@@ -55,9 +55,9 @@ export default function LoginPage() {
           <div className="bg-navy-900 px-8 py-8 text-center">
             {/* GCS Logo mark */}
             <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
-              <span className="text-2xl font-black text-navy-900 tracking-tight">GCS</span>
+              <span className="font-display text-2xl font-bold text-navy-900 tracking-tight">GCS</span>
             </div>
-            <h1 className="text-white text-xl font-bold">Greenwich Country School</h1>
+            <h1 className="font-display text-white text-2xl font-bold">Grace Church School</h1>
             <p className="text-navy-200 text-sm mt-1">Professional Development Platform</p>
           </div>
 
@@ -163,7 +163,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-white/40 text-xs mt-6">
-          &copy; {new Date().getFullYear()} Greenwich Country School
+          &copy; {new Date().getFullYear()} Grace Church School
         </p>
       </div>
     </div>

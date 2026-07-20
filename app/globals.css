@@ -3,9 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --brand-navy: #1B2A4A;
-  --brand-navy-light: #2b4c83;
-  --brand-accent: #3d619a;
+  --brand-navy: #003882;
+  --brand-navy-light: #175ba8;
+  --brand-accent: #3d7dc2;
+  --grace-grey: #C1C1C1;
+  --grace-lightblue: #adcff1;
+  --grace-orange: #f79b2e;
+  --grace-green: #d5e6a4;
+  --grace-purple: #ccacd2;
   --sidebar-width: 256px;
 }
 

@@ -6,7 +6,7 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 function tagBadge(tag: string) {
-  return `<span style="display:inline-block;background:#e8ecf3;color:#1B2A4A;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;margin:2px 4px 2px 0;">${tag}</span>`
+  return `<span style="display:inline-block;background:#e8ecf3;color:#003882;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;margin:2px 4px 2px 0;">${tag}</span>`
 }
 
 function buildSpotlightHtml(
@@ -39,11 +39,11 @@ function buildSpotlightHtml(
 
           <!-- Header -->
           <tr>
-            <td style="background:#1B2A4A;padding:32px 40px;text-align:center;">
+            <td style="background:#003882;padding:32px 40px;text-align:center;">
               <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;">
-                <span style="font-size:22px;font-weight:900;color:#1B2A4A;line-height:1;">GCS</span>
+                <span style="font-size:22px;font-weight:900;color:#003882;line-height:1;">GCS</span>
               </div>
-              <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Greenwich Country School</p>
+              <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
               <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">⭐ You've been Spotlighted!</p>
             </td>
           </tr>
@@ -57,8 +57,8 @@ function buildSpotlightHtml(
               </p>
 
               <!-- Quote block -->
-              <div style="background:#f8fafc;border-left:4px solid #1B2A4A;border-radius:0 8px 8px 0;padding:20px 24px;margin-bottom:24px;">
-                <p style="color:#1B2A4A;font-size:16px;line-height:1.7;margin:0;font-style:italic;">
+              <div style="background:#f8fafc;border-left:4px solid #003882;border-radius:0 8px 8px 0;padding:20px 24px;margin-bottom:24px;">
+                <p style="color:#003882;font-size:16px;line-height:1.7;margin:0;font-style:italic;">
                   "${spotlight.message}"
                 </p>
               </div>
@@ -73,7 +73,7 @@ function buildSpotlightHtml(
               <!-- CTA -->
               <div style="text-align:center;margin-top:32px;">
                 <a href="${APP_URL}/dashboard/spotlights"
-                  style="display:inline-block;background:#1B2A4A;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">
+                  style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">
                   View on GCS PD Platform
                 </a>
               </div>
@@ -84,7 +84,7 @@ function buildSpotlightHtml(
           <tr>
             <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
               <p style="color:#9ca3af;font-size:12px;margin:0;">
-                Greenwich Country School · Professional Development Platform<br/>
+                Grace Church School · Professional Development Platform<br/>
                 This email was sent because a colleague recognized your work.
               </p>
             </td>

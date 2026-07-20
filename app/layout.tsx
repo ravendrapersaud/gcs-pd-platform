@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'GCS PD Platform',
-  description: 'Greenwich Country School Professional Development & Feedback Platform',
+  description: 'Grace Church School Professional Development & Feedback Platform',
 }
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Asul:wght@400;700&display=swap"
           rel="stylesheet"
         />
       </head>

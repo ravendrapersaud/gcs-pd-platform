@@ -9,23 +9,35 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Grace Church School — Primary palette (Navy #003882 / White)
         navy: {
-          50:  '#e8ecf3',
-          100: '#c5cfe0',
-          200: '#9eafcc',
-          300: '#778fb8',
-          400: '#5a78a9',
-          500: '#3d619a',
-          600: '#355890',
-          700: '#2b4c83',
-          800: '#213f76',
-          900: '#1B2A4A',
-          950: '#111c32',
+          50:  '#eef4fb',
+          100: '#dbe7f5',
+          200: '#b8cfeb',
+          300: '#8fb3de',
+          400: '#6698d0',
+          500: '#3d7dc2',
+          600: '#2a6cb5',
+          700: '#175ba8',
+          800: '#0a4a97',
+          900: '#003882', // official Grace Navy (Pantone 2955C, #003882)
+          950: '#001c40',
         },
-        brand: '#1B2A4A',
+        brand: '#003882',
+        // Secondary palette
+        grace: {
+          grey: '#C1C1C1', // Pantone 428U
+          // Tertiary palette — accents / highlights only
+          lightblue: '#adcff1', // Pantone 277U
+          orange: '#f79b2e',    // Pantone 130U
+          green: '#d5e6a4',     // Pantone 2288U
+          purple: '#ccacd2',    // Pantone 2563U
+        },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Open Sans = body/UI, Asul = display/headline (both Google Fonts)
+        sans: ['"Open Sans"', 'system-ui', 'sans-serif'],
+        display: ['Asul', 'Georgia', 'serif'],
       },
     },
   },
