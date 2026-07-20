@@ -3,6 +3,31 @@
 -- Apply in Supabase SQL editor (or via supabase db push)
 -- ============================================================
 
+-- ── Clean slate (safe to re-run) ─────────────────────────────
+-- Drops tables and types if they exist so this file is idempotent.
+drop table if exists public.observation_ratings cascade;
+drop table if exists public.observations cascade;
+drop table if exists public.framework_indicators cascade;
+drop table if exists public.framework_domains cascade;
+drop table if exists public.frameworks cascade;
+drop table if exists public.spotlights cascade;
+drop table if exists public.funding_requests cascade;
+drop table if exists public.pd_activities cascade;
+drop table if exists public.goal_updates cascade;
+drop table if exists public.goal_collaborators cascade;
+drop table if exists public.goals cascade;
+drop table if exists public.resource_favorites cascade;
+drop table if exists public.resources cascade;
+drop table if exists public.supervisor_assignments cascade;
+drop table if exists public.profiles cascade;
+drop function if exists get_user_role() cascade;
+drop type if exists role_type cascade;
+drop type if exists resource_type cascade;
+drop type if exists pd_type cascade;
+drop type if exists funding_status cascade;
+drop type if exists goal_status cascade;
+drop type if exists obs_type cascade;
+
 -- ── Custom ENUMs ─────────────────────────────────────────────
 create type role_type as enum ('staff', 'supervisor', 'admin');
 
@@ -21,16 +46,6 @@ create type goal_status as enum ('active', 'completed', 'archived', 'paused');
 
 create type obs_type as enum ('formal', 'informal', 'walkthrough', 'self');
 
--- ── Helper: get current user's role ──────────────────────────
-create or replace function get_user_role()
-returns role_type
-language sql
-security definer
-stable
-as $$
-  select role from public.profiles where id = auth.uid();
-$$;
-
 -- ── profiles ─────────────────────────────────────────────────
 create table if not exists public.profiles (
   id            uuid primary key references auth.users(id) on delete cascade,
@@ -45,6 +60,17 @@ create table if not exists public.profiles (
   avatar_url    text,
   created_at    timestamptz not null default now()
 );
+
+-- ── Helper: get current user's role ──────────────────────────
+-- Defined after profiles so the referenced table exists.
+create or replace function get_user_role()
+returns role_type
+language sql
+security definer
+stable
+as $$
+  select role from public.profiles where id = auth.uid();
+$$;
 
 alter table public.profiles enable row level security;
 
@@ -148,15 +174,8 @@ create index on public.goals(status);
 
 alter table public.goals enable row level security;
 
-create policy "Users see own goals or collaborated goals"
-  on public.goals for select
-  using (
-    auth.uid() = owner_id
-    or auth.uid() in (
-      select user_id from public.goal_collaborators where goal_id = goals.id
-    )
-    or get_user_role() in ('supervisor', 'admin')
-  );
+-- Note: the collaborator-aware SELECT policy is created after the
+-- goal_collaborators table exists (see below).
 
 create policy "Users can create goals"
   on public.goals for insert
@@ -188,6 +207,18 @@ create policy "Goal owners can manage collaborators"
   using (
     auth.uid() in (select owner_id from public.goals where id = goal_id)
     or get_user_role() = 'admin'
+  );
+
+-- Collaborator-aware SELECT policy for goals (defined here now that
+-- goal_collaborators exists).
+create policy "Users see own goals or collaborated goals"
+  on public.goals for select
+  using (
+    auth.uid() = owner_id
+    or auth.uid() in (
+      select user_id from public.goal_collaborators where goal_id = goals.id
+    )
+    or get_user_role() in ('supervisor', 'admin')
   );
 
 -- ── goal_updates ──────────────────────────────────────────────
