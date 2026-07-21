@@ -27,7 +27,7 @@ interface ImportResult {
 
 const TEMPLATE_CSV = [
   'employee_id,first_name,last_name,email,title,division,department,employee_type,role,primary_supervisor_email,secondary_supervisor_email',
-  'EMP-100,Jane,Smith,jsmith@gcschool.org,Math Teacher,High School,Mathematics,faculty,staff,dana@gcschool.org,',
+  'EMP-100,Jane,Smith,jsmith@gcschool.org,Math Teacher,High School,Mathematics,faculty,staff,kchaloner@gcschool.org,',
   'EMP-101,Alex,Johnson,ajohnson@gcschool.org,Division Head,Middle School,Leadership,faculty,supervisor,kim@gcschool.org,',
   'EMP-102,Sam,Lee,slee@gcschool.org,IT Specialist,,Technology,staff,staff,ravendra@gcschool.org,',
 ].join('\n')

@@ -6,7 +6,7 @@
 
 -- Fixed UUIDs for test users
 -- Ravendra Persaud  : aa000000-0000-0000-0000-000000000001
--- Dana Osei         : aa000000-0000-0000-0000-000000000002
+-- Kim Chaloner         : aa000000-0000-0000-0000-000000000002
 -- Kim Lee           : aa000000-0000-0000-0000-000000000003
 -- Alex Kim          : aa000000-0000-0000-0000-000000000004
 -- Sarah Chen        : aa000000-0000-0000-0000-000000000005
@@ -37,11 +37,11 @@ insert into auth.users (
   (
     '00000000-0000-0000-0000-000000000000',
     'aa000000-0000-0000-0000-000000000002',
-    'dana@gcschool.org',
+    'kchaloner@gcschool.org',
     crypt('Password123!', gen_salt('bf')),
     now(), now(), now(),
     '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Dana Osei"}',
+    '{"full_name":"Kim Chaloner"}',
     'authenticated', 'authenticated',
     '', '', '', ''
   ),
@@ -110,8 +110,8 @@ insert into public.profiles (id, email, first_name, last_name, role, title, divi
   ),
   (
     'aa000000-0000-0000-0000-000000000002',
-    'dana@gcschool.org',
-    'Dana', 'Osei',
+    'kchaloner@gcschool.org',
+    'Kim', 'Chaloner',
     'supervisor',
     'Dean of Faculty',
     'All School',
@@ -162,7 +162,7 @@ on conflict (id) do update set
 insert into public.supervisor_assignments (staff_id, supervisor_id, is_primary) values
   -- Alex Kim is supervised by Ravendra Persaud (primary)
   ('aa000000-0000-0000-0000-000000000004', 'aa000000-0000-0000-0000-000000000001', true),
-  -- Sarah Chen is supervised by Dana Osei (primary)
+  -- Sarah Chen is supervised by Kim Chaloner (primary)
   ('aa000000-0000-0000-0000-000000000005', 'aa000000-0000-0000-0000-000000000002', true),
   -- Sarah Chen also reports to Kim Lee (secondary - High School)
   ('aa000000-0000-0000-0000-000000000005', 'aa000000-0000-0000-0000-000000000003', false)

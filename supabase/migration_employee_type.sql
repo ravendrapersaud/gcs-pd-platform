@@ -23,7 +23,7 @@ where employee_type is null;
 
 -- Set the seeded test users explicitly.
 update public.profiles set employee_type = 'staff'
-  where email in ('ravendra@gcschool.org','alex@gcschool.org','dana@gcschool.org');
+  where email in ('ravendra@gcschool.org','alex@gcschool.org','kchaloner@gcschool.org');
 update public.profiles set employee_type = 'faculty'
   where email in ('kim@gcschool.org','sarah@gcschool.org');
 
