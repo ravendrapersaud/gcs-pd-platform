@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { PdActivity, FundingRequest, PdType, FundingStatus } from '@/lib/types'
+import { ANNUAL_PD_ALLOTMENT, academicYearLabel, isInCurrentAcademicYear, formatUSD } from '@/lib/funds'
 import clsx from 'clsx'
 
 const PD_TYPES: PdType[] = [
@@ -120,6 +121,17 @@ export default function PdLogPage() {
   }
 
   const totalHours = activities.reduce((s, a) => s + (a.hours ?? 0), 0)
+
+  // ── PD fund allotment (resets each academic year) ────────────
+  const fundsThisYear = fundingRequests.filter((fr) => isInCurrentAcademicYear(fr.created_at))
+  const usedFunds = fundsThisYear
+    .filter((fr) => fr.status === 'approved')
+    .reduce((s, fr) => s + Number(fr.amount), 0)
+  const pendingFunds = fundsThisYear
+    .filter((fr) => fr.status === 'pending')
+    .reduce((s, fr) => s + Number(fr.amount), 0)
+  const remainingFunds = Math.max(ANNUAL_PD_ALLOTMENT - usedFunds, 0)
+  const usedPct = Math.min(Math.round((usedFunds / ANNUAL_PD_ALLOTMENT) * 100), 100)
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -276,6 +288,41 @@ export default function PdLogPage() {
 
       {tab === 'funding' && (
         <>
+          {/* Annual PD fund allotment */}
+          <div className="card p-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm text-gray-500">PD fund allotment · {academicYearLabel()}</p>
+                <p className="text-3xl font-bold text-navy-900 mt-1">
+                  {formatUSD(remainingFunds)} <span className="text-base font-medium text-gray-400">remaining</span>
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Resets to {formatUSD(ANNUAL_PD_ALLOTMENT)} each academic year
+                </p>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div>
+                  <p className="text-gray-400">Allotment</p>
+                  <p className="font-semibold text-gray-700">{formatUSD(ANNUAL_PD_ALLOTMENT)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Approved</p>
+                  <p className="font-semibold text-gray-700">{formatUSD(usedFunds)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Pending</p>
+                  <p className="font-semibold text-yellow-600">{formatUSD(pendingFunds)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full rounded-full bg-navy-900 transition-all" style={{ width: `${usedPct}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">{usedPct}% of this year&apos;s allotment used</p>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <button onClick={() => setShowFundingForm(!showFundingForm)} className="btn-primary">
               + New Request

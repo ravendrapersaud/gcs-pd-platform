@@ -10,6 +10,7 @@ interface CsvRow {
   division?: string
   department?: string
   employee_id?: string
+  employee_type?: string
   role?: string
   [key: string]: string | undefined
 }
@@ -108,6 +109,9 @@ export async function POST(request: NextRequest) {
     }
 
     const role = VALID_ROLES.includes(row.role?.toLowerCase() ?? '') ? row.role!.toLowerCase() : 'staff'
+    const employeeType = ['faculty', 'staff'].includes(row.employee_type?.trim().toLowerCase() ?? '')
+      ? row.employee_type!.trim().toLowerCase()
+      : null
 
     try {
       // Check if user already exists
@@ -158,6 +162,7 @@ export async function POST(request: NextRequest) {
         division: row.division?.trim() || null,
         department: row.department?.trim() || null,
         employee_id: row.employee_id?.trim() || null,
+        employee_type: employeeType,
       })
 
       if (profileErr) {

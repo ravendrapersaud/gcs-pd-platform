@@ -123,8 +123,8 @@ insert into public.profiles (id, email, first_name, last_name, role, title, divi
     'kim@gcschool.org',
     'Kim', 'Lee',
     'supervisor',
-    'Upper School Division Head',
-    'Upper School',
+    'High School Division Head',
+    'High School',
     'Leadership',
     'EMP-003'
   ),
@@ -144,7 +144,7 @@ insert into public.profiles (id, email, first_name, last_name, role, title, divi
     'Sarah', 'Chen',
     'staff',
     'High School English Teacher',
-    'Upper School',
+    'High School',
     'English',
     'EMP-005'
   )
@@ -164,7 +164,7 @@ insert into public.supervisor_assignments (staff_id, supervisor_id, is_primary) 
   ('aa000000-0000-0000-0000-000000000004', 'aa000000-0000-0000-0000-000000000001', true),
   -- Sarah Chen is supervised by Dana Osei (primary)
   ('aa000000-0000-0000-0000-000000000005', 'aa000000-0000-0000-0000-000000000002', true),
-  -- Sarah Chen also reports to Kim Lee (secondary - Upper School)
+  -- Sarah Chen also reports to Kim Lee (secondary - High School)
   ('aa000000-0000-0000-0000-000000000005', 'aa000000-0000-0000-0000-000000000003', false)
 on conflict (staff_id, supervisor_id) do nothing;
 
@@ -196,7 +196,7 @@ on conflict (id) do nothing;
 insert into public.goals (id, title, description, owner_id, due_date, progress_pct, status) values
   (
     'cc000000-0000-0000-0000-000000000001',
-    'Implement AI literacy curriculum across Upper School',
+    'Implement AI literacy curriculum across High School',
     'Develop and pilot a cross-disciplinary AI literacy module in grades 9-12, in collaboration with the Tech and English departments. Align with ISTE standards.',
     'aa000000-0000-0000-0000-000000000001',
     '2025-06-15',
@@ -271,7 +271,7 @@ insert into public.frameworks (id, title, division, department, description, cre
   (
     '11000000-0000-0000-0000-000000000001',
     'GCS Teaching Excellence Framework',
-    'Upper School',
+    'High School',
     'All Departments',
     'A comprehensive rubric for classroom observation and professional growth aligned to GCS instructional priorities.',
     'aa000000-0000-0000-0000-000000000002'

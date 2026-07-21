@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from 'react'
 import Papa from 'papaparse'
 
 const REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
-const OPTIONAL_FIELDS = ['title', 'division', 'department', 'employee_id', 'role']
+const OPTIONAL_FIELDS = ['title', 'division', 'department', 'employee_id', 'employee_type', 'role', 'primary_supervisor_email', 'secondary_supervisor_email']
 
 interface CsvRow {
   email: string
@@ -14,6 +14,7 @@ interface CsvRow {
   division?: string
   department?: string
   employee_id?: string
+  employee_type?: string
   role?: string
   [key: string]: string | undefined
 }
@@ -25,9 +26,10 @@ interface ImportResult {
 }
 
 const TEMPLATE_CSV = [
-  'email,first_name,last_name,title,division,department,employee_id,role',
-  'jsmith@gcschool.org,Jane,Smith,Math Teacher,Upper School,Mathematics,EMP-100,staff',
-  'ajohnson@gcschool.org,Alex,Johnson,Division Head,Middle School,Leadership,EMP-101,supervisor',
+  'employee_id,first_name,last_name,email,title,division,department,employee_type,role,primary_supervisor_email,secondary_supervisor_email',
+  'EMP-100,Jane,Smith,jsmith@gcschool.org,Math Teacher,High School,Mathematics,faculty,staff,dana@gcschool.org,',
+  'EMP-101,Alex,Johnson,ajohnson@gcschool.org,Division Head,Middle School,Leadership,faculty,supervisor,kim@gcschool.org,',
+  'EMP-102,Sam,Lee,slee@gcschool.org,IT Specialist,,Technology,staff,staff,ravendra@gcschool.org,',
 ].join('\n')
 
 export default function ImportCsvPage() {

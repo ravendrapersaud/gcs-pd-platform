@@ -1,42 +1,104 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { ResourceType } from '@/lib/types'
+import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS, AUDIENCES, SUBJECTS, THEMES } from '@/lib/taxonomy'
+import clsx from 'clsx'
 
-const RESOURCE_TYPES: ResourceType[] = [
-  'webinar', 'certificate', 'conference', 'article', 'tool', 'book', 'video', 'other',
-]
+function ChipGroup({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: readonly string[]
+  selected: string[]
+  onToggle: (value: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((opt) => {
+        const active = selected.includes(opt)
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onToggle(opt)}
+            className={clsx(
+              'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+              active
+                ? 'bg-navy-900 text-white border-navy-900'
+                : 'border-gray-300 text-gray-600 hover:border-navy-400'
+            )}
+          >
+            {opt}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function SubmitResourcePage() {
   const supabase = createClient()
   const router = useRouter()
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     title: '',
     description: '',
     url: '',
-    type: 'article' as ResourceType,
+    cover_image: '',
+    type: 'website' as ResourceType,
   })
-  const [tagInput, setTagInput] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [file, setFile] = useState<File | null>(null)
+  const [audience, setAudience] = useState<string[]>([])
+  const [subjects, setSubjects] = useState<string[]>([])
+  const [themes, setThemes] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
-      e.preventDefault()
-      const t = tagInput.trim().replace(/,$/, '')
-      if (t && !tags.includes(t)) setTags((prev) => [...prev, t])
-      setTagInput('')
+  // Cover image: paste a URL, or upload a file to Supabase Storage
+  const [imageMode, setImageMode] = useState<'url' | 'upload'>('url')
+  const [uploading, setUploading] = useState(false)
+
+  const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be under 5 MB.')
+      return
+    }
+    setUploading(true)
+    setError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('resource-covers')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('resource-covers').getPublicUrl(path)
+      setForm((f) => ({ ...f, cover_image: data.publicUrl }))
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? `Upload failed: ${err.message}. (Make sure a public "resource-covers" storage bucket exists.)`
+          : 'Upload failed.'
+      )
+    } finally {
+      setUploading(false)
     }
   }
-
-  const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,25 +109,16 @@ export default function SubmitResourcePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      let fileUrl: string | null = null
-      if (file) {
-        const ext = file.name.split('.').pop()
-        const path = `resources/${user.id}/${Date.now()}.${ext}`
-        const { error: uploadErr } = await supabase.storage
-          .from('resources')
-          .upload(path, file)
-        if (uploadErr) throw uploadErr
-        const { data: urlData } = supabase.storage.from('resources').getPublicUrl(path)
-        fileUrl = urlData.publicUrl
-      }
-
       const { error: insertErr } = await supabase.from('resources').insert({
         title: form.title,
         description: form.description || null,
         url: form.url || null,
-        file_url: fileUrl,
+        cover_image: form.cover_image || null,
         type: form.type,
-        tags,
+        audience,
+        subjects,
+        themes,
+        tags: [...themes], // legacy backward-compat
         submitted_by: user.id,
         is_approved: true,
       })
@@ -109,7 +162,7 @@ export default function SubmitResourcePage() {
               id="title"
               required
               className="input"
-              placeholder="e.g. Introduction to Project-Based Learning"
+              placeholder="e.g. The Writing Revolution"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
@@ -149,68 +202,90 @@ export default function SubmitResourcePage() {
               onChange={(e) => setForm({ ...form, type: e.target.value as ResourceType })}
             >
               {RESOURCE_TYPES.map((t) => (
-                <option key={t} value={t} className="capitalize">
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                <option key={t} value={t}>
+                  {RESOURCE_TYPE_LABELS[t]}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Tag input */}
           <div>
-            <label className="label">Tags</label>
-            <div className="border border-gray-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-navy-500 focus-within:border-transparent">
-              <div className="flex flex-wrap gap-1.5 mb-1.5">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="flex items-center gap-1 bg-navy-100 text-navy-800 text-xs font-medium px-2 py-0.5 rounded-full"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => removeTag(tag)}
-                      className="text-navy-500 hover:text-navy-900 ml-0.5 leading-none"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+            <div className="flex items-center justify-between mb-1">
+              <label className="label mb-0">Cover image</label>
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => setImageMode('url')}
+                  className={clsx('px-3 py-1 font-medium', imageMode === 'url' ? 'bg-navy-900 text-white' : 'text-gray-600 hover:bg-gray-50')}
+                >
+                  Paste URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageMode('upload')}
+                  className={clsx('px-3 py-1 font-medium', imageMode === 'upload' ? 'bg-navy-900 text-white' : 'text-gray-600 hover:bg-gray-50')}
+                >
+                  Upload file
+                </button>
               </div>
-              <input
-                type="text"
-                placeholder="Type tag and press Enter or comma"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={addTag}
-                className="w-full text-sm outline-none bg-transparent placeholder-gray-400"
-              />
             </div>
+
+            {imageMode === 'url' ? (
+              <>
+                <input
+                  id="cover_image"
+                  type="url"
+                  className="input"
+                  placeholder="https://images.unsplash.com/…"
+                  value={form.cover_image}
+                  onChange={(e) => setForm({ ...form, cover_image: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 mt-1">Paste an image URL, or leave blank for a placeholder.</p>
+              </>
+            ) : (
+              <>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy-900 file:text-white file:text-sm file:font-medium hover:file:bg-navy-800 file:cursor-pointer disabled:opacity-50"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  {uploading ? 'Uploading…' : 'PNG or JPG, up to 5 MB.'}
+                </p>
+              </>
+            )}
+
+            {form.cover_image && (
+              <div className="mt-3 relative inline-block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.cover_image} alt="Cover preview" className="h-28 rounded-lg border border-gray-200 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, cover_image: '' })}
+                  className="absolute -top-2 -right-2 bg-white border border-gray-300 rounded-full w-6 h-6 text-gray-500 hover:text-red-600 shadow-sm"
+                  aria-label="Remove cover image"
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* File upload */}
           <div>
-            <label className="label">Attach File (optional)</label>
-            <div
-              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-navy-400 transition-colors"
-              onClick={() => fileRef.current?.click()}
-            >
-              {file ? (
-                <p className="text-sm text-navy-700 font-medium">{file.name}</p>
-              ) : (
-                <>
-                  <p className="text-gray-500 text-sm">Drag & drop or click to upload</p>
-                  <p className="text-gray-400 text-xs mt-1">PDF, PPT, DOCX, or image</p>
-                </>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.pptx,.docx,.png,.jpg,.jpeg"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
+            <label className="label">Audience</label>
+            <ChipGroup options={AUDIENCES} selected={audience} onToggle={toggle(setAudience)} />
+          </div>
+
+          <div>
+            <label className="label">Subjects</label>
+            <ChipGroup options={SUBJECTS} selected={subjects} onToggle={toggle(setSubjects)} />
+          </div>
+
+          <div>
+            <label className="label">Themes</label>
+            <ChipGroup options={THEMES} selected={themes} onToggle={toggle(setThemes)} />
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -221,8 +296,8 @@ export default function SubmitResourcePage() {
             >
               Cancel
             </button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
-              {loading ? 'Submitting…' : 'Submit Resource'}
+            <button type="submit" disabled={loading || uploading} className="btn-primary flex-1">
+              {loading ? 'Submitting…' : uploading ? 'Uploading image…' : 'Submit Resource'}
             </button>
           </div>
         </form>

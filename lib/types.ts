@@ -2,6 +2,10 @@
 export type RoleType = 'staff' | 'supervisor' | 'admin'
 
 export type ResourceType =
+  | 'website'
+  | 'blog_post'
+  | 'pdf'
+  | 'podcast'
   | 'webinar'
   | 'certificate'
   | 'conference'
@@ -40,6 +44,7 @@ export interface Profile {
   division: string | null
   department: string | null
   employee_id: string | null
+  employee_type: string | null // 'faculty' | 'staff'
   avatar_url: string | null
   created_at: string
 }
@@ -63,12 +68,34 @@ export interface Resource {
   file_url: string | null
   type: ResourceType
   tags: string[]
+  cover_image: string | null
+  audience: string[]
+  themes: string[]
+  subjects: string[]
   submitted_by: string | null
   is_approved: boolean
   created_at: string
   // joined
   submitted_by_profile?: Profile
   is_favorited?: boolean
+}
+
+export interface PdEvent {
+  id: string
+  title: string
+  description: string | null
+  event_type: string | null
+  location: string | null
+  is_virtual: boolean
+  start_date: string
+  end_date: string | null
+  url: string | null
+  cost: number | null
+  audience: string[]
+  created_by: string | null
+  created_at: string
+  // joined
+  creator?: Profile
 }
 
 export interface ResourceFavorite {

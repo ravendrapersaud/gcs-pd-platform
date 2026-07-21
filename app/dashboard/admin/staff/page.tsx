@@ -3,17 +3,29 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
+import { DIVISIONS } from '@/lib/taxonomy'
+import clsx from 'clsx'
 
 interface StaffRow extends Profile {
   supervisors: string
+  primarySupEmail: string
+  secondarySupEmail: string
   pdHours: number
 }
+
+// Columns exactly match the CSV import format, so exports can be re-imported.
+const EXPORT_COLUMNS = [
+  'employee_id', 'first_name', 'last_name', 'email', 'title',
+  'division', 'department', 'employee_type', 'role',
+  'primary_supervisor_email', 'secondary_supervisor_email',
+] as const
 
 export default function StaffRosterPage() {
   const supabase = createClient()
   const [staff, setStaff] = useState<StaffRow[]>([])
   const [search, setSearch] = useState('')
   const [divFilter, setDivFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState<'' | 'faculty' | 'staff'>('')
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
@@ -27,7 +39,7 @@ export default function StaffRosterPage() {
       supabase.from('profiles').select('*').order('last_name'),
       supabase
         .from('supervisor_assignments')
-        .select('staff_id, supervisor_id, is_primary, supervisor:profiles!supervisor_assignments_supervisor_id_fkey(first_name, last_name)'),
+        .select('staff_id, supervisor_id, is_primary, supervisor:profiles!supervisor_assignments_supervisor_id_fkey(first_name, last_name, email)'),
       supabase
         .from('pd_activities')
         .select('user_id, hours')
@@ -40,16 +52,22 @@ export default function StaffRosterPage() {
     }
 
     const supervisorMap: Record<string, string[]> = {}
+    const primaryEmailMap: Record<string, string> = {}
+    const secondaryEmailMap: Record<string, string> = {}
     for (const a of assignments ?? []) {
-      const sup = a.supervisor as { first_name: string; last_name: string } | null
+      const sup = a.supervisor as unknown as { first_name: string; last_name: string; email: string } | null
       if (!sup) continue
       const name = `${sup.first_name} ${sup.last_name}${a.is_primary ? ' (Primary)' : ''}`
       supervisorMap[a.staff_id] = [...(supervisorMap[a.staff_id] ?? []), name]
+      if (a.is_primary) primaryEmailMap[a.staff_id] = sup.email
+      else secondaryEmailMap[a.staff_id] = sup.email
     }
 
     const rows: StaffRow[] = (profiles ?? []).map((p) => ({
       ...(p as Profile),
       supervisors: (supervisorMap[p.id] ?? []).join(', ') || '—',
+      primarySupEmail: primaryEmailMap[p.id] ?? '',
+      secondarySupEmail: secondaryEmailMap[p.id] ?? '',
       pdHours: hoursMap[p.id] ?? 0,
     }))
 
@@ -60,15 +78,68 @@ export default function StaffRosterPage() {
 
   useEffect(() => { load() }, [load])
 
-  const divisions = Array.from(new Set(staff.map((s) => s.division).filter(Boolean))).sort() as string[]
+  // Division options: canonical four (EC/LS/MS/HS) plus any others present in the data.
+  const canonicalDivs: string[] = DIVISIONS.map((d) => d.name)
+  const dataDivs = Array.from(new Set(staff.map((s) => s.division).filter(Boolean))) as string[]
+  const divisions = [
+    ...canonicalDivs,
+    ...dataDivs.filter((d) => !canonicalDivs.includes(d)).sort(),
+  ]
 
   const filtered = staff.filter((s) => {
     const name = `${s.first_name} ${s.last_name}`.toLowerCase()
     const matchSearch = !search || name.includes(search.toLowerCase()) ||
       (s.title ?? '').toLowerCase().includes(search.toLowerCase())
     const matchDiv = !divFilter || s.division === divFilter
-    return matchSearch && matchDiv
+    const matchType = !typeFilter || (s.employee_type ?? '').toLowerCase() === typeFilter
+    return matchSearch && matchDiv && matchType
   })
+
+  // ── Export (columns match the CSV import format) ─────────────
+  const buildExportRows = () =>
+    filtered.map((s) => ({
+      employee_id: s.employee_id ?? '',
+      first_name: s.first_name ?? '',
+      last_name: s.last_name ?? '',
+      email: s.email ?? '',
+      title: s.title ?? '',
+      division: s.division ?? '',
+      department: s.department ?? '',
+      employee_type: s.employee_type ?? '',
+      role: s.role ?? '',
+      primary_supervisor_email: s.primarySupEmail ?? '',
+      secondary_supervisor_email: s.secondarySupEmail ?? '',
+    }))
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const dateStamp = () => new Date().toISOString().split('T')[0]
+
+  const exportCsv = () => {
+    const rows = buildExportRows()
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`
+    const lines = [
+      EXPORT_COLUMNS.join(','),
+      ...rows.map((r) => EXPORT_COLUMNS.map((c) => esc(r[c])).join(',')),
+    ]
+    downloadBlob(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }), `gcs-staff-${dateStamp()}.csv`)
+  }
+
+  const exportXlsx = async () => {
+    const XLSX = await import('xlsx')
+    const rows = buildExportRows()
+    const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_COLUMNS as unknown as string[] })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Staff')
+    XLSX.writeFile(wb, `gcs-staff-${dateStamp()}.xlsx`)
+  }
 
   const openDetail = (row: StaffRow) => {
     setSelected(row)
@@ -78,6 +149,7 @@ export default function StaffRosterPage() {
       title: row.title ?? '',
       division: row.division ?? '',
       department: row.department ?? '',
+      employee_type: row.employee_type ?? '',
       role: row.role,
     })
     setSupervisorId('')
@@ -90,6 +162,7 @@ export default function StaffRosterPage() {
       title: editForm.title ?? null,
       division: editForm.division ?? null,
       department: editForm.department ?? null,
+      employee_type: editForm.employee_type || null,
       role: editForm.role,
     }).eq('id', selected.id)
 
@@ -134,6 +207,14 @@ export default function StaffRosterPage() {
                 <input className="input" value={editForm.department ?? ''} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })} />
               </div>
               <div>
+                <label className="label">Employee Type</label>
+                <select className="input" value={editForm.employee_type ?? ''} onChange={(e) => setEditForm({ ...editForm, employee_type: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  <option value="faculty">Faculty</option>
+                  <option value="staff">Staff</option>
+                </select>
+              </div>
+              <div>
                 <label className="label">Role</label>
                 <select className="input" value={editForm.role ?? 'staff'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Profile['role'] })}>
                   <option value="staff">Staff</option>
@@ -174,19 +255,40 @@ export default function StaffRosterPage() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="text"
-          placeholder="Search staff…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="input flex-1"
-        />
-        <select className="input sm:w-48" value={divFilter} onChange={(e) => setDivFilter(e.target.value)}>
-          <option value="">All Divisions</option>
-          {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
+      {/* Filters + export */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="Search staff…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input flex-1"
+          />
+          <select className="input sm:w-48" value={divFilter} onChange={(e) => setDivFilter(e.target.value)}>
+            <option value="">All Divisions</option>
+            {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Faculty / Staff filter */}
+          {([['', 'All'], ['faculty', 'Faculty'], ['staff', 'Staff']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setTypeFilter(val)}
+              className={clsx('tab', typeFilter === val ? 'tab-active' : 'tab-inactive')}
+            >
+              {label}
+            </button>
+          ))}
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-gray-400">{filtered.length} shown</span>
+            <button onClick={exportCsv} className="btn-secondary text-sm">Export CSV</button>
+            <button onClick={exportXlsx} className="btn-secondary text-sm">Export XLSX</button>
+          </div>
+        </div>
       </div>
 
       {/* Table */}

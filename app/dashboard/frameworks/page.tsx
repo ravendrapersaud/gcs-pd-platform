@@ -256,7 +256,7 @@ export default function FrameworksPage() {
                 <label className="label">Division</label>
                 <input className="input" value={fwForm.division}
                   onChange={(e) => setFwForm({ ...fwForm, division: e.target.value })}
-                  placeholder="Upper School" />
+                  placeholder="High School" />
               </div>
               <div>
                 <label className="label">Department</label>
