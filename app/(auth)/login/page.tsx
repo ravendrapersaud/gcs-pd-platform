@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -11,6 +11,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Surface the server-side domain rejection (?error=domain)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error') === 'domain') {
+      setError('Please sign in with your @gcschool.org account.')
+    }
+  }, [])
+
   const handleGoogle = async () => {
     setLoading(true)
     setError(null)
@@ -19,6 +27,9 @@ export default function LoginPage() {
       options: {
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
         scopes: 'email profile',
+        queryParams: {
+          hd: 'gcschool.org', // hint Google to show only school accounts
+        },
       },
     })
     if (error) {

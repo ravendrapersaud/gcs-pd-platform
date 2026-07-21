@@ -45,6 +45,7 @@ export interface Profile {
   department: string | null
   employee_id: string | null
   employee_type: string | null // 'faculty' | 'staff'
+  needs_setup: boolean
   avatar_url: string | null
   created_at: string
 }

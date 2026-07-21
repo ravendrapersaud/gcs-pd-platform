@@ -19,6 +19,14 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
+  // Enforce the school domain server-side: even if a non-gcschool
+  // Google account somehow authenticates, it never gets a profile.
+  const ALLOWED_DOMAIN = '@gcschool.org'
+  if (!session.user.email?.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+    await supabase.auth.signOut()
+    redirect('/login?error=domain')
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
@@ -26,7 +34,8 @@ export default async function DashboardLayout({
     .single()
 
   if (!profile) {
-    // Profile not yet created — insert minimal row from OAuth data
+    // Profile not yet created — insert minimal row from OAuth data,
+    // flagged needs_setup so admins can complete title/division/dept.
     const meta = session.user.user_metadata
     const nameParts = (meta?.full_name || meta?.name || '').split(' ')
     const firstName = nameParts[0] || ''
@@ -39,6 +48,7 @@ export default async function DashboardLayout({
       last_name: lastName,
       avatar_url: meta?.avatar_url || meta?.picture || null,
       role: 'staff',
+      needs_setup: true,
     })
   }
 
@@ -52,6 +62,8 @@ export default async function DashboardLayout({
     division: null,
     department: null,
     employee_id: null,
+    employee_type: null,
+    needs_setup: true,
     avatar_url: null,
     created_at: new Date().toISOString(),
   }

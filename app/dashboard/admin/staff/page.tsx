@@ -26,6 +26,7 @@ export default function StaffRosterPage() {
   const [search, setSearch] = useState('')
   const [divFilter, setDivFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'' | 'faculty' | 'staff'>('')
+  const [needsSetupOnly, setNeedsSetupOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
@@ -92,7 +93,8 @@ export default function StaffRosterPage() {
       (s.title ?? '').toLowerCase().includes(search.toLowerCase())
     const matchDiv = !divFilter || s.division === divFilter
     const matchType = !typeFilter || (s.employee_type ?? '').toLowerCase() === typeFilter
-    return matchSearch && matchDiv && matchType
+    const matchSetup = !needsSetupOnly || s.needs_setup
+    return matchSearch && matchDiv && matchType && matchSetup
   })
 
   // ── Export (columns match the CSV import format) ─────────────
@@ -164,6 +166,7 @@ export default function StaffRosterPage() {
       department: editForm.department ?? null,
       employee_type: editForm.employee_type || null,
       role: editForm.role,
+      needs_setup: false, // saving the profile completes setup
     }).eq('id', selected.id)
 
     if (supervisorId) {
@@ -283,6 +286,24 @@ export default function StaffRosterPage() {
             </button>
           ))}
 
+          {staff.some((s) => s.needs_setup) && (
+            <button
+              onClick={() => setNeedsSetupOnly(!needsSetupOnly)}
+              className={clsx(
+                'tab flex items-center gap-1.5',
+                needsSetupOnly ? 'tab-active' : 'tab-inactive'
+              )}
+            >
+              Needs setup
+              <span className={clsx(
+                'text-xs font-bold rounded-full px-1.5',
+                needsSetupOnly ? 'bg-white/20 text-white' : 'bg-yellow-100 text-yellow-700'
+              )}>
+                {staff.filter((s) => s.needs_setup).length}
+              </span>
+            </button>
+          )}
+
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-gray-400">{filtered.length} shown</span>
             <button onClick={exportCsv} className="btn-secondary text-sm">Export CSV</button>
@@ -328,6 +349,9 @@ export default function StaffRosterPage() {
                       <span className="font-medium text-gray-900">
                         {s.first_name} {s.last_name}
                       </span>
+                      {s.needs_setup && (
+                        <span className="badge badge-yellow text-[10px]">Needs setup</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{s.title ?? '—'}</td>
