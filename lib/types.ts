@@ -158,6 +158,7 @@ export interface FundingRequest {
   title: string
   amount: number
   description: string | null
+  is_overseas_travel: boolean
   status: FundingStatus
   reviewed_by: string | null
   reviewed_at: string | null

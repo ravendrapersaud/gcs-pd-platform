@@ -46,6 +46,7 @@ export default function PdLogPage() {
     amount: '',
     description: '',
     pd_activity_id: '',
+    is_overseas_travel: false,
   })
   const [savingFund, setSavingFund] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -110,10 +111,11 @@ export default function PdLogPage() {
       amount: parseFloat(fundForm.amount),
       description: fundForm.description || null,
       pd_activity_id: fundForm.pd_activity_id || null,
+      is_overseas_travel: fundForm.is_overseas_travel,
     })
     if (error) setFormError(error.message)
     else {
-      setFundForm({ title: '', amount: '', description: '', pd_activity_id: '' })
+      setFundForm({ title: '', amount: '', description: '', pd_activity_id: '', is_overseas_travel: false })
       setShowFundingForm(false)
       load()
     }
@@ -382,6 +384,33 @@ export default function PdLogPage() {
                     onChange={(e) => setFundForm({ ...fundForm, description: e.target.value })}
                   />
                 </div>
+                <div className="flex items-center justify-between gap-4 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                  <span className="text-sm font-medium text-gray-700" id="overseas-label">
+                    Is this a request to travel overseas?
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className={clsx('text-xs font-semibold', !fundForm.is_overseas_travel ? 'text-navy-900' : 'text-gray-400')}>No</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={fundForm.is_overseas_travel}
+                      aria-labelledby="overseas-label"
+                      onClick={() => setFundForm({ ...fundForm, is_overseas_travel: !fundForm.is_overseas_travel })}
+                      className={clsx(
+                        'relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-navy-500 focus:ring-offset-2',
+                        fundForm.is_overseas_travel ? 'bg-navy-900' : 'bg-gray-300'
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          'inline-block h-5 w-5 mt-0.5 rounded-full bg-white shadow transform transition-transform',
+                          fundForm.is_overseas_travel ? 'translate-x-5' : 'translate-x-0.5'
+                        )}
+                      />
+                    </button>
+                    <span className={clsx('text-xs font-semibold', fundForm.is_overseas_travel ? 'text-navy-900' : 'text-gray-400')}>Yes</span>
+                  </div>
+                </div>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setShowFundingForm(false)} className="btn-secondary flex-1">Cancel</button>
                   <button type="submit" disabled={savingFund} className="btn-primary flex-1">
@@ -403,7 +432,12 @@ export default function PdLogPage() {
               {fundingRequests.map((fr) => (
                 <div key={fr.id} className="card p-5 flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-gray-900">{fr.title}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-gray-900">{fr.title}</p>
+                      {fr.is_overseas_travel && (
+                        <span className="badge badge-navy text-xs">✈ Overseas travel</span>
+                      )}
+                    </div>
                     {fr.description && (
                       <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{fr.description}</p>
                     )}
