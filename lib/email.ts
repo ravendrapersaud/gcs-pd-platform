@@ -1,7 +1,13 @@
 import { Resend } from 'resend'
 import type { Spotlight, Profile } from '@/lib/types'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazily construct the client: the Resend constructor throws if the
+// key is missing, which would crash the BUILD if done at module level.
+function getResend(): Resend | null {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return null
+  return new Resend(key)
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
@@ -107,6 +113,12 @@ export async function sendSpotlightEmail(
   const to = [recipient.email]
   // CC supervisors
   const cc = supervisors.map((s) => s.email).filter(Boolean)
+
+  const resend = getResend()
+  if (!resend) {
+    console.warn('[sendSpotlightEmail] RESEND_API_KEY not set — skipping email send.')
+    return null
+  }
 
   const html = buildSpotlightHtml(spotlight, recipient, sender)
   const subject = `⭐ Spotlight from ${sender.first_name} ${sender.last_name}`
