@@ -31,6 +31,7 @@ export default function StaffRosterPage() {
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
   const [supervisorId, setSupervisorId] = useState('')
 
@@ -148,33 +149,91 @@ export default function StaffRosterPage() {
     setEditForm({
       first_name: row.first_name,
       last_name: row.last_name,
+      email: row.email,
       title: row.title ?? '',
       division: row.division ?? '',
       department: row.department ?? '',
       employee_type: row.employee_type ?? '',
       role: row.role,
+      can_create_workspaces: row.can_create_workspaces ?? false,
     })
     setSupervisorId('')
+    setSaveError(null)
   }
 
   const handleSave = async () => {
     if (!selected) return
     setSaving(true)
-    await supabase.from('profiles').update({
+    setSaveError(null)
+
+    // ── Identity changes (name/email) go through the admin API so
+    //    the login credential stays in sync with the profile. ─────
+    const identityChanged =
+      editForm.first_name !== selected.first_name ||
+      editForm.last_name !== selected.last_name ||
+      editForm.email !== selected.email
+
+    if (identityChanged) {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/update-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify({
+          user_id: selected.id,
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
+          ...(editForm.email !== selected.email ? { email: editForm.email } : {}),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setSaveError(body.error ?? `Identity update failed (${res.status})`)
+        setSaving(false)
+        return
+      }
+    }
+
+    // .select() makes the update return the affected rows, so we can
+    // detect a silent zero-row update (usually an RLS permission issue).
+    const { data: updated, error } = await supabase.from('profiles').update({
       title: editForm.title ?? null,
       division: editForm.division ?? null,
       department: editForm.department ?? null,
       employee_type: editForm.employee_type || null,
       role: editForm.role,
+      can_create_workspaces: editForm.can_create_workspaces ?? false,
       needs_setup: false, // saving the profile completes setup
-    }).eq('id', selected.id)
+    }).eq('id', selected.id).select()
+
+    if (error) {
+      setSaveError(`Save failed: ${error.message}`)
+      setSaving(false)
+      return
+    }
+    if (!updated || updated.length === 0) {
+      setSaveError(
+        'Save had no effect — your account may not have permission to edit other profiles. ' +
+        'Make sure the "Supervisors and admins can update profiles" policy has been applied ' +
+        '(supabase/migration_admin_update_profiles.sql).'
+      )
+      setSaving(false)
+      return
+    }
 
     if (supervisorId) {
-      await supabase.from('supervisor_assignments').upsert({
+      const { error: supErr } = await supabase.from('supervisor_assignments').upsert({
         staff_id: selected.id,
         supervisor_id: supervisorId,
         is_primary: true,
       }, { onConflict: 'staff_id,supervisor_id' })
+      if (supErr) {
+        setSaveError(`Profile saved, but supervisor assignment failed: ${supErr.message}`)
+        setSaving(false)
+        return
+      }
     }
 
     setSaving(false)
@@ -197,6 +256,28 @@ export default function StaffRosterPage() {
             </div>
 
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">First Name</label>
+                  <input className="input" value={editForm.first_name ?? ''} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Last Name</label>
+                  <input className="input" value={editForm.last_name ?? ''} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Email (login)</label>
+                <input
+                  type="email"
+                  className="input"
+                  value={editForm.email ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Changing this changes how they sign in. Must be an @gcschool.org address.
+                </p>
+              </div>
               <div>
                 <label className="label">Title</label>
                 <input className="input" value={editForm.title ?? ''} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
@@ -225,6 +306,19 @@ export default function StaffRosterPage() {
                   <option value="admin">Admin</option>
                 </select>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="can-create-workspaces"
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500"
+                  checked={editForm.can_create_workspaces ?? false}
+                  onChange={(e) => setEditForm({ ...editForm, can_create_workspaces: e.target.checked })}
+                />
+                <label htmlFor="can-create-workspaces" className="text-sm text-gray-700">
+                  Can create workspaces
+                  <span className="text-gray-400"> (e.g. department heads)</span>
+                </label>
+              </div>
               <div>
                 <label className="label">Set Primary Supervisor</label>
                 <select className="input" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
@@ -247,6 +341,12 @@ export default function StaffRosterPage() {
                 </div>
               </div>
             </div>
+
+            {saveError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {saveError}
+              </div>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button onClick={() => setSelected(null)} className="btn-secondary flex-1">Cancel</button>

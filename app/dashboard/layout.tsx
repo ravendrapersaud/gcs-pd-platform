@@ -64,6 +64,7 @@ export default async function DashboardLayout({
     employee_id: null,
     employee_type: null,
     needs_setup: true,
+    can_create_workspaces: false,
     avatar_url: null,
     created_at: new Date().toISOString(),
   }

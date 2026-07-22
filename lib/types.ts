@@ -46,6 +46,7 @@ export interface Profile {
   employee_id: string | null
   employee_type: string | null // 'faculty' | 'staff'
   needs_setup: boolean
+  can_create_workspaces: boolean
   avatar_url: string | null
   created_at: string
 }
@@ -240,6 +241,61 @@ export interface ObservationRating {
   notes: string | null
   // joined
   domain?: FrameworkDomain
+}
+
+// ── Workspaces ────────────────────────────────────────────────
+export type DriveIconType = 'doc' | 'sheet' | 'slide' | 'form' | 'pdf' | 'file'
+
+export interface Workspace {
+  id: string
+  name: string
+  description: string | null
+  rule_division: string | null
+  rule_department: string | null
+  rule_employee_type: string | null
+  created_by: string | null
+  created_at: string
+  // joined
+  creator?: Profile
+  member_count?: number
+}
+
+export interface WorkspaceMember {
+  workspace_id: string
+  user_id: string
+  is_manager: boolean
+  added_via: 'manual' | 'rule'
+  created_at: string
+  // joined
+  profile?: Profile
+}
+
+export interface WorkspacePost {
+  id: string
+  workspace_id: string
+  author_id: string
+  title: string | null
+  content: string
+  is_pinned: boolean
+  created_at: string
+  // joined
+  author?: Profile
+  files?: WorkspaceFile[]
+}
+
+export interface WorkspaceFile {
+  id: string
+  workspace_id: string
+  post_id: string | null
+  uploaded_by: string | null
+  name: string
+  file_url: string | null
+  drive_url: string | null
+  drive_icon: DriveIconType | null
+  size_bytes: number | null
+  created_at: string
+  // joined
+  uploader?: Profile
 }
 
 // ── Utility types ─────────────────────────────────────────────

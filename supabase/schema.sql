@@ -82,6 +82,11 @@ create policy "Users can update own profile"
   on public.profiles for update
   using (auth.uid() = id);
 
+create policy "Supervisors and admins can update profiles"
+  on public.profiles for update
+  using (get_user_role() in ('supervisor', 'admin'))
+  with check (get_user_role() in ('supervisor', 'admin'));
+
 create policy "Admins can insert profiles"
   on public.profiles for insert
   with check (get_user_role() = 'admin');
