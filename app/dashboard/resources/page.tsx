@@ -225,7 +225,11 @@ export default function ResourcesPage() {
       await supabase
         .from('resource_favorites')
         .insert({ user_id: userId, resource_id: resourceId })
-      setFavIds((prev) => new Set([...prev, resourceId]))
+      setFavIds((prev) => {
+        const next = new Set(prev)
+        next.add(resourceId)
+        return next
+      })
     }
   }
 

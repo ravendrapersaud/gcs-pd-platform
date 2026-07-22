@@ -184,7 +184,7 @@ export default async function DashboardPage() {
             ) : (
               <ul className="space-y-3">
                 {spotlights.map((s) => {
-                  const from = s.from_user as { first_name: string; last_name: string } | null
+                  const from = s.from_user as unknown as { first_name: string; last_name: string } | null
                   return (
                     <li key={s.id} className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
                       <p className="text-xs text-yellow-800 font-medium mb-1">
@@ -211,7 +211,7 @@ export default async function DashboardPage() {
             ) : (
               <ul className="space-y-2">
                 {favResources.map((fr) => {
-                  const r = fr.resource as { id: string; title: string; type: string; url: string | null } | null
+                  const r = fr.resource as unknown as { id: string; title: string; type: string; url: string | null } | null
                   if (!r) return null
                   return (
                     <li key={r.id}>
