@@ -53,6 +53,11 @@ export default function CalendarPage() {
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
 
+  // Search & filters
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string>('')
+  const [audienceFilter, setAudienceFilter] = useState<string>('')
+
   // Add-event form
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -91,6 +96,21 @@ export default function CalendarPage() {
 
   const canManage = role === 'supervisor' || role === 'admin'
 
+  // ── Search & filter (applies to grid AND upcoming list) ─────
+  const filteredEvents = events.filter((e) => {
+    const q = search.trim().toLowerCase()
+    const haystack = [
+      e.title, e.description, e.location, e.event_type,
+      ...(e.audience ?? []),
+    ].filter(Boolean).join(' ').toLowerCase()
+    const matchSearch = !q || haystack.includes(q)
+    const matchType = !typeFilter || e.event_type === typeFilter
+    const matchAudience = !audienceFilter || (e.audience ?? []).includes(audienceFilter)
+    return matchSearch && matchType && matchAudience
+  })
+
+  const filtersActive = Boolean(search.trim() || typeFilter || audienceFilter)
+
   // ── Month grid math ────────────────────────────────────────
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
@@ -102,11 +122,29 @@ export default function CalendarPage() {
 
   const eventsOnDay = (day: number) => {
     const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return events.filter((e) => {
+    return filteredEvents.filter((e) => {
       const start = e.start_date
       const end = e.end_date ?? e.start_date
       return iso >= start && iso <= end
     })
+  }
+
+  const goToToday = () => {
+    setViewYear(today.getFullYear())
+    setViewMonth(today.getMonth())
+  }
+
+  // Jump straight to the month of the next matching event.
+  const goToNextEvent = () => {
+    const todayIso2 = today.toISOString().split('T')[0]
+    const next = filteredEvents
+      .filter((e) => (e.end_date ?? e.start_date) >= todayIso2)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date))[0]
+    if (next) {
+      const d = parseDate(next.start_date)
+      setViewYear(d.getFullYear())
+      setViewMonth(d.getMonth())
+    }
   }
 
   const prevMonth = () => {
@@ -126,7 +164,7 @@ export default function CalendarPage() {
     day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
 
   const todayIso = today.toISOString().split('T')[0]
-  const upcoming = events
+  const upcoming = filteredEvents
     .filter((e) => (e.end_date ?? e.start_date) >= todayIso)
     .sort((a, b) => a.start_date.localeCompare(b.start_date))
 
@@ -333,17 +371,80 @@ export default function CalendarPage() {
         </div>
       )}
 
+      {/* Search & filters */}
+      <div className="card p-4 space-y-3">
+        <input
+          type="text"
+          className="input"
+          placeholder="Search PD by topic or keyword — e.g. AI, literacy, leadership, Boston…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="input w-auto text-sm py-1.5"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            aria-label="Filter by event type"
+          >
+            <option value="">All types</option>
+            {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select
+            className="input w-auto text-sm py-1.5"
+            value={audienceFilter}
+            onChange={(e) => setAudienceFilter(e.target.value)}
+            aria-label="Filter by audience"
+          >
+            <option value="">All audiences</option>
+            {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          {filtersActive && (
+            <>
+              <span className="text-xs text-gray-500">
+                {filteredEvents.length} event{filteredEvents.length === 1 ? '' : 's'} match
+              </span>
+              <button
+                type="button"
+                onClick={() => { setSearch(''); setTypeFilter(''); setAudienceFilter('') }}
+                className="text-xs text-navy-800 font-medium hover:underline"
+              >
+                Clear filters
+              </button>
+              <button
+                type="button"
+                onClick={goToNextEvent}
+                className="text-xs text-navy-800 font-medium hover:underline"
+              >
+                Jump to next match →
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Month grid */}
       <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={prevMonth} className="btn-ghost px-3 py-1.5" aria-label="Previous month">
-            ‹
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <button type="button" onClick={prevMonth} className="btn-secondary text-sm px-3 py-1.5" aria-label="Previous month">
+            ← Prev
           </button>
-          <h3 className="font-display text-lg text-navy-900">
-            {MONTH_NAMES[viewMonth]} {viewYear}
-          </h3>
-          <button onClick={nextMonth} className="btn-ghost px-3 py-1.5" aria-label="Next month">
-            ›
+          <div className="flex items-center gap-3">
+            <h3 className="font-display text-lg text-navy-900">
+              {MONTH_NAMES[viewMonth]} {viewYear}
+            </h3>
+            {(viewMonth !== today.getMonth() || viewYear !== today.getFullYear()) && (
+              <button
+                type="button"
+                onClick={goToToday}
+                className="text-xs text-navy-800 font-medium hover:underline"
+              >
+                Today
+              </button>
+            )}
+          </div>
+          <button type="button" onClick={nextMonth} className="btn-secondary text-sm px-3 py-1.5" aria-label="Next month">
+            Next →
           </button>
         </div>
 
@@ -409,7 +510,7 @@ export default function CalendarPage() {
           </div>
         ) : upcoming.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
-            <p>No upcoming events.</p>
+            <p>{filtersActive ? 'No upcoming events match your search.' : 'No upcoming events.'}</p>
           </div>
         ) : (
           <div className="space-y-3">
