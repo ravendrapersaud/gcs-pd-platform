@@ -61,8 +61,24 @@ This enables BOTH Google sign-in and the Drive picker in workspaces.
      - `https://xhhxecoubvwqyqvctpdf.supabase.co/auth/v1/callback`
        (the SUPABASE callback — not your app's URL; most common mistake)
    - Save → copy the **Client ID** and **Client Secret**.
-5. **Credentials → Create Credentials → API key** → copy it. Optional:
-   restrict it to the Picker API + your two origins.
+5. **Create the API key** (used by the Drive picker to load Google's
+   file-browser UI — separate from the OAuth client in step 4):
+   - Still in **APIs & Services → Credentials**, click
+     **Create Credentials → API key** (top of the page).
+   - A dialog shows the new key (a string starting `AIza…`). Copy it —
+     this becomes `NEXT_PUBLIC_GOOGLE_API_KEY` in Step 3.
+   - **Restrict it** (recommended — this key ships in the browser, so
+     anyone can see it; restrictions make it useless outside your app).
+     Click **Edit API key** (or the key's name in the list):
+     - Under **Application restrictions** choose **Websites** and add:
+       - `https://YOUR-APP.vercel.app/*`
+       - `http://localhost:3000/*`
+     - Under **API restrictions** choose **Restrict key** and select
+       **Google Picker API** only.
+     - Save. (Restriction changes can take a few minutes to apply.)
+   - Note: the API key identifies your Google Cloud project; the OAuth
+     client from step 4 is what asks the user for Drive permission.
+     The picker needs both.
 
 ## Step 3 — Connect the pieces (~10 min)
 

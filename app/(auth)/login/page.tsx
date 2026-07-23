@@ -25,7 +25,10 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+        // Must go through the server-side callback so the session cookie
+        // is set before landing on the dashboard (otherwise the middleware
+        // bounces the first attempt and users have to sign in twice).
+        redirectTo: `${window.location.origin}/api/auth/callback?next=/dashboard`,
         scopes: 'email profile',
         queryParams: {
           hd: 'gcschool.org', // hint Google to show only school accounts
