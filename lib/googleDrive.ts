@@ -100,7 +100,12 @@ export async function openDrivePicker(
   // 3. Build and show the picker
   await new Promise<void>((resolve) => {
     const google = window.google
-    const view = new google.picker.DocsView().setIncludeFolders(false)
+    // List mode instead of the thumbnail grid: with the narrow drive.file
+    // scope the picker can't render file previews, so grid thumbnails
+    // appear broken. List view shows name/icon/date cleanly.
+    const view = new google.picker.DocsView()
+      .setIncludeFolders(false)
+      .setMode(google.picker.DocsViewMode.LIST)
     const picker = new google.picker.PickerBuilder()
       .addView(view)
       .setOAuthToken(accessToken)
