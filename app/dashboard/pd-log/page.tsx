@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { PdActivity, FundingRequest, PdType, FundingStatus } from '@/lib/types'
-import { ANNUAL_PD_ALLOTMENT, academicYearLabel, isInCurrentAcademicYear, formatUSD } from '@/lib/funds'
+import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, type FundConfig } from '@/lib/funds'
 import clsx from 'clsx'
 
 const PD_TYPES: PdType[] = [
@@ -27,6 +27,8 @@ export default function PdLogPage() {
   const [fundingRequests, setFundingRequests] = useState<FundingRequest[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fundCfg, setFundCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
+  const [myProfile, setMyProfile] = useState<{ employee_type: string | null; pd_allotment: number | null } | null>(null)
 
   // Activity form state
   const [showActivityForm, setShowActivityForm] = useState(false)
@@ -57,7 +59,7 @@ export default function PdLogPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: acts }, { data: funds }] = await Promise.all([
+    const [{ data: acts }, { data: funds }, { data: profile }, { data: settings }] = await Promise.all([
       supabase
         .from('pd_activities')
         .select('*')
@@ -68,9 +70,17 @@ export default function PdLogPage() {
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('employee_type, pd_allotment')
+        .eq('id', user.id)
+        .single(),
+      supabase.from('app_settings').select('key, value'),
     ])
     setActivities((acts ?? []) as PdActivity[])
     setFundingRequests((funds ?? []) as FundingRequest[])
+    setMyProfile((profile ?? null) as { employee_type: string | null; pd_allotment: number | null } | null)
+    setFundCfg(parseFundSettings(settings))
     setLoading(false)
   }, [])
 
@@ -124,16 +134,20 @@ export default function PdLogPage() {
 
   const totalHours = activities.reduce((s, a) => s + (a.hours ?? 0), 0)
 
-  // ── PD fund allotment (resets each academic year) ────────────
-  const fundsThisYear = fundingRequests.filter((fr) => isInCurrentAcademicYear(fr.created_at))
+  // ── PD fund allotment (resets each fund year; window depends on
+  //    faculty vs staff, amount honors any per-person override) ────
+  const myAllotment = effectiveAllotment(myProfile, fundCfg)
+  const fundsThisYear = fundingRequests.filter((fr) => isInFundYear(fr.created_at, myProfile?.employee_type, fundCfg))
   const usedFunds = fundsThisYear
     .filter((fr) => fr.status === 'approved')
     .reduce((s, fr) => s + Number(fr.amount), 0)
   const pendingFunds = fundsThisYear
     .filter((fr) => fr.status === 'pending')
     .reduce((s, fr) => s + Number(fr.amount), 0)
-  const remainingFunds = Math.max(ANNUAL_PD_ALLOTMENT - usedFunds, 0)
-  const usedPct = Math.min(Math.round((usedFunds / ANNUAL_PD_ALLOTMENT) * 100), 100)
+  const remainingFunds = Math.max(myAllotment - usedFunds, 0)
+  const usedPct = myAllotment > 0 ? Math.min(Math.round((usedFunds / myAllotment) * 100), 100) : 100
+  const myYearStart = fundYearRange(myProfile?.employee_type, fundCfg).start
+  const resetDateLabel = myYearStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -294,18 +308,18 @@ export default function PdLogPage() {
           <div className="card p-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <p className="text-sm text-gray-500">PD fund allotment · {academicYearLabel()}</p>
+                <p className="text-sm text-gray-500">PD fund allotment · {fundYearLabel(myProfile?.employee_type, fundCfg)}</p>
                 <p className="text-3xl font-bold text-navy-900 mt-1">
                   {formatUSD(remainingFunds)} <span className="text-base font-medium text-gray-400">remaining</span>
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Resets to {formatUSD(ANNUAL_PD_ALLOTMENT)} each academic year
+                  Resets to {formatUSD(myAllotment)} each year on {resetDateLabel}
                 </p>
               </div>
               <div className="flex gap-6 text-sm">
                 <div>
                   <p className="text-gray-400">Allotment</p>
-                  <p className="font-semibold text-gray-700">{formatUSD(ANNUAL_PD_ALLOTMENT)}</p>
+                  <p className="font-semibold text-gray-700">{formatUSD(myAllotment)}</p>
                 </div>
                 <div>
                   <p className="text-gray-400">Approved</p>

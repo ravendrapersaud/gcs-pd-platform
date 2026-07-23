@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { FundingRequest, FundingStatus } from '@/lib/types'
-import { ANNUAL_PD_ALLOTMENT, academicYearLabel, isInCurrentAcademicYear, formatUSD } from '@/lib/funds'
+import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, formatUSD, type FundConfig } from '@/lib/funds'
 import clsx from 'clsx'
 
 const statusColors: Record<FundingStatus, string> = {
@@ -25,6 +25,7 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true)
   const [actingId, setActingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [fundCfg, setFundCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,9 +58,13 @@ export default function ApprovalsPage() {
       return
     }
 
+    // Load fund policy settings (allotment + fund-year start dates).
+    const { data: settingsRows } = await supabase.from('app_settings').select('key, value')
+    setFundCfg(parseFundSettings(settingsRows))
+
     const selectStr = `
       *,
-      user:profiles!funding_requests_user_id_fkey(id, first_name, last_name, title, division, department),
+      user:profiles!funding_requests_user_id_fkey(id, first_name, last_name, title, division, department, employee_type, pd_allotment),
       reviewer:profiles!funding_requests_reviewed_by_fkey(id, first_name, last_name)
     `
 
@@ -139,10 +144,11 @@ export default function ApprovalsPage() {
     }
   }
 
-  // Approved totals per requester, current academic year only.
+  // Approved totals per requester, counted within THEIR fund year
+  // (faculty and staff have different reset dates).
   const approvedByUser: Record<string, number> = {}
   for (const r of requests) {
-    if (r.status === 'approved' && isInCurrentAcademicYear(r.created_at)) {
+    if (r.status === 'approved' && isInFundYear(r.created_at, r.user?.employee_type, fundCfg)) {
       approvedByUser[r.user_id] = (approvedByUser[r.user_id] ?? 0) + Number(r.amount)
     }
   }
@@ -198,7 +204,9 @@ export default function ApprovalsPage() {
         ) : (
           <div className="space-y-3">
             {pending.map((r) => {
-              const remaining = Math.max(ANNUAL_PD_ALLOTMENT - (approvedByUser[r.user_id] ?? 0), 0)
+              // Remaining is computed against the requester's own
+              // allotment (profile override or school default).
+              const remaining = Math.max(effectiveAllotment(r.user, fundCfg) - (approvedByUser[r.user_id] ?? 0), 0)
               const wouldLeave = remaining - Number(r.amount)
               return (
                 <div key={r.id} className="card p-5">
@@ -229,7 +237,7 @@ export default function ApprovalsPage() {
                     <div className="text-right shrink-0">
                       <p className="font-bold text-navy-900 text-lg">{formatUSD(Number(r.amount))}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {formatUSD(remaining)} remaining · {academicYearLabel()}
+                        {formatUSD(remaining)} remaining · {fundYearLabel(r.user?.employee_type, fundCfg)}
                       </p>
                       <p className={clsx('text-xs mt-0.5', wouldLeave < 0 ? 'text-red-600 font-medium' : 'text-gray-400')}>
                         {wouldLeave < 0

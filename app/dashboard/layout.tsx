@@ -63,6 +63,7 @@ export default async function DashboardLayout({
     department: null,
     employee_id: null,
     employee_type: null,
+    pd_allotment: null,
     needs_setup: true,
     can_create_workspaces: false,
     avatar_url: null,

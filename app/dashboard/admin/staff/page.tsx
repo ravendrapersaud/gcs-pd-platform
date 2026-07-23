@@ -30,6 +30,7 @@ export default function StaffRosterPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
+  const [allotmentInput, setAllotmentInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
@@ -157,6 +158,7 @@ export default function StaffRosterPage() {
       role: row.role,
       can_create_workspaces: row.can_create_workspaces ?? false,
     })
+    setAllotmentInput(row.pd_allotment === null || row.pd_allotment === undefined ? '' : String(row.pd_allotment))
     setSupervisorId('')
     setSaveError(null)
   }
@@ -203,6 +205,7 @@ export default function StaffRosterPage() {
       division: editForm.division ?? null,
       department: editForm.department ?? null,
       employee_type: editForm.employee_type || null,
+      pd_allotment: allotmentInput.trim() === '' ? null : Number(allotmentInput),
       role: editForm.role,
       can_create_workspaces: editForm.can_create_workspaces ?? false,
       needs_setup: false, // saving the profile completes setup
@@ -297,6 +300,21 @@ export default function StaffRosterPage() {
                   <option value="faculty">Faculty</option>
                   <option value="staff">Staff</option>
                 </select>
+              </div>
+              <div>
+                <label className="label">PD allotment override ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  placeholder="School default"
+                  value={allotmentInput}
+                  onChange={(e) => setAllotmentInput(e.target.value)}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Leave blank to use the school default.
+                </p>
               </div>
               <div>
                 <label className="label">Role</label>

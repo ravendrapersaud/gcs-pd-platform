@@ -1,17 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ANNUAL_PD_ALLOTMENT, academicYearRange, academicYearLabel, formatUSD } from '@/lib/funds'
+import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiveAllotment, formatUSD } from '@/lib/funds'
 
 interface ReportRow {
   id: string
   first_name: string
   last_name: string
   title: string | null
+  employee_type: string | null
+  pd_allotment: number | null
 }
 
 interface TeamData {
   label: string
+  yearLabel: string
   reports: (ReportRow & { pdHours: number; remainingFunds: number })[]
   pendingCount: number
   pendingTotal: number
@@ -26,18 +29,22 @@ async function fetchTeamData(
 ): Promise<TeamData | null> {
   if (role !== 'supervisor' && role !== 'admin') return null
 
+  // Fund policy settings (default allotment + fund-year start dates).
+  const { data: settingsRows } = await supabase.from('app_settings').select('key, value')
+  const fundCfg = parseFundSettings(settingsRows)
+
   let reports: ReportRow[] = []
   if (role === 'admin') {
     const { data } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, title')
+      .select('id, first_name, last_name, title, employee_type, pd_allotment')
       .neq('id', userId)
       .order('last_name')
     reports = (data ?? []) as ReportRow[]
   } else {
     const { data } = await supabase
       .from('supervisor_assignments')
-      .select('staff:profiles!supervisor_assignments_staff_id_fkey(id, first_name, last_name, title)')
+      .select('staff:profiles!supervisor_assignments_staff_id_fkey(id, first_name, last_name, title, employee_type, pd_allotment)')
       .eq('supervisor_id', userId)
     const seen = new Set<string>()
     reports = (data ?? []).flatMap((row) => {
@@ -51,7 +58,8 @@ async function fetchTeamData(
   const ids = reports.map((r) => r.id)
   const base: TeamData = {
     label: role === 'admin' ? 'School overview' : 'My Team',
-    reports: reports.map((r) => ({ ...r, pdHours: 0, remainingFunds: ANNUAL_PD_ALLOTMENT })),
+    yearLabel: fundYearLabel('staff', fundCfg),
+    reports: reports.map((r) => ({ ...r, pdHours: 0, remainingFunds: effectiveAllotment(r, fundCfg) })),
     pendingCount: 0,
     pendingTotal: 0,
     teamHours: 0,
@@ -59,9 +67,17 @@ async function fetchTeamData(
   }
   if (ids.length === 0) return base
 
-  const { start } = academicYearRange()
-  const startISO = start.toISOString()
-  const startDate = startISO.slice(0, 10)
+  // Staff and faculty fund years start on different dates, so fetch
+  // approved requests since the EARLIER of the two starts, then filter
+  // per-user in JS with each person's own window.
+  const staffStart = fundYearRange('staff', fundCfg).start
+  const facultyStart = fundYearRange('faculty', fundCfg).start
+  const earliestStart = staffStart < facultyStart ? staffStart : facultyStart
+  const earliestISO = earliestStart.toISOString()
+  // Team hours metric: simplification — a single (staff) window is used
+  // for everyone here; the header labels it as one academic year and
+  // per-person precision matters less for this aggregate.
+  const hoursStartDate = staffStart.toISOString().slice(0, 10)
 
   const [pendingRes, approvedRes, hoursRes, obsRes] = await Promise.all([
     supabase
@@ -71,15 +87,15 @@ async function fetchTeamData(
       .eq('status', 'pending'),
     supabase
       .from('funding_requests')
-      .select('user_id, amount')
+      .select('user_id, amount, created_at')
       .in('user_id', ids)
       .eq('status', 'approved')
-      .gte('created_at', startISO),
+      .gte('created_at', earliestISO),
     supabase
       .from('pd_activities')
       .select('user_id, hours')
       .in('user_id', ids)
-      .gte('activity_date', startDate),
+      .gte('activity_date', hoursStartDate),
     supabase
       .from('observations')
       .select('id')
@@ -87,8 +103,13 @@ async function fetchTeamData(
       .eq('signed_off', false),
   ])
 
+  const typeById: Record<string, string | null> = {}
+  for (const r of reports) typeById[r.id] = r.employee_type
+
   const approvedByUser: Record<string, number> = {}
   for (const row of approvedRes.data ?? []) {
+    // Only count spend inside this person's own fund year.
+    if (!isInFundYear(row.created_at, typeById[row.user_id], fundCfg)) continue
     approvedByUser[row.user_id] = (approvedByUser[row.user_id] ?? 0) + Number(row.amount)
   }
   const hoursByUser: Record<string, number> = {}
@@ -101,7 +122,7 @@ async function fetchTeamData(
     reports: reports.map((r) => ({
       ...r,
       pdHours: hoursByUser[r.id] ?? 0,
-      remainingFunds: Math.max(ANNUAL_PD_ALLOTMENT - (approvedByUser[r.id] ?? 0), 0),
+      remainingFunds: Math.max(effectiveAllotment(r, fundCfg) - (approvedByUser[r.id] ?? 0), 0),
     })),
     pendingCount: pendingRes.data?.length ?? 0,
     pendingTotal: (pendingRes.data ?? []).reduce((s, r) => s + Number(r.amount), 0),
@@ -224,7 +245,7 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-gray-900 text-lg">{team.label}</h2>
-              <p className="text-xs text-gray-400">Academic year {academicYearLabel()}</p>
+              <p className="text-xs text-gray-400">Academic year {team.yearLabel}</p>
             </div>
             {team.pendingCount > 0 && (
               <Link href="/dashboard/approvals" className="text-sm text-navy-700 hover:underline font-medium">
