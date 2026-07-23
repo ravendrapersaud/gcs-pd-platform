@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Goal, Profile, GoalStatus } from '@/lib/types'
+import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
 type TabId = 'mine' | 'collab' | 'archived'
@@ -70,6 +71,22 @@ function GoalCard({ goal, onUpdate, onEdit }: GoalCardProps) {
         </p>
       )}
 
+      {goal.collaborators && goal.collaborators.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {goal.collaborators.map((c) => (
+            <span
+              key={c.id}
+              className="inline-flex items-center gap-1.5 bg-navy-50 text-navy-800 border border-navy-100 rounded-full pl-1 pr-2.5 py-0.5 text-xs font-medium"
+            >
+              <span className="w-4 h-4 rounded-full bg-navy-200 text-navy-900 text-[9px] font-bold flex items-center justify-center">
+                {(c.first_name?.[0] ?? '')}{(c.last_name?.[0] ?? '')}
+              </span>
+              {c.first_name} {c.last_name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Update form */}
       {showUpdate && (
         <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
@@ -128,37 +145,35 @@ function GoalCard({ goal, onUpdate, onEdit }: GoalCardProps) {
 }
 
 interface GoalFormProps {
-  onSave: (data: Partial<Goal>) => Promise<void>
+  onSave: (data: Partial<Goal>, collaborators: Profile[]) => Promise<void>
   onCancel: () => void
   initial?: Partial<Goal>
   profiles: Profile[]
+  currentUserId?: string | null
 }
 
-function GoalForm({ onSave, onCancel, initial, profiles }: GoalFormProps) {
+function GoalForm({ onSave, onCancel, initial, profiles, currentUserId }: GoalFormProps) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
     description: initial?.description ?? '',
     due_date: initial?.due_date ?? '',
   })
-  const [coOwner, setCoOwner] = useState('')
+  const [collaborators, setCollaborators] = useState<Profile[]>([])
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave({
-      ...initial,
-      title: form.title,
-      description: form.description || undefined,
-      due_date: form.due_date || undefined,
-    })
+    await onSave(
+      {
+        ...initial,
+        title: form.title,
+        description: form.description || undefined,
+        due_date: form.due_date || undefined,
+      },
+      collaborators
+    )
     setSaving(false)
   }
-
-  const filteredProfiles = profiles.filter(
-    (p) =>
-      coOwner &&
-      `${p.first_name} ${p.last_name}`.toLowerCase().includes(coOwner.toLowerCase())
-  )
 
   return (
     <div className="card p-6 space-y-4">
@@ -192,29 +207,19 @@ function GoalForm({ onSave, onCancel, initial, profiles }: GoalFormProps) {
           onChange={(e) => setForm({ ...form, due_date: e.target.value })}
         />
       </div>
-      <div className="relative">
-        <label className="label">Co-owner (search by name)</label>
-        <input
-          className="input"
-          placeholder="Search colleague…"
-          value={coOwner}
-          onChange={(e) => setCoOwner(e.target.value)}
-        />
-        {filteredProfiles.length > 0 && (
-          <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1">
-            {filteredProfiles.slice(0, 5).map((p) => (
-              <li
-                key={p.id}
-                className="px-4 py-2 text-sm hover:bg-navy-50 cursor-pointer"
-                onClick={() => setCoOwner(`${p.first_name} ${p.last_name}`)}
-              >
-                {p.first_name} {p.last_name}
-                <span className="text-gray-400 text-xs ml-2">{p.title}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {!initial?.id && (
+        <div>
+          <label className="label">Co-owners</label>
+          <PersonPicker
+            multiple
+            profiles={profiles}
+            exclude={currentUserId ? [currentUserId] : []}
+            value={collaborators}
+            onChange={setCollaborators}
+            placeholder="Search colleagues by name…"
+          />
+        </div>
+      )}
       <div className="flex gap-3">
         <button onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
         <button onClick={handleSave} disabled={saving || !form.title} className="btn-primary flex-1">
@@ -236,6 +241,7 @@ export default function GoalsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editGoal, setEditGoal] = useState<Goal | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const loadGoals = useCallback(async () => {
     setLoading(true)
@@ -263,11 +269,34 @@ export default function GoalsPage() {
         supabase.from('profiles').select('*').order('first_name'),
       ])
 
-    setGoals((myGoals ?? []) as Goal[])
-    setCollabGoals(
-      (collabs ?? []).flatMap((c) => (c.goals ? [c.goals as unknown as Goal] : []))
-    )
-    setArchivedGoals((archived ?? []) as Goal[])
+    const mine = (myGoals ?? []) as Goal[]
+    const collaborative = (collabs ?? []).flatMap((c) => (c.goals ? [c.goals as unknown as Goal] : []))
+    const arch = (archived ?? []) as Goal[]
+
+    // Batched fetch of collaborators for all visible goals.
+    const allIds = Array.from(new Set([...mine, ...collaborative, ...arch].map((g) => g.id)))
+    if (allIds.length > 0) {
+      const { data: collabRows } = await supabase
+        .from('goal_collaborators')
+        .select('goal_id, profile:profiles(id, first_name, last_name, title)')
+        .in('goal_id', allIds)
+
+      const collabMap: Record<string, Profile[]> = {}
+      for (const row of collabRows ?? []) {
+        const p = row.profile as unknown as Profile | null
+        if (!p) continue
+        collabMap[row.goal_id] = [...(collabMap[row.goal_id] ?? []), p]
+      }
+      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [] })
+      setGoals(mine.map(attach))
+      setCollabGoals(collaborative.map(attach))
+      setArchivedGoals(arch.map(attach))
+    } else {
+      setGoals(mine)
+      setCollabGoals(collaborative)
+      setArchivedGoals(arch)
+    }
+
     setProfiles((allProfiles ?? []) as Profile[])
     setLoading(false)
   }, [])
@@ -276,26 +305,54 @@ export default function GoalsPage() {
     loadGoals()
   }, [loadGoals])
 
-  const handleCreate = async (data: Partial<Goal>) => {
+  const handleCreate = async (data: Partial<Goal>, collaborators: Profile[]) => {
     if (!userId) return
-    await supabase.from('goals').insert({
-      title: data.title,
-      description: data.description ?? null,
-      due_date: data.due_date ?? null,
-      owner_id: userId,
-      progress_pct: 0,
-      status: 'active',
-    })
+    setSaveError(null)
+
+    const { data: goal, error: goalErr } = await supabase
+      .from('goals')
+      .insert({
+        title: data.title,
+        description: data.description ?? null,
+        due_date: data.due_date ?? null,
+        owner_id: userId,
+        progress_pct: 0,
+        status: 'active',
+      })
+      .select()
+      .single()
+
+    if (goalErr) {
+      setSaveError(goalErr.message)
+      return
+    }
+
+    if (collaborators.length > 0) {
+      const { error: collabErr } = await supabase.from('goal_collaborators').insert(
+        collaborators.map((p) => ({ goal_id: goal.id, user_id: p.id }))
+      )
+      if (collabErr) {
+        setSaveError(`Goal was created, but adding co-owners failed: ${collabErr.message}`)
+        loadGoals()
+        return
+      }
+    }
+
     setShowForm(false)
     loadGoals()
   }
 
   const handleEdit = async (data: Partial<Goal>) => {
     if (!data.id) return
-    await supabase
+    setSaveError(null)
+    const { error } = await supabase
       .from('goals')
       .update({ title: data.title, description: data.description, due_date: data.due_date })
       .eq('id', data.id)
+    if (error) {
+      setSaveError(error.message)
+      return
+    }
     setEditGoal(null)
     loadGoals()
   }
@@ -341,12 +398,19 @@ export default function GoalsPage() {
         )}
       </div>
 
+      {saveError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {saveError}
+        </div>
+      )}
+
       {/* New goal form */}
       {showForm && (
         <GoalForm
           onSave={handleCreate}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => { setShowForm(false); setSaveError(null) }}
           profiles={profiles}
+          currentUserId={userId}
         />
       )}
 
@@ -355,8 +419,9 @@ export default function GoalsPage() {
         <GoalForm
           initial={editGoal}
           onSave={handleEdit}
-          onCancel={() => setEditGoal(null)}
+          onCancel={() => { setEditGoal(null); setSaveError(null) }}
           profiles={profiles}
+          currentUserId={userId}
         />
       )}
 

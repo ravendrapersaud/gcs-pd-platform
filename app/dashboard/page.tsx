@@ -1,6 +1,114 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { ANNUAL_PD_ALLOTMENT, academicYearRange, academicYearLabel, formatUSD } from '@/lib/funds'
+
+interface ReportRow {
+  id: string
+  first_name: string
+  last_name: string
+  title: string | null
+}
+
+interface TeamData {
+  label: string
+  reports: (ReportRow & { pdHours: number; remainingFunds: number })[]
+  pendingCount: number
+  pendingTotal: number
+  teamHours: number
+  unsignedObs: number
+}
+
+async function fetchTeamData(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  role: string
+): Promise<TeamData | null> {
+  if (role !== 'supervisor' && role !== 'admin') return null
+
+  let reports: ReportRow[] = []
+  if (role === 'admin') {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, title')
+      .neq('id', userId)
+      .order('last_name')
+    reports = (data ?? []) as ReportRow[]
+  } else {
+    const { data } = await supabase
+      .from('supervisor_assignments')
+      .select('staff:profiles!supervisor_assignments_staff_id_fkey(id, first_name, last_name, title)')
+      .eq('supervisor_id', userId)
+    const seen = new Set<string>()
+    reports = (data ?? []).flatMap((row) => {
+      const s = row.staff as unknown as ReportRow | null
+      if (!s || seen.has(s.id)) return []
+      seen.add(s.id)
+      return [s]
+    })
+  }
+
+  const ids = reports.map((r) => r.id)
+  const base: TeamData = {
+    label: role === 'admin' ? 'School overview' : 'My Team',
+    reports: reports.map((r) => ({ ...r, pdHours: 0, remainingFunds: ANNUAL_PD_ALLOTMENT })),
+    pendingCount: 0,
+    pendingTotal: 0,
+    teamHours: 0,
+    unsignedObs: 0,
+  }
+  if (ids.length === 0) return base
+
+  const { start } = academicYearRange()
+  const startISO = start.toISOString()
+  const startDate = startISO.slice(0, 10)
+
+  const [pendingRes, approvedRes, hoursRes, obsRes] = await Promise.all([
+    supabase
+      .from('funding_requests')
+      .select('id, amount')
+      .in('user_id', ids)
+      .eq('status', 'pending'),
+    supabase
+      .from('funding_requests')
+      .select('user_id, amount')
+      .in('user_id', ids)
+      .eq('status', 'approved')
+      .gte('created_at', startISO),
+    supabase
+      .from('pd_activities')
+      .select('user_id, hours')
+      .in('user_id', ids)
+      .gte('activity_date', startDate),
+    supabase
+      .from('observations')
+      .select('id')
+      .in('observed_id', ids)
+      .eq('signed_off', false),
+  ])
+
+  const approvedByUser: Record<string, number> = {}
+  for (const row of approvedRes.data ?? []) {
+    approvedByUser[row.user_id] = (approvedByUser[row.user_id] ?? 0) + Number(row.amount)
+  }
+  const hoursByUser: Record<string, number> = {}
+  for (const row of hoursRes.data ?? []) {
+    hoursByUser[row.user_id] = (hoursByUser[row.user_id] ?? 0) + (row.hours ?? 0)
+  }
+
+  return {
+    ...base,
+    reports: reports.map((r) => ({
+      ...r,
+      pdHours: hoursByUser[r.id] ?? 0,
+      remainingFunds: Math.max(ANNUAL_PD_ALLOTMENT - (approvedByUser[r.id] ?? 0), 0),
+    })),
+    pendingCount: pendingRes.data?.length ?? 0,
+    pendingTotal: (pendingRes.data ?? []).reduce((s, r) => s + Number(r.amount), 0),
+    teamHours: (hoursRes.data ?? []).reduce((s, r) => s + (r.hours ?? 0), 0),
+    unsignedObs: obsRes.data?.length ?? 0,
+  }
+}
 
 function MetricCard({
   label,
@@ -48,6 +156,15 @@ export default async function DashboardPage() {
   if (!session) redirect('/login')
 
   const userId = session.user.id
+
+  // Current profile role (for supervisor/admin team section)
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single()
+
+  const team = await fetchTeamData(supabase, userId, myProfile?.role ?? 'staff')
 
   // Fetch PD activities
   const { data: pdActivities } = await supabase
@@ -101,6 +218,80 @@ export default async function DashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {/* Team section (supervisors and admins) */}
+      {team && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900 text-lg">{team.label}</h2>
+              <p className="text-xs text-gray-400">Academic year {academicYearLabel()}</p>
+            </div>
+            {team.pendingCount > 0 && (
+              <Link href="/dashboard/approvals" className="text-sm text-navy-700 hover:underline font-medium">
+                Review requests →
+              </Link>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <MetricCard
+              label={team.label === 'My Team' ? 'Team members' : 'Staff members'}
+              value={team.reports.length}
+              color="navy"
+            />
+            <MetricCard
+              label="Pending approvals"
+              value={team.pendingCount}
+              sub={team.pendingCount > 0 ? `${formatUSD(team.pendingTotal)} requested` : 'none waiting'}
+              color="yellow"
+            />
+            <MetricCard
+              label="Team PD hours"
+              value={team.teamHours.toFixed(1)}
+              sub="this academic year"
+              color="green"
+            />
+            <MetricCard
+              label="Unsigned observations"
+              value={team.unsignedObs}
+              sub="awaiting sign-off"
+              color="blue"
+            />
+          </div>
+
+          {team.reports.length > 0 && (
+            <div className="card overflow-hidden">
+              <ul className="divide-y divide-gray-100">
+                {team.reports.slice(0, 8).map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center shrink-0">
+                      <span className="text-navy-800 text-xs font-bold">
+                        {(r.first_name?.[0] ?? '')}{(r.last_name?.[0] ?? '')}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {r.first_name} {r.last_name}
+                      </p>
+                      {r.title && <p className="text-xs text-gray-400 truncate">{r.title}</p>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-navy-800">{r.pdHours.toFixed(1)} hrs</p>
+                      <p className="text-xs text-gray-400">{formatUSD(r.remainingFunds)} PD funds left</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {team.reports.length > 8 && (
+                <p className="px-4 py-2.5 text-xs text-gray-400 border-t border-gray-100">
+                  + {team.reports.length - 8} more
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <MetricCard

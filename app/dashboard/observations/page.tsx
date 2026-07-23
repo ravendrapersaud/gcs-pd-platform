@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Observation, Profile, Framework, FrameworkDomain, ObsType } from '@/lib/types'
+import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
 const OBS_TYPES: ObsType[] = ['formal', 'informal', 'walkthrough', 'self']
 
-const ratingLabels = ['', 'Developing', 'Emerging', 'Proficient', 'Distinguished']
+const ratingLabels = ['', 'Developing', 'Basic', 'Proficient', 'Distinguished']
 const ratingColors = ['', 'bg-red-100 text-red-700', 'bg-yellow-100 text-yellow-700', 'bg-blue-100 text-blue-700', 'bg-green-100 text-green-700']
 
 function ObservationCard({
@@ -119,6 +120,7 @@ export default function ObservationsPage() {
   const [userRole, setUserRole] = useState<string>('staff')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [selectedPerson, setSelectedPerson] = useState<Profile | null>(null)
   const [selectedFramework, setSelectedFramework] = useState<Framework | null>(null)
   const [form, setForm] = useState<NewObsForm>({
     observed_id: '',
@@ -251,6 +253,7 @@ export default function ObservationsPage() {
         notes: '',
         ratings: {},
       })
+      setSelectedPerson(null)
       setSelectedFramework(null)
       load()
     } catch (err: unknown) {
@@ -262,6 +265,15 @@ export default function ObservationsPage() {
 
   const currentObs = tab === 'mine' ? observations : pending
   const isSupervisorOrAdmin = userRole === 'supervisor' || userRole === 'admin'
+
+  const hasRating = Object.values(form.ratings).some((r) => r.rating >= 1)
+  // Frameworks without domains can't be rated — don't block submission for those.
+  const frameworkHasDomains = Boolean(selectedFramework?.domains?.length)
+  const canSubmit =
+    Boolean(form.observed_id) &&
+    Boolean(form.framework_id) &&
+    Boolean(form.observed_at) &&
+    (hasRating || !frameworkHasDomains)
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -296,28 +308,26 @@ export default function ObservationsPage() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="label">Staff Member <span className="text-red-500">*</span></label>
-                <select
-                  required
-                  className="input"
-                  value={form.observed_id}
-                  onChange={(e) => setForm({ ...form, observed_id: e.target.value })}
-                >
-                  <option value="">Select staff…</option>
-                  {profiles.filter((p) => p.id !== userId).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.first_name} {p.last_name} — {p.title}
-                    </option>
-                  ))}
-                </select>
+                <PersonPicker
+                  profiles={profiles}
+                  exclude={userId ? [userId] : []}
+                  value={selectedPerson}
+                  onChange={(p) => {
+                    setSelectedPerson(p)
+                    setForm((prev) => ({ ...prev, observed_id: p?.id ?? '' }))
+                  }}
+                  placeholder="Search staff by name or title…"
+                />
               </div>
               <div>
-                <label className="label">Framework</label>
+                <label className="label">Framework <span className="text-red-500">*</span></label>
                 <select
+                  required
                   className="input"
                   value={form.framework_id}
                   onChange={(e) => handleFrameworkChange(e.target.value)}
                 >
-                  <option value="">No framework</option>
+                  <option value="">Select framework…</option>
                   {frameworks.map((fw) => (
                     <option key={fw.id} value={fw.id}>{fw.title}</option>
                   ))}
@@ -365,6 +375,9 @@ export default function ObservationsPage() {
                 {selectedFramework.domains.map((domain) => (
                   <div key={domain.id} className="bg-gray-50 rounded-lg p-4 space-y-2">
                     <p className="font-medium text-sm text-gray-800">{domain.title}</p>
+                    {domain.description && (
+                      <p className="text-xs text-gray-500">{domain.description}</p>
+                    )}
                     <div className="flex gap-2">
                       {[1, 2, 3, 4].map((rating) => (
                         <button
@@ -374,8 +387,8 @@ export default function ObservationsPage() {
                           className={clsx(
                             'flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors',
                             form.ratings[domain.id]?.rating === rating
-                              ? `${ratingColors[rating]} border-transparent`
-                              : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                              ? 'bg-navy-900 text-white border-navy-900'
+                              : 'border-gray-200 text-gray-500 hover:border-navy-400 bg-white'
                           )}
                         >
                           {rating} — {ratingLabels[rating]}
@@ -398,7 +411,7 @@ export default function ObservationsPage() {
               <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">
                 Cancel
               </button>
-              <button type="submit" disabled={submitting || !form.observed_id} className="btn-primary flex-1">
+              <button type="submit" disabled={submitting || !canSubmit} className="btn-primary flex-1">
                 {submitting ? 'Saving…' : 'Save Observation'}
               </button>
             </div>

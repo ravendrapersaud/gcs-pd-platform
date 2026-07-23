@@ -106,9 +106,16 @@ This enables BOTH Google sign-in and the Drive picker in workspaces.
 
 ## Later / backlog
 
-- **Resend** (spotlight emails): create account at resend.com, verify the
-  gcschool.org sending domain (DNS records), put the API key in
-  `RESEND_API_KEY` on Vercel + `.env.local`, redeploy.
+- **Resend** (spotlight emails): create account at resend.com. Verify a
+  SUBDOMAIN (e.g. `notify.gcschool.org`) rather than the root domain —
+  keeps the app's sending reputation separate from school Google
+  Workspace mail and can't disturb existing SPF/DKIM. Add Resend's DNS
+  records where gcschool.org DNS is managed, wait for the green check,
+  then put the API key in `RESEND_API_KEY` on Vercel + `.env.local` and
+  redeploy. Tell Claude the verified domain so the from-address gets
+  updated, and optionally have Claude add an `email_log` table for an
+  in-app audit trail of all sends (Resend's dashboard covers delivery
+  logs regardless).
 - **Real roster import**: export staff from Blackbaud → match the CSV
   template (Admin → Import CSV → Download Template) → import. Do this
   BEFORE opening Google sign-in to everyone, so people land on complete

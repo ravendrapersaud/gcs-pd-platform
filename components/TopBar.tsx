@@ -20,6 +20,7 @@ const routeMeta: Record<string, { title: string; action?: { label: string; href:
   '/dashboard/workspaces': { title: 'Workspaces' },
   '/dashboard/spotlights': { title: 'Spotlights' },
   '/dashboard/observations': { title: 'Observations' },
+  '/dashboard/approvals': { title: 'Funding Approvals' },
   '/dashboard/frameworks': { title: 'Frameworks' },
   '/dashboard/admin/staff': { title: 'Staff Roster' },
   '/dashboard/admin/import': { title: 'Import Staff (CSV)' },
