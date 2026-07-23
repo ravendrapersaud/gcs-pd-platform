@@ -402,7 +402,9 @@ export default function CalendarPage() {
           {filtersActive && (
             <>
               <span className="text-xs text-gray-500">
-                {filteredEvents.length} event{filteredEvents.length === 1 ? '' : 's'} match
+                {upcoming.length} upcoming event{upcoming.length === 1 ? '' : 's'} match
+                {filteredEvents.length > upcoming.length &&
+                  ` (${filteredEvents.length - upcoming.length} past)`}
               </span>
               <button
                 type="button"
