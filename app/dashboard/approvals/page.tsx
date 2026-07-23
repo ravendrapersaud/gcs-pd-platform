@@ -2,9 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { FundingRequest, FundingStatus } from '@/lib/types'
+import type { FundingRequest, FundingStatus, Resource } from '@/lib/types'
 import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, formatUSD, type FundConfig } from '@/lib/funds'
+import { fundingAdminThreshold, resourceModerationOn } from '@/lib/appSettings'
+import { RESOURCE_TYPE_LABELS } from '@/lib/taxonomy'
 import clsx from 'clsx'
+
+// Pending resource with the submitter's name joined in.
+type PendingResource = Resource & {
+  submitter?: { first_name: string; last_name: string } | null
+}
 
 const statusColors: Record<FundingStatus, string> = {
   pending: 'badge-yellow',
@@ -18,7 +25,7 @@ const fmtDate = (d: string) =>
 
 export default function ApprovalsPage() {
   const supabase = createClient()
-  const [tab, setTab] = useState<'pending' | 'decided'>('pending')
+  const [tab, setTab] = useState<'pending' | 'decided' | 'resources'>('pending')
   const [requests, setRequests] = useState<FundingRequest[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
@@ -26,6 +33,10 @@ export default function ApprovalsPage() {
   const [actingId, setActingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [fundCfg, setFundCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
+  const [adminThreshold, setAdminThreshold] = useState<number | null>(null)
+  const [moderationOn, setModerationOn] = useState(false)
+  const [pendingResources, setPendingResources] = useState<PendingResource[]>([])
+  const [resActingId, setResActingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,9 +69,26 @@ export default function ApprovalsPage() {
       return
     }
 
-    // Load fund policy settings (allotment + fund-year start dates).
+    // Load fund policy settings (allotment + fund-year start dates)
+    // plus the admin threshold and resource moderation flags.
     const { data: settingsRows } = await supabase.from('app_settings').select('key, value')
     setFundCfg(parseFundSettings(settingsRows))
+    setAdminThreshold(fundingAdminThreshold(settingsRows))
+    setModerationOn(resourceModerationOn(settingsRows))
+
+    // Admins also review pending resource submissions here.
+    if (myRole === 'admin') {
+      const { data: pendingRes, error: pendingResErr } = await supabase
+        .from('resources')
+        .select('*, submitter:profiles!resources_submitted_by_fkey(first_name, last_name)')
+        .eq('is_approved', false)
+        .order('created_at', { ascending: false })
+      if (pendingResErr) {
+        setError(pendingResErr.message)
+      } else {
+        setPendingResources((pendingRes ?? []) as unknown as PendingResource[])
+      }
+    }
 
     const selectStr = `
       *,
@@ -144,6 +172,22 @@ export default function ApprovalsPage() {
     }
   }
 
+  // Approve or remove a pending resource submission (admins only).
+  const decideResource = async (id: string, action: 'approve' | 'remove') => {
+    setResActingId(id)
+    setError(null)
+    const { error: err } =
+      action === 'approve'
+        ? await supabase.from('resources').update({ is_approved: true }).eq('id', id)
+        : await supabase.from('resources').delete().eq('id', id)
+    if (err) {
+      setError(err.message)
+    } else {
+      setPendingResources((prev) => prev.filter((r) => r.id !== id))
+    }
+    setResActingId(null)
+  }
+
   // Approved totals per requester, counted within THEIR fund year
   // (faculty and staff have different reset dates).
   const approvedByUser: Record<string, number> = {}
@@ -155,6 +199,11 @@ export default function ApprovalsPage() {
 
   const pending = requests.filter((r) => r.status === 'pending')
   const decided = requests.filter((r) => r.status !== 'pending')
+
+  // Resources tab: admins only. Shown while moderation is on, or when
+  // moderation is off but leftover unapproved items still exist (so
+  // nothing gets stranded).
+  const showResourcesTab = role === 'admin' && (moderationOn || pendingResources.length > 0)
 
   if (!loading && role !== null && role !== 'supervisor' && role !== 'admin') {
     return (
@@ -184,6 +233,14 @@ export default function ApprovalsPage() {
         >
           Decided
         </button>
+        {showResourcesTab && (
+          <button
+            onClick={() => setTab('resources')}
+            className={clsx('tab', tab === 'resources' ? 'tab-active' : 'tab-inactive')}
+          >
+            Resources{pendingResources.length > 0 ? ` (${pendingResources.length})` : ''}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -208,6 +265,9 @@ export default function ApprovalsPage() {
               // allotment (profile override or school default).
               const remaining = Math.max(effectiveAllotment(r.user, fundCfg) - (approvedByUser[r.user_id] ?? 0), 0)
               const wouldLeave = remaining - Number(r.amount)
+              // Over the admin-approval threshold: supervisors can't
+              // decide these (admins can).
+              const overThreshold = adminThreshold !== null && Number(r.amount) > adminThreshold
               return (
                 <div key={r.id} className="card p-5">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -225,6 +285,9 @@ export default function ApprovalsPage() {
                         <p className="font-semibold text-gray-900">{r.title}</p>
                         {r.is_overseas_travel && (
                           <span className="badge badge-navy text-xs">✈ Overseas travel</span>
+                        )}
+                        {overThreshold && (
+                          <span className="badge badge-red text-xs">Admin approval</span>
                         )}
                       </div>
                       {r.description && (
@@ -246,25 +309,93 @@ export default function ApprovalsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-3 mt-4 justify-end">
-                    <button
-                      onClick={() => decide(r.id, 'denied')}
-                      disabled={actingId !== null}
-                      className="btn-secondary text-sm"
-                    >
-                      {actingId === r.id ? 'Saving…' : 'Deny'}
-                    </button>
-                    <button
-                      onClick={() => decide(r.id, 'approved')}
-                      disabled={actingId !== null}
-                      className="btn-primary text-sm"
-                    >
-                      {actingId === r.id ? 'Saving…' : 'Approve'}
-                    </button>
-                  </div>
+                  {overThreshold && role !== 'admin' ? (
+                    <div className="flex mt-4 justify-end">
+                      <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        Requires admin approval (over {formatUSD(adminThreshold ?? 0)})
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3 mt-4 justify-end">
+                      <button
+                        onClick={() => decide(r.id, 'denied')}
+                        disabled={actingId !== null}
+                        className="btn-secondary text-sm"
+                      >
+                        {actingId === r.id ? 'Saving…' : 'Deny'}
+                      </button>
+                      <button
+                        onClick={() => decide(r.id, 'approved')}
+                        disabled={actingId !== null}
+                        className="btn-primary text-sm"
+                      >
+                        {actingId === r.id ? 'Saving…' : 'Approve'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
+          </div>
+        )
+      ) : tab === 'resources' ? (
+        pendingResources.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            No resource submissions awaiting approval.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingResources.map((res) => (
+              <div key={res.id} className="card p-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-500">
+                      {res.submitter
+                        ? `${res.submitter.first_name} ${res.submitter.last_name}`
+                        : 'Unknown submitter'}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <p className="font-semibold text-gray-900">{res.title}</p>
+                      <span className="badge badge-navy text-xs">
+                        {RESOURCE_TYPE_LABELS[res.type] ?? res.type}
+                      </span>
+                    </div>
+                    {res.description && (
+                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">{res.description}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1.5">
+                      Submitted {fmtDate(res.created_at)}
+                    </p>
+                    {res.url && (
+                      <a
+                        href={res.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block text-navy-800 text-xs font-semibold hover:text-navy-900 mt-1"
+                      >
+                        Open resource →
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-4 justify-end">
+                  <button
+                    onClick={() => decideResource(res.id, 'remove')}
+                    disabled={resActingId !== null}
+                    className="btn-secondary text-sm"
+                  >
+                    {resActingId === res.id ? 'Saving…' : 'Remove'}
+                  </button>
+                  <button
+                    onClick={() => decideResource(res.id, 'approve')}
+                    disabled={resActingId !== null}
+                    className="btn-primary text-sm"
+                  >
+                    {resActingId === res.id ? 'Saving…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )
       ) : decided.length === 0 ? (

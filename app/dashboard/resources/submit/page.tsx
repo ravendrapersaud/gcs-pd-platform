@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { ResourceType } from '@/lib/types'
-import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS, AUDIENCES, SUBJECTS, THEMES } from '@/lib/taxonomy'
+import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '@/lib/taxonomy'
+import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
+import { resourceModerationOn, type AppSettingRow } from '@/lib/appSettings'
 import clsx from 'clsx'
 
 function ChipGroup({
@@ -61,6 +63,23 @@ export default function SubmitResourcePage() {
   // Cover image: paste a URL, or upload a file to Supabase Storage
   const [imageMode, setImageMode] = useState<'url' | 'upload'>('url')
   const [uploading, setUploading] = useState(false)
+
+  // Admin-managed tag lists + moderation setting
+  const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
+  const [moderation, setModeration] = useState(false)
+
+  useEffect(() => {
+    const loadMeta = async () => {
+      const [{ data: tax }, { data: settings }] = await Promise.all([
+        supabase.from('taxonomy_terms').select('*').order('sort_order', { ascending: true }),
+        supabase.from('app_settings').select('key, value'),
+      ])
+      setTaxTerms((tax ?? []) as TaxonomyTerm[])
+      setModeration(resourceModerationOn((settings ?? []) as AppSettingRow[]))
+    }
+    loadMeta()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
@@ -120,7 +139,8 @@ export default function SubmitResourcePage() {
         themes,
         tags: [...themes], // legacy backward-compat
         submitted_by: user.id,
-        is_approved: true,
+        // With moderation on, submissions wait for admin approval.
+        is_approved: !moderation,
       })
 
       if (insertErr) throw insertErr
@@ -138,8 +158,14 @@ export default function SubmitResourcePage() {
     return (
       <div className="max-w-xl mx-auto text-center py-20">
         <p className="text-4xl mb-4">✅</p>
-        <h2 className="text-xl font-semibold text-gray-800">Resource submitted!</h2>
-        <p className="text-gray-500 text-sm mt-1">Redirecting to library…</p>
+        <h2 className="text-xl font-semibold text-gray-800">
+          {moderation ? 'Submitted for approval' : 'Resource submitted!'}
+        </h2>
+        <p className="text-gray-500 text-sm mt-1">
+          {moderation
+            ? 'Submitted for approval — it will appear once approved.'
+            : 'Redirecting to library…'}
+        </p>
       </div>
     )
   }
@@ -275,17 +301,17 @@ export default function SubmitResourcePage() {
 
           <div>
             <label className="label">Audience</label>
-            <ChipGroup options={AUDIENCES} selected={audience} onToggle={toggle(setAudience)} />
+            <ChipGroup options={termsFor(taxTerms, 'audience')} selected={audience} onToggle={toggle(setAudience)} />
           </div>
 
           <div>
             <label className="label">Subjects</label>
-            <ChipGroup options={SUBJECTS} selected={subjects} onToggle={toggle(setSubjects)} />
+            <ChipGroup options={termsFor(taxTerms, 'subject')} selected={subjects} onToggle={toggle(setSubjects)} />
           </div>
 
           <div>
             <label className="label">Themes</label>
-            <ChipGroup options={THEMES} selected={themes} onToggle={toggle(setThemes)} />
+            <ChipGroup options={termsFor(taxTerms, 'theme')} selected={themes} onToggle={toggle(setThemes)} />
           </div>
 
           <div className="flex gap-3 pt-2">

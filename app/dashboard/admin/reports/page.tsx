@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
+import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget } from '@/lib/appSettings'
 
 interface DeptStats {
   department: string
@@ -16,8 +17,6 @@ interface StaffStats {
   obsCount: number
 }
 
-const PD_GOAL_HOURS = 30
-
 export default function ReportsPage() {
   const supabase = createClient()
   const [divFilter, setDivFilter] = useState('')
@@ -29,12 +28,13 @@ export default function ReportsPage() {
   const [obsCompletion, setObsCompletion] = useState(0)
   const [totalFunding, setTotalFunding] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [pdGoal, setPdGoal] = useState(DEFAULT_PD_HOURS_TARGET)
 
   const load = useCallback(async () => {
     setLoading(true)
     const year = new Date().getFullYear()
 
-    const [{ data: profiles }, { data: pdActs }, { data: observations }, { data: funding }] =
+    const [{ data: profiles }, { data: pdActs }, { data: observations }, { data: funding }, { data: settings }] =
       await Promise.all([
         supabase.from('profiles').select('*'),
         supabase
@@ -43,7 +43,10 @@ export default function ReportsPage() {
           .gte('activity_date', `${year}-01-01`),
         supabase.from('observations').select('observed_id'),
         supabase.from('funding_requests').select('amount').eq('status', 'approved'),
+        supabase.from('app_settings').select('key, value'),
       ])
+
+    setPdGoal(pdHoursTarget(settings))
 
     const allProfiles = (profiles ?? []) as Profile[]
     const filteredProfiles = divFilter
@@ -125,7 +128,7 @@ export default function ReportsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Staff Count', value: totalStaff, sub: divFilter || 'All School' },
-          { label: 'Avg PD Hours', value: avgHours.toFixed(1), sub: `Goal: ${PD_GOAL_HOURS}h` },
+          { label: 'Avg PD Hours', value: avgHours.toFixed(1), sub: `Goal: ${pdGoal}h` },
           { label: 'Obs Coverage', value: `${obsCompletion}%`, sub: 'with ≥1 observation' },
           { label: 'Approved Funding', value: `$${totalFunding.toFixed(0)}`, sub: 'this year' },
         ].map((m) => (
@@ -155,7 +158,7 @@ export default function ReportsPage() {
           <div className="space-y-3">
             {deptStats.map((d) => {
               const pct = (d.hours / maxHours) * 100
-              const goalPct = Math.min(100, (d.hours / (d.count * PD_GOAL_HOURS)) * 100)
+              const goalPct = Math.min(100, (d.hours / (d.count * pdGoal)) * 100)
               return (
                 <div key={d.department} className="flex items-center gap-4">
                   <div className="w-36 text-sm text-gray-700 shrink-0 truncate" title={d.department}>
@@ -166,7 +169,7 @@ export default function ReportsPage() {
                       {/* Goal marker at proportional position */}
                       <div
                         className="absolute top-0 bottom-0 w-0.5 bg-orange-400 z-10 opacity-60"
-                        style={{ left: `${Math.min(100, (d.count * PD_GOAL_HOURS) / maxHours * 100)}%` }}
+                        style={{ left: `${Math.min(100, (d.count * pdGoal) / maxHours * 100)}%` }}
                       />
                       <div
                         className="h-6 rounded-full transition-all"
@@ -185,7 +188,7 @@ export default function ReportsPage() {
               )
             })}
             <p className="text-xs text-gray-400 mt-2">
-              Orange line = team goal ({PD_GOAL_HOURS}h × staff count). Green = at/above goal.
+              Orange line = team goal ({pdGoal}h × staff count). Green = at/above goal.
             </p>
           </div>
         )}
@@ -211,7 +214,7 @@ export default function ReportsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {staffStats.map(({ profile: p, hours, obsCount }) => {
-                const pct = Math.min(100, Math.round((hours / PD_GOAL_HOURS) * 100))
+                const pct = Math.min(100, Math.round((hours / pdGoal) * 100))
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">
@@ -219,7 +222,7 @@ export default function ReportsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{p.department ?? '—'}</td>
                     <td className="px-4 py-3 text-right">
-                      <span className={`font-bold ${hours >= PD_GOAL_HOURS ? 'text-green-700' : 'text-navy-800'}`}>
+                      <span className={`font-bold ${hours >= pdGoal ? 'text-green-700' : 'text-navy-800'}`}>
                         {hours.toFixed(1)}h
                       </span>
                     </td>

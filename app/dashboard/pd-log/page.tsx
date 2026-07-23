@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { PdActivity, FundingRequest, PdType, FundingStatus } from '@/lib/types'
 import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, type FundConfig } from '@/lib/funds'
+import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget, allowOverBalanceRequests } from '@/lib/appSettings'
 import clsx from 'clsx'
 
 const PD_TYPES: PdType[] = [
@@ -29,6 +30,8 @@ export default function PdLogPage() {
   const [loading, setLoading] = useState(true)
   const [fundCfg, setFundCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
   const [myProfile, setMyProfile] = useState<{ employee_type: string | null; pd_allotment: number | null } | null>(null)
+  const [hoursTarget, setHoursTarget] = useState(DEFAULT_PD_HOURS_TARGET)
+  const [allowOverBalance, setAllowOverBalance] = useState(true)
 
   // Activity form state
   const [showActivityForm, setShowActivityForm] = useState(false)
@@ -81,6 +84,8 @@ export default function PdLogPage() {
     setFundingRequests((funds ?? []) as FundingRequest[])
     setMyProfile((profile ?? null) as { employee_type: string | null; pd_allotment: number | null } | null)
     setFundCfg(parseFundSettings(settings))
+    setHoursTarget(pdHoursTarget(settings))
+    setAllowOverBalance(allowOverBalanceRequests(settings))
     setLoading(false)
   }, [])
 
@@ -113,6 +118,10 @@ export default function PdLogPage() {
   const handleFundingRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId) return
+    if (exceedsBalance) {
+      setFormError(`This request exceeds your remaining balance of ${formatUSD(remainingFunds)}.`)
+      return
+    }
     setSavingFund(true)
     setFormError(null)
     const { error } = await supabase.from('funding_requests').insert({
@@ -149,6 +158,15 @@ export default function PdLogPage() {
   const myYearStart = fundYearRange(myProfile?.employee_type, fundCfg).start
   const resetDateLabel = myYearStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
 
+  // Hours-vs-target progress (target is admin-configurable).
+  const hoursPct = hoursTarget > 0 ? Math.min(Math.round((totalHours / hoursTarget) * 100), 100) : 100
+
+  // Over-balance rule: when the admin setting is off, block requests
+  // that exceed the requester's remaining funds.
+  const requestAmount = parseFloat(fundForm.amount)
+  const exceedsBalance =
+    !allowOverBalance && Number.isFinite(requestAmount) && requestAmount > remainingFunds
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Tabs */}
@@ -169,8 +187,13 @@ export default function PdLogPage() {
           {/* Summary + add */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-navy-900">{totalHours.toFixed(1)} hrs</p>
-              <p className="text-sm text-gray-500">{activities.length} activities logged this year</p>
+              <p className="text-2xl font-bold text-navy-900">
+                {totalHours.toFixed(1)} <span className="text-base font-medium text-gray-400">of {hoursTarget} hrs this year</span>
+              </p>
+              <div className="h-1.5 w-48 rounded-full bg-gray-100 overflow-hidden mt-1.5">
+                <div className="h-full rounded-full bg-navy-900 transition-all" style={{ width: `${hoursPct}%` }} />
+              </div>
+              <p className="text-sm text-gray-500 mt-1">{activities.length} activities logged this year</p>
             </div>
             <button onClick={() => setShowActivityForm(!showActivityForm)} className="btn-primary">
               + Log Activity
@@ -373,6 +396,11 @@ export default function PdLogPage() {
                       value={fundForm.amount}
                       onChange={(e) => setFundForm({ ...fundForm, amount: e.target.value })}
                     />
+                    {exceedsBalance && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">
+                        Exceeds your remaining balance of {formatUSD(remainingFunds)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="label">Linked PD Activity</label>
@@ -427,7 +455,7 @@ export default function PdLogPage() {
                 </div>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setShowFundingForm(false)} className="btn-secondary flex-1">Cancel</button>
-                  <button type="submit" disabled={savingFund} className="btn-primary flex-1">
+                  <button type="submit" disabled={savingFund || exceedsBalance} className="btn-primary flex-1">
                     {savingFund ? 'Submitting…' : 'Submit Request'}
                   </button>
                 </div>

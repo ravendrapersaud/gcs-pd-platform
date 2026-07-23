@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Workspace } from '@/lib/types'
 import { DIVISIONS, EMPLOYEE_TYPES } from '@/lib/taxonomy'
+import { workspaceCreationPolicy } from '@/lib/appSettings'
 
 function RuleBadges({ ws }: { ws: Workspace }) {
   const hasRules = ws.rule_division || ws.rule_department || ws.rule_employee_type
@@ -31,6 +32,7 @@ export default function WorkspacesPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [joiningId, setJoiningId] = useState<string | null>(null)
+  const [creationPolicy, setCreationPolicy] = useState<'supervisors' | 'everyone'>('supervisors')
 
   // Create form
   const [showForm, setShowForm] = useState(false)
@@ -48,12 +50,15 @@ export default function WorkspacesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [{ data: prof, error: profErr }, { data: wss, error: wsErr }, { data: members, error: memErr }] =
+    const [{ data: prof, error: profErr }, { data: wss, error: wsErr }, { data: members, error: memErr }, { data: settings }] =
       await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('workspaces').select('*').order('name'),
         supabase.from('workspace_members').select('workspace_id, user_id'),
+        supabase.from('app_settings').select('key, value'),
       ])
+
+    setCreationPolicy(workspaceCreationPolicy(settings))
 
     const firstErr = profErr ?? wsErr ?? memErr
     if (firstErr) setError(`Failed to load workspaces: ${firstErr.message}`)
@@ -76,6 +81,7 @@ export default function WorkspacesPage() {
   useEffect(() => { load() }, [load])
 
   const canCreate =
+    creationPolicy === 'everyone' ||
     profile?.role === 'supervisor' || profile?.role === 'admin' || profile?.can_create_workspaces
 
   const handleCreate = async () => {

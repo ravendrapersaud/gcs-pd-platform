@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { PdEvent } from '@/lib/types'
-import { EVENT_TYPES, AUDIENCES } from '@/lib/taxonomy'
+import { EVENT_TYPES } from '@/lib/taxonomy'
+import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
 import clsx from 'clsx'
 
 const MONTH_NAMES = [
@@ -48,6 +49,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [role, setRole] = useState<string>('staff')
   const [userId, setUserId] = useState<string | null>(null)
+  const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
 
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
@@ -80,13 +82,15 @@ export default function CalendarPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: evs }, { data: prof }] = await Promise.all([
+    const [{ data: evs }, { data: prof }, { data: tax }] = await Promise.all([
       supabase.from('pd_events').select('*').order('start_date', { ascending: true }),
       supabase.from('profiles').select('role').eq('id', user.id).single(),
+      supabase.from('taxonomy_terms').select('*').order('sort_order', { ascending: true }),
     ])
 
     setEvents((evs ?? []) as PdEvent[])
     if (prof?.role) setRole(prof.role)
+    setTaxTerms((tax ?? []) as TaxonomyTerm[])
     setLoading(false)
   }, [])
 
@@ -95,6 +99,7 @@ export default function CalendarPage() {
   }, [load])
 
   const canManage = role === 'supervisor' || role === 'admin'
+  const audienceOptions = termsFor(taxTerms, 'audience')
 
   // ── Search & filter (applies to grid AND upcoming list) ─────
   const filteredEvents = events.filter((e) => {
@@ -338,7 +343,7 @@ export default function CalendarPage() {
             <div>
               <label className="label">Audience</label>
               <div className="flex flex-wrap gap-1.5">
-                {AUDIENCES.map((a) => {
+                {audienceOptions.map((a) => {
                   const active = formAudience.includes(a)
                   return (
                     <button
@@ -397,7 +402,7 @@ export default function CalendarPage() {
             aria-label="Filter by audience"
           >
             <option value="">All audiences</option>
-            {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
+            {audienceOptions.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
           {filtersActive && (
             <>

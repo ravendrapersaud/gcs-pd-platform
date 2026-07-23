@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiveAllotment, formatUSD } from '@/lib/funds'
+import { pdHoursTarget } from '@/lib/appSettings'
 
 interface ReportRow {
   id: string
@@ -15,6 +16,7 @@ interface ReportRow {
 interface TeamData {
   label: string
   yearLabel: string
+  hoursTarget: number
   reports: (ReportRow & { pdHours: number; remainingFunds: number })[]
   pendingCount: number
   pendingTotal: number
@@ -59,6 +61,7 @@ async function fetchTeamData(
   const base: TeamData = {
     label: role === 'admin' ? 'School overview' : 'My Team',
     yearLabel: fundYearLabel('staff', fundCfg),
+    hoursTarget: pdHoursTarget(settingsRows),
     reports: reports.map((r) => ({ ...r, pdHours: 0, remainingFunds: effectiveAllotment(r, fundCfg) })),
     pendingCount: 0,
     pendingTotal: 0,
@@ -269,7 +272,7 @@ export default async function DashboardPage() {
             <MetricCard
               label="Team PD hours"
               value={team.teamHours.toFixed(1)}
-              sub="this academic year"
+              sub={`Target: ${team.hoursTarget} hrs each`}
               color="green"
             />
             <MetricCard

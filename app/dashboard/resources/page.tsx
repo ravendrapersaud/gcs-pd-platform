@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Resource } from '@/lib/types'
-import { RESOURCE_TYPE_LABELS, RESOURCE_TYPES, AUDIENCES, SUBJECTS, THEMES } from '@/lib/taxonomy'
+import { RESOURCE_TYPE_LABELS, RESOURCE_TYPES } from '@/lib/taxonomy'
+import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
 import clsx from 'clsx'
 import Link from 'next/link'
 
@@ -179,6 +180,7 @@ export default function ResourcesPage() {
   const [subjectFilter, setSubjectFilter] = useState<string[]>([])
   const [themeFilter, setThemeFilter] = useState<string[]>([])
   const [userId, setUserId] = useState<string | null>(null)
+  const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -186,7 +188,7 @@ export default function ResourcesPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: res }, { data: favs }] = await Promise.all([
+    const [{ data: res }, { data: favs }, { data: tax }] = await Promise.all([
       supabase
         .from('resources')
         .select('*')
@@ -196,10 +198,15 @@ export default function ResourcesPage() {
         .from('resource_favorites')
         .select('resource_id')
         .eq('user_id', user.id),
+      supabase
+        .from('taxonomy_terms')
+        .select('*')
+        .order('sort_order', { ascending: true }),
     ])
 
     setResources((res ?? []) as Resource[])
     setFavIds(new Set((favs ?? []).map((f) => f.resource_id)))
+    setTaxTerms((tax ?? []) as TaxonomyTerm[])
     setLoading(false)
   }, [])
 
@@ -293,9 +300,9 @@ export default function ResourcesPage() {
             onToggle={toggle(setTypeFilter)}
             labelFor={(t) => RESOURCE_TYPE_LABELS[t] ?? t}
           />
-          <MultiChips label="Audience" options={AUDIENCES} selected={audienceFilter} onToggle={toggle(setAudienceFilter)} />
-          <MultiChips label="Subject" options={SUBJECTS} selected={subjectFilter} onToggle={toggle(setSubjectFilter)} />
-          <MultiChips label="Theme" options={THEMES} selected={themeFilter} onToggle={toggle(setThemeFilter)} />
+          <MultiChips label="Audience" options={termsFor(taxTerms, 'audience')} selected={audienceFilter} onToggle={toggle(setAudienceFilter)} />
+          <MultiChips label="Subject" options={termsFor(taxTerms, 'subject')} selected={subjectFilter} onToggle={toggle(setSubjectFilter)} />
+          <MultiChips label="Theme" options={termsFor(taxTerms, 'theme')} selected={themeFilter} onToggle={toggle(setThemeFilter)} />
           {activeFilterCount > 0 && (
             <button onClick={clearFilters} className="btn-ghost text-xs">
               Clear all filters
