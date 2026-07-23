@@ -25,6 +25,9 @@ export default function StaffRosterPage() {
   const [staff, setStaff] = useState<StaffRow[]>([])
   const [search, setSearch] = useState('')
   const [divFilter, setDivFilter] = useState('')
+  const [deptFilter, setDeptFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'' | 'staff' | 'supervisor' | 'admin'>('')
+  const [supFilter, setSupFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'' | 'faculty' | 'staff'>('')
   const [needsSetupOnly, setNeedsSetupOnly] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -89,14 +92,24 @@ export default function StaffRosterPage() {
     ...dataDivs.filter((d) => !canonicalDivs.includes(d)).sort(),
   ]
 
+  const departments = Array.from(new Set(staff.map((s) => s.department).filter(Boolean))).sort() as string[]
+  const supervisorOptions = allProfiles
+    .filter((p) => p.role === 'supervisor' || p.role === 'admin')
+    .sort((a, b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''))
+
   const filtered = staff.filter((s) => {
     const name = `${s.first_name} ${s.last_name}`.toLowerCase()
     const matchSearch = !search || name.includes(search.toLowerCase()) ||
-      (s.title ?? '').toLowerCase().includes(search.toLowerCase())
+      (s.title ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.email ?? '').toLowerCase().includes(search.toLowerCase())
     const matchDiv = !divFilter || s.division === divFilter
+    const matchDept = !deptFilter || s.department === deptFilter
+    const matchRole = !roleFilter || s.role === roleFilter
+    const matchSup = !supFilter ||
+      s.primarySupEmail === supFilter || s.secondarySupEmail === supFilter
     const matchType = !typeFilter || (s.employee_type ?? '').toLowerCase() === typeFilter
     const matchSetup = !needsSetupOnly || s.needs_setup
-    return matchSearch && matchDiv && matchType && matchSetup
+    return matchSearch && matchDiv && matchDept && matchRole && matchSup && matchType && matchSetup
   })
 
   // ── Export (columns match the CSV import format) ─────────────
@@ -381,15 +394,52 @@ export default function StaffRosterPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
-            placeholder="Search staff…"
+            placeholder="Search by name, title, or email…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="input flex-1"
           />
-          <select className="input sm:w-48" value={divFilter} onChange={(e) => setDivFilter(e.target.value)}>
+          <select className="input sm:w-44" value={divFilter} onChange={(e) => setDivFilter(e.target.value)}>
             <option value="">All Divisions</option>
             {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
+          <select className="input sm:w-44" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
+            <option value="">All Departments</option>
+            {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            className="input sm:w-44"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as '' | 'staff' | 'supervisor' | 'admin')}
+          >
+            <option value="">All Roles</option>
+            <option value="staff">Staff (standard access)</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="admin">Admin</option>
+          </select>
+          <select className="input sm:w-64" value={supFilter} onChange={(e) => setSupFilter(e.target.value)}>
+            <option value="">Any Supervisor</option>
+            {supervisorOptions.map((p) => (
+              <option key={p.id} value={p.email}>
+                Reports to {p.first_name} {p.last_name}
+              </option>
+            ))}
+          </select>
+          {(divFilter || deptFilter || roleFilter || supFilter || typeFilter || needsSetupOnly || search) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch(''); setDivFilter(''); setDeptFilter(''); setRoleFilter('')
+                setSupFilter(''); setTypeFilter(''); setNeedsSetupOnly(false)
+              }}
+              className="text-sm text-navy-800 font-medium hover:underline self-center whitespace-nowrap"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
