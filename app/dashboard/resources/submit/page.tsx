@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import type { ResourceType } from '@/lib/types'
+import Link from 'next/link'
+import type { Resource, ResourceType } from '@/lib/types'
 import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '@/lib/taxonomy'
 import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
 import { resourceModerationOn, type AppSettingRow } from '@/lib/appSettings'
@@ -68,6 +69,11 @@ export default function SubmitResourcePage() {
   const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
   const [moderation, setModeration] = useState(false)
 
+  // Edit mode
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editDenied, setEditDenied] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+
   useEffect(() => {
     const loadMeta = async () => {
       const [{ data: tax }, { data: settings }] = await Promise.all([
@@ -78,6 +84,47 @@ export default function SubmitResourcePage() {
       setModeration(resourceModerationOn((settings ?? []) as AppSettingRow[]))
     }
     loadMeta()
+
+    // Detect edit mode from the URL (avoids useSearchParams / Suspense requirement)
+    const id = new URLSearchParams(window.location.search).get('edit')
+    if (id) {
+      setEditId(id)
+      setEditLoading(true)
+      const loadResource = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (!user) {
+            setEditDenied(true)
+            return
+          }
+          const [{ data: res }, { data: profile }] = await Promise.all([
+            supabase.from('resources').select('*').eq('id', id).maybeSingle(),
+            supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+          ])
+          const resource = res as unknown as Resource | null
+          const role = (profile as unknown as { role: string } | null)?.role
+          if (!resource || !(resource.submitted_by === user.id || role === 'admin')) {
+            setEditDenied(true)
+            return
+          }
+          setForm({
+            title: resource.title,
+            description: resource.description ?? '',
+            url: resource.url ?? '',
+            cover_image: resource.cover_image ?? '',
+            type: resource.type as ResourceType,
+          })
+          setAudience(resource.audience ?? [])
+          setSubjects(resource.subjects ?? [])
+          setThemes(resource.themes ?? [])
+        } catch {
+          setEditDenied(true)
+        } finally {
+          setEditLoading(false)
+        }
+      }
+      loadResource()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -128,6 +175,35 @@ export default function SubmitResourcePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
+      if (editId) {
+        // Edit mode: update the existing resource. is_approved is intentionally
+        // left out so the existing value is preserved.
+        const { data: updated, error: updateErr } = await supabase
+          .from('resources')
+          .update({
+            title: form.title,
+            description: form.description || null,
+            url: form.url || null,
+            cover_image: form.cover_image || null,
+            type: form.type,
+            audience,
+            subjects,
+            themes,
+            tags: [...themes], // legacy backward-compat
+          })
+          .eq('id', editId)
+          .select()
+
+        if (updateErr) throw updateErr
+        if (!updated || updated.length === 0) {
+          throw new Error("You don't have permission to edit this resource.")
+        }
+
+        setSuccess(true)
+        setTimeout(() => router.push('/dashboard/resources'), 1500)
+        return
+      }
+
       const { error: insertErr } = await supabase.from('resources').insert({
         title: form.title,
         description: form.description || null,
@@ -159,10 +235,12 @@ export default function SubmitResourcePage() {
       <div className="max-w-xl mx-auto text-center py-20">
         <p className="text-4xl mb-4">✅</p>
         <h2 className="text-xl font-semibold text-gray-800">
-          {moderation ? 'Submitted for approval' : 'Resource submitted!'}
+          {editId ? 'Resource updated.' : moderation ? 'Submitted for approval' : 'Resource submitted!'}
         </h2>
         <p className="text-gray-500 text-sm mt-1">
-          {moderation
+          {editId
+            ? 'Redirecting to library…'
+            : moderation
             ? 'Submitted for approval — it will appear once approved.'
             : 'Redirecting to library…'}
         </p>
@@ -170,10 +248,36 @@ export default function SubmitResourcePage() {
     )
   }
 
+  if (editDenied) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          You don&apos;t have permission to edit this resource.
+        </div>
+        <Link
+          href="/dashboard/resources"
+          className="inline-block mt-4 text-navy-800 text-sm font-semibold hover:text-navy-900"
+        >
+          ← Back to Resource Library
+        </Link>
+      </div>
+    )
+  }
+
+  if (editLoading) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="card p-8 h-96 animate-pulse bg-gray-100" />
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="card p-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Submit a Resource</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">
+          {editId ? 'Edit Resource' : 'Submit a Resource'}
+        </h2>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -323,7 +427,15 @@ export default function SubmitResourcePage() {
               Cancel
             </button>
             <button type="submit" disabled={loading || uploading} className="btn-primary flex-1">
-              {loading ? 'Submitting…' : uploading ? 'Uploading image…' : 'Submit Resource'}
+              {loading
+                ? editId
+                  ? 'Saving…'
+                  : 'Submitting…'
+                : uploading
+                ? 'Uploading image…'
+                : editId
+                ? 'Save Changes'
+                : 'Submit Resource'}
             </button>
           </div>
         </form>

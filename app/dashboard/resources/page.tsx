@@ -18,10 +18,14 @@ function ResourceCard({
   resource,
   isFav,
   onToggleFav,
+  canManage,
+  onDelete,
 }: {
   resource: Resource
   isFav: boolean
   onToggleFav: (id: string, current: boolean) => void
+  canManage: boolean
+  onDelete: (id: string) => void
 }) {
   return (
     <div className="card p-0 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
@@ -114,16 +118,38 @@ function ResourceCard({
           )}
         </div>
 
-        {resource.url && (
-          <a
-            href={resource.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-navy-800 text-xs font-semibold hover:text-navy-900 mt-auto pt-1"
-          >
-            Open resource →
-          </a>
-        )}
+        {/* Footer row */}
+        <div className="mt-auto pt-1 flex items-center justify-between gap-2">
+          {resource.url ? (
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-navy-800 text-xs font-semibold hover:text-navy-900"
+            >
+              Open resource →
+            </a>
+          ) : (
+            <span />
+          )}
+
+          {canManage && (
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/dashboard/resources/submit?edit=${resource.id}`}
+                className="text-xs font-semibold text-gray-500 hover:text-navy-900"
+              >
+                Edit
+              </Link>
+              <button
+                onClick={() => onDelete(resource.id)}
+                className="text-xs font-semibold text-red-600 hover:text-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -180,6 +206,8 @@ export default function ResourcesPage() {
   const [subjectFilter, setSubjectFilter] = useState<string[]>([])
   const [themeFilter, setThemeFilter] = useState<string[]>([])
   const [userId, setUserId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [pageError, setPageError] = useState<string | null>(null)
   const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
 
   const loadData = useCallback(async () => {
@@ -188,7 +216,7 @@ export default function ResourcesPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: res }, { data: favs }, { data: tax }] = await Promise.all([
+    const [{ data: res }, { data: favs }, { data: tax }, { data: profile }] = await Promise.all([
       supabase
         .from('resources')
         .select('*')
@@ -202,11 +230,17 @@ export default function ResourcesPage() {
         .from('taxonomy_terms')
         .select('*')
         .order('sort_order', { ascending: true }),
+      supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle(),
     ])
 
     setResources((res ?? []) as Resource[])
     setFavIds(new Set((favs ?? []).map((f) => f.resource_id)))
     setTaxTerms((tax ?? []) as TaxonomyTerm[])
+    setUserRole((profile as unknown as { role: string } | null)?.role ?? null)
     setLoading(false)
   }, [])
 
@@ -240,6 +274,33 @@ export default function ResourcesPage() {
     }
   }
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this resource? This cannot be undone.')) return
+    setPageError(null)
+
+    const { data, error } = await supabase
+      .from('resources')
+      .delete()
+      .eq('id', id)
+      .select()
+
+    if (error) {
+      setPageError(error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      setPageError("You don't have permission to delete this resource.")
+      return
+    }
+
+    setResources((prev) => prev.filter((r) => r.id !== id))
+    setFavIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
   const toggle = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (value: string) =>
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
 
@@ -270,6 +331,12 @@ export default function ResourcesPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {pageError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {pageError}
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
         <input
@@ -331,6 +398,8 @@ export default function ResourcesPage() {
               resource={r}
               isFav={favIds.has(r.id)}
               onToggleFav={toggleFav}
+              canManage={(userId !== null && r.submitted_by === userId) || userRole === 'admin'}
+              onDelete={handleDelete}
             />
           ))}
         </div>
