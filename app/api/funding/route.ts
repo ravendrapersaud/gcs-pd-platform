@@ -44,12 +44,31 @@ export async function PATCH(request: NextRequest) {
     // Verify the request exists
     const { data: existing } = await supabase
       .from('funding_requests')
-      .select('id, status')
+      .select('id, status, user_id')
       .eq('id', id)
       .single()
 
     if (!existing) {
       return NextResponse.json({ error: 'Funding request not found' }, { status: 404 })
+    }
+
+    // Supervisors may only act on their own assigned reports; admins are
+    // unrestricted. (RLS also enforces this — this is defense in depth
+    // and gives a clearer 403 than an RLS zero-row result.)
+    if (profile.role === 'supervisor') {
+      const { data: assignment } = await supabase
+        .from('supervisor_assignments')
+        .select('id')
+        .eq('supervisor_id', session.user.id)
+        .eq('staff_id', existing.user_id)
+        .maybeSingle()
+
+      if (!assignment) {
+        return NextResponse.json(
+          { error: 'Forbidden — you are not the assigned supervisor for this person' },
+          { status: 403 }
+        )
+      }
     }
 
     if (existing.status !== 'pending') {

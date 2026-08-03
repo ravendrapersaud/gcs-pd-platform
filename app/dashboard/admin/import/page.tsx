@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import Papa from 'papaparse'
+import { createClient } from '@/lib/supabase/client'
 
 const REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
 const OPTIONAL_FIELDS = ['title', 'division', 'department', 'employee_id', 'employee_type', 'role', 'primary_supervisor_email', 'secondary_supervisor_email']
@@ -92,8 +93,13 @@ export default function ImportCsvPage() {
     formData.append('file', blob, 'import.csv')
 
     try {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/import-csv', {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
         body: formData,
       })
       const data: ImportResult = await res.json()

@@ -31,28 +31,30 @@ export async function POST(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  // Verify caller is supervisor or admin
+  // Verify caller is supervisor or admin. This endpoint uses the
+  // service-role key to create auth users + profiles, so it MUST reject
+  // any request that isn't a proven supervisor/admin. No token = no entry.
   const authHeader = request.headers.get('authorization')
   const token = authHeader?.replace('Bearer ', '') ?? ''
 
-  let callerId: string | null = null
-  if (token) {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token)
-    callerId = user?.id ?? null
+  if (!token) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  if (callerId) {
-    const { data: callerProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', callerId)
-      .single()
-
-    if (!callerProfile || !['supervisor', 'admin'].includes(callerProfile.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+  const { data: { user: caller } } = await supabaseAdmin.auth.getUser(token)
+  if (!caller) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
-  // Note: in dev without token header, we allow — production should enforce auth
+
+  const { data: callerProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', caller.id)
+    .single()
+
+  if (!callerProfile || !['supervisor', 'admin'].includes(callerProfile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const formData = await request.formData()
   const file = formData.get('file')

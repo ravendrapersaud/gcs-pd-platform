@@ -41,6 +41,24 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: 'user_id is required' }, { status: 400 })
   }
+
+  // Supervisors may only edit themselves or their assigned reports;
+  // admins are unrestricted.
+  if (callerProfile.role === 'supervisor' && userId !== caller.id) {
+    const { data: assignment } = await supabaseAdmin
+      .from('supervisor_assignments')
+      .select('id')
+      .eq('supervisor_id', caller.id)
+      .eq('staff_id', userId)
+      .maybeSingle()
+
+    if (!assignment) {
+      return NextResponse.json(
+        { error: 'Forbidden — you are not the assigned supervisor for this person' },
+        { status: 403 }
+      )
+    }
+  }
   if (email !== undefined) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
