@@ -39,6 +39,17 @@ export default function StaffRosterPage() {
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
   const [supervisorId, setSupervisorId] = useState('')
 
+  // ── Add-a-person drawer (single-user equivalent of CSV import) ─
+  const emptyCreateForm = {
+    first_name: '', last_name: '', email: '', title: '', division: '',
+    department: '', employee_id: '', employee_type: '', role: 'staff',
+    pd_allotment: '', supervisor_id: '',
+  }
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState({ ...emptyCreateForm })
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: profiles }, { data: assignments }, { data: pdActs }] = await Promise.all([
@@ -167,6 +178,7 @@ export default function StaffRosterPage() {
       title: row.title ?? '',
       division: row.division ?? '',
       department: row.department ?? '',
+      employee_id: row.employee_id ?? '',
       employee_type: row.employee_type ?? '',
       role: row.role,
       can_create_workspaces: row.can_create_workspaces ?? false,
@@ -174,6 +186,38 @@ export default function StaffRosterPage() {
     setAllotmentInput(row.pd_allotment === null || row.pd_allotment === undefined ? '' : String(row.pd_allotment))
     setSupervisorId('')
     setSaveError(null)
+  }
+
+  const handleCreate = async () => {
+    setCreating(true)
+    setCreateError(null)
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/admin/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify(createForm),
+    })
+    const body = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      setCreateError(body.error ?? `Could not create this person (${res.status})`)
+      setCreating(false)
+      return
+    }
+    // Created, but the supervisor link failed — say so instead of
+    // silently pretending everything worked.
+    if (body.warning) setCreateError(body.warning)
+
+    setCreating(false)
+    if (!body.warning) {
+      setShowCreate(false)
+      setCreateForm({ ...emptyCreateForm })
+    }
+    load()
   }
 
   const handleSave = async () => {
@@ -217,6 +261,7 @@ export default function StaffRosterPage() {
       title: editForm.title ?? null,
       division: editForm.division ?? null,
       department: editForm.department ?? null,
+      employee_id: editForm.employee_id?.trim() || null,
       employee_type: editForm.employee_type || null,
       pd_allotment: allotmentInput.trim() === '' ? null : Number(allotmentInput),
       role: editForm.role,
@@ -307,12 +352,27 @@ export default function StaffRosterPage() {
                 <input className="input" value={editForm.department ?? ''} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })} />
               </div>
               <div>
+                <label className="label">Employee ID</label>
+                <input
+                  className="input"
+                  placeholder="e.g. 4160"
+                  value={editForm.employee_id ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, employee_id: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Matches the employee_id column in the roster CSV.
+                </p>
+              </div>
+              <div>
                 <label className="label">Employee Type</label>
                 <select className="input" value={editForm.employee_type ?? ''} onChange={(e) => setEditForm({ ...editForm, employee_type: e.target.value })}>
                   <option value="">Unspecified</option>
                   <option value="faculty">Faculty</option>
                   <option value="staff">Staff</option>
                 </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Drives which fund-year reset applies (staff July 1, faculty late Aug).
+                </p>
               </div>
               <div>
                 <label className="label">PD allotment override ($)</label>
@@ -383,6 +443,110 @@ export default function StaffRosterPage() {
               <button onClick={() => setSelected(null)} className="btn-secondary flex-1">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
                 {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add-a-person drawer */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/30" onClick={() => setShowCreate(false)} />
+          <div className="w-full max-w-md bg-white h-full shadow-xl overflow-y-auto p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-lg text-gray-900">Add a person</h2>
+              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Creates the login and profile immediately — the same result as a
+              one-row CSV import. They sign in with Google using this address.
+            </p>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">First Name *</label>
+                  <input className="input" value={createForm.first_name} onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Last Name *</label>
+                  <input className="input" value={createForm.last_name} onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Email (login) *</label>
+                <input type="email" className="input" placeholder="name@gcschool.org" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
+                <p className="text-xs text-gray-400 mt-1">Must be an @gcschool.org address.</p>
+              </div>
+              <div>
+                <label className="label">Title</label>
+                <input className="input" value={createForm.title} onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Division</label>
+                  <input className="input" value={createForm.division} onChange={(e) => setCreateForm({ ...createForm, division: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Department</label>
+                  <input className="input" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Employee ID</label>
+                  <input className="input" placeholder="e.g. 4160" value={createForm.employee_id} onChange={(e) => setCreateForm({ ...createForm, employee_id: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Employee Type</label>
+                  <select className="input" value={createForm.employee_type} onChange={(e) => setCreateForm({ ...createForm, employee_type: e.target.value })}>
+                    <option value="">Unspecified</option>
+                    <option value="faculty">Faculty</option>
+                    <option value="staff">Staff</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="label">Role (access level)</label>
+                <select className="input" value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}>
+                  <option value="staff">Staff</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Only admins can create supervisor or admin accounts.
+                </p>
+              </div>
+              <div>
+                <label className="label">PD allotment override ($)</label>
+                <input type="number" step="0.01" min="0" className="input" placeholder="School default" value={createForm.pd_allotment} onChange={(e) => setCreateForm({ ...createForm, pd_allotment: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Primary Supervisor</label>
+                <select className="input" value={createForm.supervisor_id} onChange={(e) => setCreateForm({ ...createForm, supervisor_id: e.target.value })}>
+                  <option value="">None for now</option>
+                  {allProfiles.filter((p) => p.role === 'supervisor' || p.role === 'admin').map((p) => (
+                    <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Needed before they can submit funding requests for approval.
+                </p>
+              </div>
+            </div>
+
+            {createError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {createError}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={handleCreate} disabled={creating} className="btn-primary flex-1">
+                {creating ? 'Creating…' : 'Create Person'}
               </button>
             </div>
           </div>
@@ -474,6 +638,12 @@ export default function StaffRosterPage() {
 
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-gray-400">{filtered.length} shown</span>
+            <button
+              onClick={() => { setCreateForm({ ...emptyCreateForm }); setCreateError(null); setShowCreate(true) }}
+              className="btn-primary text-sm"
+            >
+              + Add Person
+            </button>
             <button onClick={exportCsv} className="btn-secondary text-sm">Export CSV</button>
             <button onClick={exportXlsx} className="btn-secondary text-sm">Export XLSX</button>
           </div>
