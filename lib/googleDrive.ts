@@ -103,8 +103,14 @@ export async function openDrivePicker(
     // List mode instead of the thumbnail grid: with the narrow drive.file
     // scope the picker can't render file previews, so grid thumbnails
     // appear broken. List view shows name/icon/date cleanly.
+    //
+    // Folders ARE browsable but NOT selectable: clicking a folder navigates
+    // into it (with breadcrumbs) instead of returning it as the picked item,
+    // since callers expect a file. Folder navigation needs no extra OAuth
+    // scope — unlike grid thumbnails, which is why we stay on LIST.
     const view = new google.picker.DocsView()
-      .setIncludeFolders(false)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(false)
       .setMode(google.picker.DocsViewMode.LIST)
     const picker = new google.picker.PickerBuilder()
       .addView(view)
