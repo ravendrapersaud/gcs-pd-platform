@@ -1,6 +1,24 @@
 # GCS PD Platform — Pickup Notes
 
-_Last updated: July 22, 2026_
+_Last updated: July 23, 2026 (evening)_
+
+## Session recap (July 23)
+Done & live (or push-pending): Google SSO (single-pass) + Drive picker
+(list view); supervisor funding approvals with allotment context; team
+dashboard for supervisors/admins; person pickers for observations &
+goal co-owners; admin Settings (fund policy, PD hours target, funding
+rules, resource moderation, workspace policy, Tags & taxonomy);
+per-person PD allotment overrides; faculty/staff fund-year dates;
+staff roster filters (role/department/supervisor) + clear-all;
+resource edit/delete for submitters/admins; real PD events seeded;
+rpersaud@gcschool.org promoted to ADMIN. Supabase connector active —
+Claude applies migrations directly now.
+
+FIRST THING TOMORROW: `git status` in the project folder — if the
+resource edit/delete work is uncommitted, commit and push it. Verify
+the taxonomy deploy landed (Settings → Tags & taxonomy visible).
+Consider Vercel Settings → Git disconnect/reconnect (webhook has
+missed pushes twice).
 
 ## Where things stand
 
