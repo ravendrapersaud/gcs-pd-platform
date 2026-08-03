@@ -84,25 +84,40 @@ export async function POST(request: NextRequest) {
       supervisors = (supProfiles ?? []) as Profile[]
     }
 
-    // Send email (best-effort — don't fail the request if email fails)
-    try {
-      await sendSpotlightEmail(
-        spotlight as Spotlight,
-        recipientProfile as Profile,
-        supervisors,
-        senderProfile as Profile
-      )
+    // Send email (best-effort — never fails the request; sendSpotlightEmail
+    // returns a status rather than throwing).
+    const emailResult = await sendSpotlightEmail(
+      spotlight as Spotlight,
+      recipientProfile as Profile,
+      supervisors,
+      senderProfile as Profile
+    )
+    const emailSent = emailResult.status === 'sent'
 
-      // Mark email sent
+    if (emailSent) {
       await supabase
         .from('spotlights')
         .update({ email_sent: true })
         .eq('id', spotlight.id)
-    } catch (emailErr) {
-      console.error('[POST /api/spotlights] email error (non-fatal):', emailErr)
     }
 
-    return NextResponse.json({ ...spotlight, email_sent: true }, { status: 201 })
+    // Audit trail — best-effort, must not fail the spotlight.
+    const { error: logErr } = await supabase.from('email_log').insert({
+      email_type: 'spotlight',
+      to_email: emailResult.to[0] ?? recipientProfile.email,
+      cc_emails: emailResult.cc,
+      subject: emailResult.subject,
+      status: emailResult.status,
+      provider_id: emailResult.providerId ?? null,
+      error: emailResult.error ?? null,
+      spotlight_id: spotlight.id,
+      created_by: session.user.id,
+    })
+    if (logErr) {
+      console.error('[POST /api/spotlights] email_log insert failed (non-fatal):', logErr)
+    }
+
+    return NextResponse.json({ ...spotlight, email_sent: emailSent }, { status: 201 })
   } catch (err: unknown) {
     console.error('[POST /api/spotlights] unexpected error:', err)
     return NextResponse.json(

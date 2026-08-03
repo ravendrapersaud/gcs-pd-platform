@@ -11,6 +11,23 @@ function getResend(): Resend | null {
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
+// From-address MUST live on a domain verified in Resend. Per the rollout
+// plan we verify a SUBDOMAIN (notify.gcschool.org) to keep this app's
+// sending reputation separate from school Google Workspace mail — so the
+// default here is the subdomain, NOT the root domain. Override with the
+// EMAIL_FROM env var once the verified domain is confirmed.
+const EMAIL_FROM =
+  process.env.EMAIL_FROM || 'GCS PD Platform <noreply@notify.gcschool.org>'
+
+export type EmailResult = {
+  status: 'sent' | 'skipped' | 'failed'
+  to: string[]
+  cc: string[]
+  subject: string
+  providerId?: string
+  error?: string
+}
+
 function tagBadge(tag: string) {
   return `<span style="display:inline-block;background:#e8ecf3;color:#003882;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;margin:2px 4px 2px 0;">${tag}</span>`
 }
@@ -104,37 +121,47 @@ function buildSpotlightHtml(
 </html>`
 }
 
+// Never throws: returns a structured result the caller uses to set
+// email_sent accurately and write an audit-log row. A missing API key is
+// a 'skipped' (expected before Resend is wired up), a provider error is
+// a 'failed' — neither should fail the spotlight itself.
 export async function sendSpotlightEmail(
   spotlight: Spotlight,
   recipient: Profile,
   supervisors: Profile[],
   sender: Profile
-) {
+): Promise<EmailResult> {
   const to = [recipient.email]
   // CC supervisors
   const cc = supervisors.map((s) => s.email).filter(Boolean)
+  const subject = `⭐ Spotlight from ${sender.first_name} ${sender.last_name}`
 
   const resend = getResend()
   if (!resend) {
     console.warn('[sendSpotlightEmail] RESEND_API_KEY not set — skipping email send.')
-    return null
+    return { status: 'skipped', to, cc, subject }
   }
 
   const html = buildSpotlightHtml(spotlight, recipient, sender)
-  const subject = `⭐ Spotlight from ${sender.first_name} ${sender.last_name}`
 
-  const { data, error } = await resend.emails.send({
-    from: 'GCS PD Platform <noreply@gcschool.org>',
-    to,
-    cc: cc.length > 0 ? cc : undefined,
-    subject,
-    html,
-  })
+  try {
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      cc: cc.length > 0 ? cc : undefined,
+      subject,
+      html,
+    })
 
-  if (error) {
-    console.error('[sendSpotlightEmail] Resend error:', error)
-    throw new Error(`Failed to send spotlight email: ${error.message}`)
+    if (error) {
+      console.error('[sendSpotlightEmail] Resend error:', error)
+      return { status: 'failed', to, cc, subject, error: error.message }
+    }
+
+    return { status: 'sent', to, cc, subject, providerId: data?.id }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown send error'
+    console.error('[sendSpotlightEmail] unexpected error:', err)
+    return { status: 'failed', to, cc, subject, error: message }
   }
-
-  return data
 }
