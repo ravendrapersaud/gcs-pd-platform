@@ -111,6 +111,19 @@ export async function POST(request: NextRequest) {
     }
 
     const role = VALID_ROLES.includes(row.role?.toLowerCase() ?? '') ? row.role!.toLowerCase() : 'staff'
+
+    // Only admins may create elevated accounts. Without this a supervisor
+    // could upload a row with role=admin and mint full access (fund policy,
+    // every profile, all allotments). Rejected per-row and reported rather
+    // than silently downgraded, so the importer sees what was refused.
+    if (role !== 'staff' && callerProfile.role !== 'admin') {
+      errors.push({
+        row: rowNum,
+        email,
+        error: `Only admins can import the "${role}" role — ask an admin to set it, or use "staff"`,
+      })
+      continue
+    }
     const employeeType = ['faculty', 'staff'].includes(row.employee_type?.trim().toLowerCase() ?? '')
       ? row.employee_type!.trim().toLowerCase()
       : null
