@@ -71,6 +71,10 @@ feedback. See NEXT_STEPS.md for current status and backlog.
   (round-trips). employee_type column matters for fund math.
 
 ## Test accounts (password Password123!)
-ravendra@ (supervisor), kchaloner@ (supervisor, Dean of Faculty),
-kim@ (supervisor, HS head), alex@ (staff, IT), sarah@ (staff, HS
-English). Real admin: rpersaud@gcschool.org via Google SSO.
+rpersaud@ (ADMIN, owner — also Google SSO), kchaloner@ (admin, Dean of
+Faculty — also Google SSO), kim@ (supervisor, HS head), alex@ (staff,
+IT), sarah@ (staff, HS English). NOTE: seed.sql creates the owner row as
+`ravendra@gcschool.org` (supervisor), but in production that row
+(`aa000000-…-0001`) was renamed to rpersaud@ and promoted to admin — so
+`ravendra@` is NOT a working login. A fresh install from seed.sql needs
+that rename + promotion applied by hand.
