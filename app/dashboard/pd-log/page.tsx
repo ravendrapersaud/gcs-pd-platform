@@ -70,7 +70,9 @@ export default function PdLogPage() {
         .order('activity_date', { ascending: false }),
       supabase
         .from('funding_requests')
-        .select('*')
+        // Join the reviewer so the requester can see WHO decided, not just
+        // that a decision happened.
+        .select('*, reviewer:profiles!funding_requests_reviewed_by_fkey(id, first_name, last_name)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false }),
       supabase
@@ -486,6 +488,21 @@ export default function PdLogPage() {
                     <p className="text-xs text-gray-400 mt-1">
                       Submitted {new Date(fr.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
+                    {/* Decision trail: who decided, when, and why. Without
+                        this the requester only ever saw a status badge. */}
+                    {fr.status !== 'pending' && fr.reviewed_at && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {fr.status === 'approved' ? 'Approved' : fr.status === 'denied' ? 'Denied' : 'Closed'}
+                        {fr.reviewer ? ` by ${fr.reviewer.first_name} ${fr.reviewer.last_name}` : ''}
+                        {' on '}
+                        {new Date(fr.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    )}
+                    {fr.decision_note && (
+                      <p className="text-sm text-gray-700 mt-1.5 bg-gray-50 border-l-2 border-navy-800 pl-2 py-1">
+                        {fr.decision_note}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-bold text-navy-900">${Number(fr.amount).toFixed(2)}</p>

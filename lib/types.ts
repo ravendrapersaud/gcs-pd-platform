@@ -165,6 +165,7 @@ export interface FundingRequest {
   status: FundingStatus
   reviewed_by: string | null
   reviewed_at: string | null
+  decision_note: string | null
   created_at: string
   // joined
   user?: Profile

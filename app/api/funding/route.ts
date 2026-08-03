@@ -29,6 +29,11 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json()
     const { id, status } = body
+    // Optional reviewer rationale. Trimmed; empty string stores as null so
+    // "no note" is one value rather than two.
+    const rawNote: unknown = body?.decision_note
+    const decisionNote =
+      typeof rawNote === 'string' && rawNote.trim() !== '' ? rawNote.trim().slice(0, 2000) : null
 
     if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: 'Funding request id is required' }, { status: 400 })
@@ -84,6 +89,7 @@ export async function PATCH(request: NextRequest) {
         status: status as FundingStatus,
         reviewed_by: session.user.id,
         reviewed_at: new Date().toISOString(),
+        decision_note: decisionNote,
       })
       .eq('id', id)
       .select()

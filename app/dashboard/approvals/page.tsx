@@ -31,6 +31,8 @@ export default function ApprovalsPage() {
   const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actingId, setActingId] = useState<string | null>(null)
+  // Reviewer rationale, keyed by request id (each pending card has its own).
+  const [notes, setNotes] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [fundCfg, setFundCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
   const [adminThreshold, setAdminThreshold] = useState<number | null>(null)
@@ -150,7 +152,7 @@ export default function ApprovalsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status, decision_note: notes[id] ?? '' }),
       })
 
       if (!res.ok) {
@@ -161,7 +163,13 @@ export default function ApprovalsPage() {
       setRequests((prev) =>
         prev.map((r) =>
           r.id === id
-            ? { ...r, status, reviewed_by: session.user.id, reviewed_at: new Date().toISOString() }
+            ? {
+                ...r,
+                status,
+                reviewed_by: session.user.id,
+                reviewed_at: new Date().toISOString(),
+                decision_note: notes[id]?.trim() ? notes[id].trim() : null,
+              }
             : r
         )
       )
@@ -316,21 +324,37 @@ export default function ApprovalsPage() {
                       </p>
                     </div>
                   ) : (
-                    <div className="flex gap-3 mt-4 justify-end">
-                      <button
-                        onClick={() => decide(r.id, 'denied')}
-                        disabled={actingId !== null}
-                        className="btn-secondary text-sm"
-                      >
-                        {actingId === r.id ? 'Saving…' : 'Deny'}
-                      </button>
-                      <button
-                        onClick={() => decide(r.id, 'approved')}
-                        disabled={actingId !== null}
-                        className="btn-primary text-sm"
-                      >
-                        {actingId === r.id ? 'Saving…' : 'Approve'}
-                      </button>
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="label">
+                          Note to {r.user ? r.user.first_name : 'requester'} (optional)
+                        </label>
+                        <textarea
+                          className="input min-h-[64px]"
+                          placeholder="Why this was approved or denied — the requester sees this."
+                          value={notes[r.id] ?? ''}
+                          onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })}
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                          Strongly recommended when denying — it is the record of why.
+                        </p>
+                      </div>
+                      <div className="flex gap-3 justify-end">
+                        <button
+                          onClick={() => decide(r.id, 'denied')}
+                          disabled={actingId !== null}
+                          className="btn-secondary text-sm"
+                        >
+                          {actingId === r.id ? 'Saving…' : 'Deny'}
+                        </button>
+                        <button
+                          onClick={() => decide(r.id, 'approved')}
+                          disabled={actingId !== null}
+                          className="btn-primary text-sm"
+                        >
+                          {actingId === r.id ? 'Saving…' : 'Approve'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -419,7 +443,19 @@ export default function ApprovalsPage() {
                   <td className="px-4 py-3 text-gray-700">
                     {r.user ? `${r.user.first_name} ${r.user.last_name}` : '—'}
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{r.title}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{r.title}</p>
+                    {/* The requester's justification — previously dropped from
+                        this view, so the reasoning vanished once decided. */}
+                    {r.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">{r.description}</p>
+                    )}
+                    {r.decision_note && (
+                      <p className="text-xs text-navy-800 mt-1">
+                        <span className="font-semibold">Note:</span> {r.decision_note}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold text-navy-800">
                     {formatUSD(Number(r.amount))}
                   </td>
