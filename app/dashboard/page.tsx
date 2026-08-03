@@ -77,10 +77,11 @@ async function fetchTeamData(
   const facultyStart = fundYearRange('faculty', fundCfg).start
   const earliestStart = staffStart < facultyStart ? staffStart : facultyStart
   const earliestISO = earliestStart.toISOString()
-  // Team hours metric: simplification — a single (staff) window is used
-  // for everyone here; the header labels it as one academic year and
-  // per-person precision matters less for this aggregate.
-  const hoursStartDate = staffStart.toISOString().slice(0, 10)
+  // Hours use the same treatment as funds: fetch from the earlier of the
+  // two fund-year starts, then filter per person against their own window
+  // below. (Previously every report was measured on the staff window, so
+  // faculty hours between the two start dates were counted wrongly.)
+  const hoursStartDate = earliestStart.toISOString().slice(0, 10)
 
   const [pendingRes, approvedRes, hoursRes, obsRes] = await Promise.all([
     supabase
@@ -96,7 +97,7 @@ async function fetchTeamData(
       .gte('created_at', earliestISO),
     supabase
       .from('pd_activities')
-      .select('user_id, hours')
+      .select('user_id, hours, activity_date')
       .in('user_id', ids)
       .gte('activity_date', hoursStartDate),
     supabase
@@ -117,6 +118,8 @@ async function fetchTeamData(
   }
   const hoursByUser: Record<string, number> = {}
   for (const row of hoursRes.data ?? []) {
+    // Only count hours inside this person's own fund year.
+    if (!isInFundYear(row.activity_date, typeById[row.user_id], fundCfg)) continue
     hoursByUser[row.user_id] = (hoursByUser[row.user_id] ?? 0) + (row.hours ?? 0)
   }
 
@@ -129,7 +132,9 @@ async function fetchTeamData(
     })),
     pendingCount: pendingRes.data?.length ?? 0,
     pendingTotal: (pendingRes.data ?? []).reduce((s, r) => s + Number(r.amount), 0),
-    teamHours: (hoursRes.data ?? []).reduce((s, r) => s + (r.hours ?? 0), 0),
+    // Sum the per-person filtered figures, not the raw rows, so the
+    // headline total matches the per-report numbers beneath it.
+    teamHours: Object.values(hoursByUser).reduce((s, h) => s + h, 0),
     unsignedObs: obsRes.data?.length ?? 0,
   }
 }
@@ -181,20 +186,30 @@ export default async function DashboardPage() {
 
   const userId = session.user.id
 
-  // Current profile role (for supervisor/admin team section)
+  // Current profile role (for supervisor/admin team section) and
+  // employee_type (faculty/staff decides which fund year applies).
   const { data: myProfile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, employee_type')
     .eq('id', userId)
     .single()
 
   const team = await fetchTeamData(supabase, userId, myProfile?.role ?? 'staff')
 
-  // Fetch PD activities
+  // PD activities for THIS fund year only. The hours target is annual, so
+  // an all-time total would let hours from earlier years count toward it.
+  // Staff and faculty fund years start on different dates, hence the
+  // per-person window rather than a calendar year.
+  const { data: mySettingsRows } = await supabase.from('app_settings').select('key, value')
+  const myFundCfg = parseFundSettings(mySettingsRows)
+  const myYear = fundYearRange(myProfile?.employee_type, myFundCfg)
+
   const { data: pdActivities } = await supabase
     .from('pd_activities')
     .select('hours')
     .eq('user_id', userId)
+    .gte('activity_date', myYear.start.toISOString().slice(0, 10))
+    .lt('activity_date', myYear.end.toISOString().slice(0, 10))
 
   const totalHours = pdActivities?.reduce((sum, a) => sum + (a.hours ?? 0), 0) ?? 0
   const pdCount = pdActivities?.length ?? 0

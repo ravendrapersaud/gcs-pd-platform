@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 import { DIVISIONS } from '@/lib/taxonomy'
+import { parseFundSettings, isInFundYear } from '@/lib/funds'
 import clsx from 'clsx'
 
 interface StaffRow extends Profile {
@@ -52,19 +53,29 @@ export default function StaffRosterPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: profiles }, { data: assignments }, { data: pdActs }] = await Promise.all([
+    const [{ data: profiles }, { data: assignments }, { data: pdActs }, { data: settingsRows }] = await Promise.all([
       supabase.from('profiles').select('*').order('last_name'),
       supabase
         .from('supervisor_assignments')
         .select('staff_id, supervisor_id, is_primary, supervisor:profiles!supervisor_assignments_supervisor_id_fkey(first_name, last_name, email)'),
+      // Fetch from the earlier of the two fund-year starts, then filter per
+      // person below. This column used to be a CALENDAR-year filter while
+      // the UI called it "PD hours this year", so it disagreed with the
+      // dashboards. Everything now uses each person's own fund year.
       supabase
         .from('pd_activities')
-        .select('user_id, hours')
-        .gte('activity_date', `${new Date().getFullYear()}-01-01`),
+        .select('user_id, hours, activity_date')
+        .gte('activity_date', `${new Date().getFullYear() - 1}-01-01`),
+      supabase.from('app_settings').select('key, value'),
     ])
+
+    const fundCfg = parseFundSettings(settingsRows)
+    const typeById: Record<string, string | null> = {}
+    for (const p of profiles ?? []) typeById[p.id] = (p as Profile).employee_type
 
     const hoursMap: Record<string, number> = {}
     for (const act of pdActs ?? []) {
+      if (!isInFundYear(act.activity_date, typeById[act.user_id], fundCfg)) continue
       hoursMap[act.user_id] = (hoursMap[act.user_id] ?? 0) + (act.hours ?? 0)
     }
 
