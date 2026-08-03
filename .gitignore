@@ -37,3 +37,6 @@ next-env.d.ts
 # Supabase local
 /supabase/.branches
 /supabase/.temp
+
+# Claude Code local permission state (machine-specific, not shared)
+.claude/settings.local.json

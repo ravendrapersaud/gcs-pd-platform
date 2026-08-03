@@ -58,12 +58,11 @@ account** — that seeded row was renamed to `rpersaud@gcschool.org`
 > taxonomy, everyone's allotments). Fine if deliberate; drop her to
 > `supervisor` in Admin → Staff Roster if not.
 
+**Production URL: https://gcs-pd-platform.vercel.app**
+
 Key dashboards: **Vercel** (hosting, deployments, env vars) ·
 **Supabase** project `xhhxecoubvwqyqvctpdf` · **GitHub**
 `ravendrapersaud/gcs-pd-platform` (pushes auto-deploy).
-
-**TODO: record the production Vercel URL here** — it is not written down
-anywhere in this repo, which makes the notes hard to act on.
 
 ---
 
