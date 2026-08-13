@@ -470,7 +470,7 @@ export default function AdminSettingsPage() {
             onChange={(e) => { setAllotment(e.target.value); touch() }}
           />
           <p className="text-xs text-gray-400 mt-1">
-            Individuals can be given a different amount from their profile in the Staff Roster.
+            Individuals can be given a different amount from their profile in the Roster.
           </p>
         </div>
 

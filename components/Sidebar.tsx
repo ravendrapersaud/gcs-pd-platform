@@ -134,7 +134,7 @@ const navSections: NavSection[] = [
     label: 'Admin',
     minRole: 'supervisor',
     items: [
-      { href: '/dashboard/admin/staff', label: 'Staff Roster', icon: <IconStaff /> },
+      { href: '/dashboard/admin/staff', label: 'Roster', icon: <IconStaff /> },
       { href: '/dashboard/admin/import', label: 'Import CSV', icon: <IconImport /> },
       { href: '/dashboard/admin/reports', label: 'Reports', icon: <IconReports /> },
       { href: '/dashboard/admin/settings', label: 'Settings', icon: <IconSettings />, minRole: 'admin' },

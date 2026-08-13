@@ -23,7 +23,7 @@ const routeMeta: Record<string, { title: string; action?: { label: string; href:
   '/dashboard/observations': { title: 'Observations' },
   '/dashboard/approvals': { title: 'Funding Approvals' },
   '/dashboard/frameworks': { title: 'Frameworks' },
-  '/dashboard/admin/staff': { title: 'Staff Roster' },
+  '/dashboard/admin/staff': { title: 'Roster' },
   '/dashboard/admin/import': { title: 'Import Staff (CSV)' },
   '/dashboard/admin/reports': { title: 'Reports' },
   '/dashboard/admin/settings': { title: 'Settings' },

@@ -46,6 +46,28 @@ export const DIVISIONS = [
   { code: 'HS', name: 'High School' },
 ] as const
 
+// Division options for people-pickers: the four teaching divisions plus
+// "All School" for cross-division roles (administration, operations, tech).
+export const DIVISION_OPTIONS: string[] = [
+  ...DIVISIONS.map((d) => d.name),
+  'All School',
+]
+
+// Department options for the roster, grouped: academic (teaching faculty)
+// vs. role-based (staff & administration). Not exhaustive — the roster UI
+// merges any other value already present in the data so nothing is lost.
+export const DEPARTMENT_GROUPS: { label: string; options: readonly string[] }[] = [
+  { label: 'Academic', options: SUBJECTS },
+  {
+    label: 'Administrative & Operations',
+    options: [
+      'Administration', 'Admissions', 'Advancement', 'Athletics',
+      'Business Office', 'College Office', 'Communications', 'Facilities',
+      'Health Services', 'Human Resources', 'Operations', 'Technology',
+    ],
+  },
+]
+
 // Employee types (job category, distinct from access role). 'admin' =
 // Administration; like 'staff' it uses the staff fund-year window (see
 // lib/funds.ts yearStartFor).

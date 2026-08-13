@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
-import { DIVISIONS } from '@/lib/taxonomy'
+import { DIVISION_OPTIONS, DEPARTMENT_GROUPS } from '@/lib/taxonomy'
 import { parseFundSettings, isInFundYear } from '@/lib/funds'
 import { roleAccessLabel } from '@/lib/roles'
 import clsx from 'clsx'
@@ -114,15 +114,18 @@ export default function StaffRosterPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Division options: canonical four (EC/LS/MS/HS) plus any others present in the data.
-  const canonicalDivs: string[] = DIVISIONS.map((d) => d.name)
+  // Division options: canonical (4 divisions + All School) plus any others present in the data.
   const dataDivs = Array.from(new Set(staff.map((s) => s.division).filter(Boolean))) as string[]
   const divisions = [
-    ...canonicalDivs,
-    ...dataDivs.filter((d) => !canonicalDivs.includes(d)).sort(),
+    ...DIVISION_OPTIONS,
+    ...dataDivs.filter((d) => !DIVISION_OPTIONS.includes(d)).sort(),
   ]
 
   const departments = Array.from(new Set(staff.map((s) => s.department).filter(Boolean))).sort() as string[]
+  // Department values already in use that aren't in the canonical groups —
+  // surfaced under an "Other" optgroup so existing data stays selectable.
+  const canonicalDepts = new Set(DEPARTMENT_GROUPS.flatMap((g) => g.options))
+  const otherDepts = departments.filter((d) => !canonicalDepts.has(d))
   const supervisorOptions = allProfiles
     .filter((p) => p.role === 'supervisor' || p.role === 'admin')
     .sort((a, b) => (a.last_name ?? '').localeCompare(b.last_name ?? ''))
@@ -364,11 +367,26 @@ export default function StaffRosterPage() {
               </div>
               <div>
                 <label className="label">Division</label>
-                <input className="input" value={editForm.division ?? ''} onChange={(e) => setEditForm({ ...editForm, division: e.target.value })} />
+                <select className="input" value={editForm.division ?? ''} onChange={(e) => setEditForm({ ...editForm, division: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
               </div>
               <div>
                 <label className="label">Department</label>
-                <input className="input" value={editForm.department ?? ''} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })} />
+                <select className="input" value={editForm.department ?? ''} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  {DEPARTMENT_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </optgroup>
+                  ))}
+                  {otherDepts.length > 0 && (
+                    <optgroup label="Other (in use)">
+                      {otherDepts.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </optgroup>
+                  )}
+                </select>
               </div>
               <div>
                 <label className="label">Employee ID</label>
@@ -509,11 +527,26 @@ export default function StaffRosterPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Division</label>
-                  <input className="input" value={createForm.division} onChange={(e) => setCreateForm({ ...createForm, division: e.target.value })} />
+                  <select className="input" value={createForm.division} onChange={(e) => setCreateForm({ ...createForm, division: e.target.value })}>
+                    <option value="">Unspecified</option>
+                    {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Department</label>
-                  <input className="input" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
+                  <select className="input" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}>
+                    <option value="">Unspecified</option>
+                    {DEPARTMENT_GROUPS.map((g) => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </optgroup>
+                    ))}
+                    {otherDepts.length > 0 && (
+                      <optgroup label="Other (in use)">
+                        {otherDepts.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
