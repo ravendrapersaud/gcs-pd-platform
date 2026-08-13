@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget } from '@/lib/appSettings'
+import ReportBuilder from '@/components/ReportBuilder'
 
 interface DeptStats {
   department: string
@@ -255,6 +256,16 @@ export default function ReportsPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Reports & exports */}
+      <div className="pt-6 border-t border-gray-200">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Reports &amp; exports</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Run a standard report or build your own — pick any fields, filter, optionally
+          group, and export to CSV or XLSX.
+        </p>
+        <ReportBuilder />
       </div>
     </div>
   )
