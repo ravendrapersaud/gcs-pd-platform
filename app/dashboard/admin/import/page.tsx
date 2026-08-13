@@ -148,6 +148,10 @@ export default function ImportCsvPage() {
         <p className="text-xs text-gray-500">
           <strong>Role values:</strong> <code>staff</code> (default), <code>supervisor</code>, <code>admin</code>
         </p>
+        <p className="text-xs text-gray-500">
+          <strong>Employee type values:</strong> <code>faculty</code>, <code>staff</code>, <code>admin</code> (Administration).
+          Drives the fund-year reset — <code>admin</code> uses the staff window (July 1).
+        </p>
 
         <button onClick={downloadTemplate} className="btn-secondary text-sm">
           ⬇ Download Template CSV

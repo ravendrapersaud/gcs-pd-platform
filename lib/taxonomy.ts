@@ -16,6 +16,9 @@ export const THEMES = [
   'Classroom Management', 'Assessment', 'Writing', 'Reading & Literacy', 'DEI',
   'Social-Emotional Learning', 'AI & EdTech', 'Project-Based Learning', 'Leadership',
   'Curriculum Design', 'Differentiation', 'Family Engagement',
+  // Categories from the 'PD and Resource Lists' Google Doc import.
+  'Teaching Lessons', 'Designing Courses', 'Building Relationships',
+  'Academic Leadership', 'Modeling Virtues', 'Grace Curated Lists',
 ] as const
 
 export const RESOURCE_TYPE_LABELS: Record<string, string> = {
@@ -43,5 +46,7 @@ export const DIVISIONS = [
   { code: 'HS', name: 'High School' },
 ] as const
 
-// Employee types (job category, distinct from access role).
-export const EMPLOYEE_TYPES = ['faculty', 'staff'] as const
+// Employee types (job category, distinct from access role). 'admin' =
+// Administration; like 'staff' it uses the staff fund-year window (see
+// lib/funds.ts yearStartFor).
+export const EMPLOYEE_TYPES = ['faculty', 'staff', 'admin'] as const

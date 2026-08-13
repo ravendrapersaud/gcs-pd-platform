@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 import { DIVISIONS } from '@/lib/taxonomy'
 import { parseFundSettings, isInFundYear } from '@/lib/funds'
+import { roleAccessLabel } from '@/lib/roles'
 import clsx from 'clsx'
 
 interface StaffRow extends Profile {
@@ -29,9 +30,12 @@ export default function StaffRosterPage() {
   const [deptFilter, setDeptFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState<'' | 'staff' | 'supervisor' | 'admin'>('')
   const [supFilter, setSupFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'' | 'faculty' | 'staff'>('')
+  const [typeFilter, setTypeFilter] = useState<'' | 'faculty' | 'staff' | 'admin'>('')
   const [needsSetupOnly, setNeedsSetupOnly] = useState(false)
   const [loading, setLoading] = useState(true)
+  // Whether the signed-in user is a Platform Admin — gates the Access
+  // (role) dropdowns, which only admins may change.
+  const [isAdmin, setIsAdmin] = useState(false)
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
   const [allotmentInput, setAllotmentInput] = useState('')
@@ -98,6 +102,10 @@ export default function StaffRosterPage() {
       secondarySupEmail: secondaryEmailMap[p.id] ?? '',
       pdHours: hoursMap[p.id] ?? 0,
     }))
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const me = (profiles ?? []).find((p) => p.id === user?.id) as Profile | undefined
+    setIsAdmin(me?.role === 'admin')
 
     setStaff(rows)
     setAllProfiles((profiles ?? []) as Profile[])
@@ -380,9 +388,10 @@ export default function StaffRosterPage() {
                   <option value="">Unspecified</option>
                   <option value="faculty">Faculty</option>
                   <option value="staff">Staff</option>
+                  <option value="admin">Admin (Administration)</option>
                 </select>
                 <p className="text-xs text-gray-400 mt-1">
-                  Drives which fund-year reset applies (staff July 1, faculty late Aug).
+                  Drives which fund-year reset applies (staff &amp; admin July 1, faculty late Aug).
                 </p>
               </div>
               <div>
@@ -400,14 +409,16 @@ export default function StaffRosterPage() {
                   Leave blank to use the school default.
                 </p>
               </div>
-              <div>
-                <label className="label">Role</label>
-                <select className="input" value={editForm.role ?? 'staff'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Profile['role'] })}>
-                  <option value="staff">Staff</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
+              {isAdmin && (
+                <div>
+                  <label className="label">Access</label>
+                  <select className="input" value={editForm.role ?? 'staff'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Profile['role'] })}>
+                    <option value="staff">Member</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin">Platform Admin</option>
+                  </select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   id="can-create-workspaces"
@@ -516,20 +527,23 @@ export default function StaffRosterPage() {
                     <option value="">Unspecified</option>
                     <option value="faculty">Faculty</option>
                     <option value="staff">Staff</option>
+                    <option value="admin">Admin (Administration)</option>
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="label">Role (access level)</label>
-                <select className="input" value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}>
-                  <option value="staff">Staff</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Only admins can create supervisor or admin accounts.
-                </p>
-              </div>
+              {isAdmin && (
+                <div>
+                  <label className="label">Access</label>
+                  <select className="input" value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}>
+                    <option value="staff">Member</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin">Platform Admin</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Only admins can grant Supervisor or Platform Admin access.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="label">PD allotment override ($)</label>
                 <input type="number" step="0.01" min="0" className="input" placeholder="School default" value={createForm.pd_allotment} onChange={(e) => setCreateForm({ ...createForm, pd_allotment: e.target.value })} />
@@ -590,10 +604,10 @@ export default function StaffRosterPage() {
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value as '' | 'staff' | 'supervisor' | 'admin')}
           >
-            <option value="">All Roles</option>
-            <option value="staff">Staff (standard access)</option>
+            <option value="">All Access</option>
+            <option value="staff">Member</option>
             <option value="supervisor">Supervisor</option>
-            <option value="admin">Admin</option>
+            <option value="admin">Platform Admin</option>
           </select>
           <select className="input sm:w-64" value={supFilter} onChange={(e) => setSupFilter(e.target.value)}>
             <option value="">Any Supervisor</option>
@@ -618,8 +632,8 @@ export default function StaffRosterPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Faculty / Staff filter */}
-          {([['', 'All'], ['faculty', 'Faculty'], ['staff', 'Staff']] as const).map(([val, label]) => (
+          {/* Employee-type filter (faculty / staff / admin) */}
+          {([['', 'All'], ['faculty', 'Faculty'], ['staff', 'Staff'], ['admin', 'Admin']] as const).map(([val, label]) => (
             <button
               key={val}
               onClick={() => setTypeFilter(val)}
@@ -674,7 +688,7 @@ export default function StaffRosterPage() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Dept</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Supervisor(s)</th>
                 <th className="text-right px-4 py-3 font-semibold text-gray-600">PD Hrs</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-600">Role</th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600">Access</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -708,10 +722,10 @@ export default function StaffRosterPage() {
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell text-xs">{s.supervisors}</td>
                   <td className="px-4 py-3 text-right font-semibold text-navy-800">{s.pdHours.toFixed(1)}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`badge capitalize ${
+                    <span className={`badge ${
                       s.role === 'admin' ? 'badge-red' : s.role === 'supervisor' ? 'badge-navy' : 'badge-gray'
                     }`}>
-                      {s.role}
+                      {roleAccessLabel(s.role)}
                     </span>
                   </td>
                 </tr>

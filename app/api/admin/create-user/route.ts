@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   const employeeType: string | null =
-    ['faculty', 'staff'].includes(body?.employee_type) ? body.employee_type : null
+    ['faculty', 'staff', 'admin'].includes(body?.employee_type) ? body.employee_type : null
 
   let allotment: number | null = null
   if (body?.pd_allotment !== undefined && body?.pd_allotment !== null && body?.pd_allotment !== '') {

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import type { Profile } from '@/lib/types'
+import { roleSelfLabel } from '@/lib/roles'
 
 interface TopBarProps {
   profile: Profile
@@ -57,7 +58,7 @@ export default function TopBar({ profile }: TopBarProps) {
             <p className="text-xs font-medium text-gray-700">
               {profile.first_name} {profile.last_name}
             </p>
-            <p className="text-[10px] text-gray-400 capitalize">{profile.role}</p>
+            <p className="text-[10px] text-gray-400">{roleSelfLabel(profile.role)}</p>
           </div>
           {profile.avatar_url ? (
             <img

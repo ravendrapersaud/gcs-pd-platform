@@ -44,7 +44,7 @@ export interface Profile {
   division: string | null
   department: string | null
   employee_id: string | null
-  employee_type: string | null // 'faculty' | 'staff'
+  employee_type: string | null // 'faculty' | 'staff' | 'admin'
   pd_allotment: number | null // per-person override; null = school default
   needs_setup: boolean
   can_create_workspaces: boolean

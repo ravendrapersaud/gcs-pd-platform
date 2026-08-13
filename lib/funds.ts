@@ -47,8 +47,10 @@ export function parseFundSettings(rows: { key: string; value: string }[] | null 
 }
 
 function yearStartFor(employeeType: string | null | undefined, cfg: FundConfig): { month: number; day: number } {
-  // Faculty use the faculty start date; staff and anyone unclassified
-  // use the staff start date.
+  // Faculty use the faculty start date; staff, admin (Administration),
+  // and anyone unclassified use the staff start date. Admin-type
+  // employees intentionally follow the staff window (July 1) — only
+  // 'faculty' gets the later faculty reset.
   return (employeeType ?? '').toLowerCase() === 'faculty'
     ? cfg.facultyYearStart
     : cfg.staffYearStart

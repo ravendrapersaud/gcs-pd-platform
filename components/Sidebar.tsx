@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
+import { roleSelfLabel } from '@/lib/roles'
 import clsx from 'clsx'
 
 interface NavItem {
@@ -242,7 +243,7 @@ export default function Sidebar({ profile }: SidebarProps) {
             <p className="text-white text-sm font-medium truncate">
               {profile.first_name} {profile.last_name}
             </p>
-            <p className="text-navy-400 text-xs capitalize">{profile.role}</p>
+            <p className="text-navy-400 text-xs">{roleSelfLabel(profile.role)}</p>
           </div>
         </div>
         <button

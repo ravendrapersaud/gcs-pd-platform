@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
       })
       continue
     }
-    const employeeType = ['faculty', 'staff'].includes(row.employee_type?.trim().toLowerCase() ?? '')
+    const employeeType = ['faculty', 'staff', 'admin'].includes(row.employee_type?.trim().toLowerCase() ?? '')
       ? row.employee_type!.trim().toLowerCase()
       : null
 
