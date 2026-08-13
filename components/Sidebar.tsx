@@ -179,7 +179,7 @@ export default function Sidebar({ profile }: SidebarProps) {
           <span className="text-sm font-black text-navy-900">GCS</span>
         </div>
         <div>
-          <p className="text-white text-sm font-bold leading-tight">GCS</p>
+          <p className="text-white text-sm font-bold leading-tight">Grace Church School</p>
           <p className="text-navy-300 text-xs">PD Platform</p>
         </div>
       </div>
