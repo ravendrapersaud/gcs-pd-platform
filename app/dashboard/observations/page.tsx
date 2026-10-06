@@ -16,14 +16,19 @@ const ratingColors = ['', 'bg-red-100 text-red-700', 'bg-yellow-100 text-yellow-
 function ObservationCard({
   obs,
   onSignOff,
+  onDelete,
   currentUserId,
+  isAdmin,
 }: {
   obs: Observation
   onSignOff: (id: string) => void
+  onDelete: (id: string) => void
   currentUserId: string
+  isAdmin: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const canSignOff = !obs.signed_off && obs.observed_id === currentUserId
+  const canDelete = obs.observer_id === currentUserId || isAdmin
   const twg = obs.twg_data
 
   return (
@@ -117,13 +122,25 @@ function ObservationCard({
             </div>
           )}
 
-          {canSignOff && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSignOff(obs.id) }}
-              className="btn-primary text-sm"
-            >
-              Sign Off Observation
-            </button>
+          {(canSignOff || canDelete) && (
+            <div className="flex items-center gap-3 pt-1">
+              {canSignOff && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSignOff(obs.id) }}
+                  className="btn-primary text-sm"
+                >
+                  Sign Off Observation
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(obs.id) }}
+                  className="text-sm text-red-600 hover:text-red-800 font-medium ml-auto"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -221,6 +238,13 @@ export default function ObservationsPage() {
       .from('observations')
       .update({ signed_off: true, signed_off_at: new Date().toISOString() })
       .eq('id', obsId)
+    load()
+  }
+
+  const handleDelete = async (obsId: string) => {
+    if (!window.confirm('Delete this observation? This cannot be undone.')) return
+    const { error } = await supabase.from('observations').delete().eq('id', obsId)
+    if (error) { window.alert(`Could not delete: ${error.message}`); return }
     load()
   }
 
@@ -494,7 +518,10 @@ export default function ObservationsPage() {
                       {new Date(obs.observed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
-                  <Link href={`/dashboard/observations/twg?id=${obs.id}`} className="btn-primary text-sm shrink-0">Continue</Link>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => handleDelete(obs.id)} className="text-sm text-red-600 hover:text-red-800 font-medium">Delete</button>
+                    <Link href={`/dashboard/observations/twg?id=${obs.id}`} className="btn-primary text-sm">Continue</Link>
+                  </div>
                 </div>
               )
             })}
@@ -511,7 +538,9 @@ export default function ObservationsPage() {
               key={obs.id}
               obs={obs}
               onSignOff={handleSignOff}
+              onDelete={handleDelete}
               currentUserId={userId ?? ''}
+              isAdmin={userRole === 'admin'}
             />
           ))}
         </div>

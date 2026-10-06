@@ -9,6 +9,7 @@ import { DIVISION_OPTIONS } from '@/lib/taxonomy'
 import clsx from 'clsx'
 import {
   MODES, WHO, MODE_TO_OBS_TYPE, TWG_FRAMEWORK_TITLE,
+  ADDONS, ADDON_MAP, ADDON_PREFIX, CUSTOM_CATEGORY_ID, ADDON_COLOR,
   emptyTwgData, normalizeCapture, formatElapsed, segmentsFromSpans, excerptsForNote, categoryColor,
   type ObsMode, type TwgData, type TwgNote, type CategoryAnalysis, type CaptureCategory,
 } from '@/lib/twg'
@@ -138,9 +139,13 @@ export default function ObservationCapturePage() {
     domains.forEach((d, i) => m.set(d.id, i))
     return m
   }, [domains])
-  const catColor = (id: string) => categoryColor(domainIndex.get(id) ?? twg.categories.findIndex((c) => c.id === id))
+  const isAddon = (id: string) => id.startsWith(ADDON_PREFIX)
+  const catColor = (id: string) =>
+    isAddon(id) || id === CUSTOM_CATEGORY_ID ? ADDON_COLOR : categoryColor(domainIndex.get(id) ?? 0)
   const catTitle = (id: string) =>
     domains.find((d) => d.id === id)?.title ?? twg.categories.find((c) => c.id === id)?.title ?? 'Category'
+  const catDescription = (id: string): string =>
+    isAddon(id) ? (ADDON_MAP[id.slice(ADDON_PREFIX.length)]?.hint ?? '') : (domains.find((d) => d.id === id)?.description ?? '')
 
   const patch = (p: Partial<TwgData>) => setTwg((t) => ({ ...t, ...p }))
 
@@ -202,7 +207,32 @@ export default function ObservationCapturePage() {
       return { ...t, analysis: { ...t.analysis, [id]: { ...prev, ...p } } }
     })
 
-  const indicatorsFor = (id: string) => domains.find((d) => d.id === id)?.indicators ?? []
+  const indicatorsFor = (id: string): { id: string; title: string }[] => {
+    if (isAddon(id)) return (ADDON_MAP[id.slice(ADDON_PREFIX.length)]?.lookfors ?? []).map((l, i) => ({ id: `${id}:${i}`, title: l }))
+    if (id === CUSTOM_CATEGORY_ID) return twg.customLookfors.split('\n').map((s) => s.trim()).filter(Boolean).map((l, i) => ({ id: `custom:${i}`, title: l }))
+    return (domains.find((d) => d.id === id)?.indicators ?? []).map((ind) => ({ id: ind.id, title: ind.title }))
+  }
+
+  const toggleAddon = (key: string) => {
+    const id = ADDON_PREFIX + key
+    setTwg((t) => ({
+      ...t,
+      categories: t.categories.some((c) => c.id === id)
+        ? t.categories.filter((c) => c.id !== id)
+        : [...t.categories, { id, title: ADDON_MAP[key]?.name ?? key }],
+    }))
+  }
+
+  const setCustomLookfors = (val: string) =>
+    setTwg((t) => {
+      const has = t.categories.some((c) => c.id === CUSTOM_CATEGORY_ID)
+      const nonEmpty = val.trim().length > 0
+      let categories = t.categories
+      if (nonEmpty && !has) categories = [...categories, { id: CUSTOM_CATEGORY_ID, title: 'Your look-fors' }]
+      if (!nonEmpty && has) categories = categories.filter((c) => c.id !== CUSTOM_CATEGORY_ID)
+      return { ...t, customLookfors: val, categories }
+    })
+
   const toggleCheck = (domainId: string, lookfor: string) =>
     setTwg((t) => {
       const cur = t.checks?.[domainId] ?? []
@@ -480,6 +510,35 @@ export default function ObservationCapturePage() {
             )}
           </div>
 
+          {selectedFw?.title === TWG_FRAMEWORK_TITLE && (
+            <div className="card p-5 space-y-3">
+              <div>
+                <label className="label mb-0">Discipline or division add-ons</label>
+                <p className="text-xs text-gray-500 mt-0.5">Extra look-fors for the space, age group, or discipline. Each becomes a tag and joins the reference.</p>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {ADDONS.map((ad) => {
+                  const on = twg.categories.some((c) => c.id === ADDON_PREFIX + ad.key)
+                  return (
+                    <button key={ad.key} onClick={() => toggleAddon(ad.key)}
+                      className={clsx('text-left rounded-xl border p-3 transition-colors', on ? 'border-navy-300 bg-navy-50 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300')}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-gray-900">{ad.name}</span>
+                        {on && <span className="ml-auto text-xs font-semibold text-navy-700">✓</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{ad.hint}</p>
+                    </button>
+                  )
+                })}
+              </div>
+              <div>
+                <label className="label">Your own look-fors (one per line)</label>
+                <textarea rows={3} className="input resize-none" placeholder="e.g. Uses the new listening routine from PD" value={twg.customLookfors} onChange={(e) => setCustomLookfors(e.target.value)} />
+                <p className="text-xs text-gray-400 mt-1">For anything specific to this teacher or discipline the framework doesn&apos;t cover.</p>
+              </div>
+            </div>
+          )}
+
           {twg.mode !== 'popin' && (
             <div className="card p-5 space-y-3">
               <h3 className="font-semibold text-gray-900">Pre-observation conversation</h3>
@@ -497,7 +556,7 @@ export default function ObservationCapturePage() {
             </div>
           )}
 
-          {domains.length > 0 && (
+          {twg.categories.length > 0 && (
             <>
               <button onClick={() => setShowFramework((s) => !s)} className="text-sm font-medium text-navy-800 hover:underline">
                 {showFramework ? '▾ Hide' : '▸ Show'} the framework reference &amp; look-fors
@@ -505,21 +564,23 @@ export default function ObservationCapturePage() {
               {showFramework && (
                 <div className="card p-4 space-y-2">
                   {selectedFw?.description && <p className="text-sm italic text-gray-600 px-1">{selectedFw.description}</p>}
-                  {domains.map((d) => {
-                    const open = openRefs.has(d.id)
-                    const color = catColor(d.id)
+                  {twg.categories.map((c) => {
+                    const open = openRefs.has(c.id)
+                    const color = catColor(c.id)
+                    const desc = catDescription(c.id)
+                    const inds = indicatorsFor(c.id)
                     return (
-                      <div key={d.id} className="rounded-lg border border-gray-200 overflow-hidden" style={{ borderLeftWidth: 3, borderLeftColor: color }}>
-                        <button onClick={() => toggleSet(setOpenRefs, d.id)} className="w-full flex items-center gap-2 p-3 text-left hover:bg-gray-50">
-                          <span className="font-semibold text-gray-900">{d.title}</span>
+                      <div key={c.id} className="rounded-lg border border-gray-200 overflow-hidden" style={{ borderLeftWidth: 3, borderLeftColor: color }}>
+                        <button onClick={() => toggleSet(setOpenRefs, c.id)} className="w-full flex items-center gap-2 p-3 text-left hover:bg-gray-50">
+                          <span className="font-semibold text-gray-900">{c.title}</span>
                           <span className="ml-auto text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
                         </button>
                         {open && (
                           <div className="px-4 pb-3 pt-1 border-t border-gray-100">
-                            {d.description && <p className="text-sm text-gray-600 mb-2">{d.description}</p>}
-                            {(d.indicators ?? []).length > 0 && (
+                            {desc && <p className="text-sm text-gray-600 mb-2">{desc}</p>}
+                            {inds.length > 0 && (
                               <ul className="list-disc pl-5 text-sm text-gray-500 space-y-0.5">
-                                {(d.indicators ?? []).map((ind) => <li key={ind.id}>{ind.title}</li>)}
+                                {inds.map((ind) => <li key={ind.id}>{ind.title}</li>)}
                               </ul>
                             )}
                           </div>

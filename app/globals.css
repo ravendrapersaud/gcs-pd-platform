@@ -97,10 +97,10 @@
   }
 
   .tab-active {
-    @apply bg-navy-900 text-white;
+    @apply bg-navy-100 text-navy-800 ring-1 ring-navy-200;
   }
 
   .tab-inactive {
-    @apply text-gray-600 hover:bg-gray-100;
+    @apply text-gray-500 hover:bg-gray-100;
   }
 }

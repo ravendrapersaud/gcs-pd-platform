@@ -290,11 +290,18 @@ export interface TwgData {
   pre: TwgPre
   notes: TwgNote[]
   analysis: Record<string, CategoryAnalysis>
-  // Look-fors (indicator titles) the observer checked as noticed, per domain id.
+  // Look-fors (indicator titles) the observer checked as noticed, per category id.
   checks: Record<string, string[]>
+  // Free-text custom look-fors (one per line), for anything the framework misses.
+  customLookfors: string
   wrap: TwgWrap
   durationMs: number | null
 }
+
+// Fixed id prefixes for non-domain categories layered onto a framework.
+export const ADDON_PREFIX = 'addon:'
+export const CUSTOM_CATEGORY_ID = 'custom'
+export const ADDON_COLOR = '#64748b' // slate — distinguishes add-ons from the colored domains
 
 // obs_type (existing enum) each capture mode maps to.
 export const MODE_TO_OBS_TYPE: Record<ObsMode, 'formal' | 'informal' | 'walkthrough'> = {
@@ -314,6 +321,7 @@ export function emptyTwgData(mode: ObsMode): TwgData {
     notes: [],
     analysis: {},
     checks: {},
+    customLookfors: '',
     wrap: { context: '', overall: '', next: '', questions: '' },
     durationMs: null,
   }
@@ -343,6 +351,7 @@ export function normalizeCapture(raw: unknown, domains: { id: string; title: str
     categories: [],
     analysis: {},
     checks: (r.checks && typeof r.checks === 'object') ? (r.checks as Record<string, string[]>) : {},
+    customLookfors: typeof r.customLookfors === 'string' ? r.customLookfors : '',
   }
 
   // Already the current shape.
