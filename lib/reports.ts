@@ -13,8 +13,9 @@ import {
   type FundConfig,
 } from './funds'
 import { roleAccessLabel } from './roles'
+import { MODES, excerptsForNote, type TwgData } from './twg'
 
-export type ReportSubject = 'people' | 'activities' | 'funding'
+export type ReportSubject = 'people' | 'activities' | 'funding' | 'observations'
 export type FieldType = 'text' | 'number' | 'currency' | 'date' | 'bool'
 
 export interface FieldDef {
@@ -56,10 +57,18 @@ export interface RawData {
   profiles: ProfileRow[]
   activities: ActivityRow[]
   funding: FundingRow[]
-  observations: { observed_id: string }[]
+  observations: ObservationRow[]
   goals: { owner_id: string }[]
   assignments: AssignmentRow[]
   spotlights: { to_user_id: string }[]
+}
+interface ObservationRow {
+  observed_id: string
+  observer_id: string
+  observed_at: string | null
+  signed_off: boolean | null
+  obs_type: string | null
+  twg_data: TwgData | null
 }
 interface ProfileRow {
   id: string
@@ -177,6 +186,27 @@ export const SUBJECTS: {
       { key: 'created_at', label: 'Submitted', group: 'Request', type: 'date' },
     ],
   },
+  {
+    id: 'observations',
+    label: 'Observations',
+    defaultColumns: ['person', 'division', 'observed_at', 'mode', 'framework', 'dc', 'tl', 'br', 'mv'],
+    fields: [
+      { key: 'person', label: 'Teacher', group: 'Observation', type: 'text' },
+      { key: 'division', label: 'Division', group: 'Observation', type: 'text' },
+      { key: 'department', label: 'Department', group: 'Observation', type: 'text' },
+      { key: 'employee_type', label: 'Employee Type', group: 'Observation', type: 'text' },
+      { key: 'observer', label: 'Observer', group: 'Observation', type: 'text' },
+      { key: 'observed_at', label: 'Date', group: 'Observation', type: 'date' },
+      { key: 'mode', label: 'Visit', group: 'Observation', type: 'text' },
+      { key: 'framework', label: 'Framework', group: 'Observation', type: 'text' },
+      { key: 'signed_off', label: 'Signed Off', group: 'Observation', type: 'bool' },
+      { key: 'feedback', label: 'Feedback by area (all)', group: 'Areas', type: 'text' },
+      { key: 'dc', label: 'Designing Courses', group: 'Teaching with Grace pillars', type: 'text' },
+      { key: 'tl', label: 'Teaching Lessons', group: 'Teaching with Grace pillars', type: 'text' },
+      { key: 'br', label: 'Building Relationships', group: 'Teaching with Grace pillars', type: 'text' },
+      { key: 'mv', label: 'Modeling Virtues', group: 'Teaching with Grace pillars', type: 'text' },
+    ],
+  },
 ]
 
 export function subjectFields(subject: ReportSubject): FieldDef[] {
@@ -289,9 +319,66 @@ export function buildFundingRecords(data: RawData): ReportRow[] {
   })
 }
 
+// The feedback for one category id: analysis + tagged-note excerpts + flag.
+function areaBody(catId: string, twg: TwgData): string {
+  const a = twg.analysis[catId]
+  const excerpts = twg.notes.flatMap((n) => excerptsForNote(n, catId))
+  const parts: string[] = []
+  if (a?.strengths) parts.push(`Strengths: ${a.strengths}`)
+  if (a?.growth) parts.push(`Growth: ${a.growth}`)
+  if (a?.flag) parts.push('⚑ follow-up support')
+  if (excerpts.length) parts.push(`Notes (${excerpts.length}): ${excerpts.join(' | ')}`)
+  return parts.join('\n')
+}
+
+// A named-column cell: the feedback for the category whose title matches
+// (used for the fixed Teaching with Grace pillar columns). Empty for
+// observations on other frameworks.
+function cellByTitle(title: string, twg: TwgData | null): string {
+  if (!twg) return ''
+  const c = (twg.categories ?? []).find((cat) => cat.title === title)
+  return c ? areaBody(c.id, twg) : ''
+}
+
+// The combined column: every area the observation covers, labeled — works
+// for any framework.
+function allAreasCell(twg: TwgData | null): string {
+  if (!twg) return ''
+  return (twg.categories ?? [])
+    .map((c) => { const body = areaBody(c.id, twg); return body ? `${c.title}\n${body}` : '' })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function buildObservationRecords(data: RawData): ReportRow[] {
+  const byId = new Map(data.profiles.map((p) => [p.id, p]))
+  return data.observations.map((o) => {
+    const p = byId.get(o.observed_id)
+    const observer = byId.get(o.observer_id)
+    const twg = o.twg_data
+    return {
+      person: name(p),
+      division: p?.division ?? '',
+      department: p?.department ?? '',
+      employee_type: p?.employee_type ?? '',
+      observer: name(observer),
+      observed_at: o.observed_at,
+      mode: twg ? MODES[twg.mode].label : (o.obs_type ?? ''),
+      framework: twg?.frameworkTitle ?? '',
+      signed_off: !!o.signed_off,
+      feedback: allAreasCell(twg),
+      dc: cellByTitle('Designing Courses', twg),
+      tl: cellByTitle('Teaching Lessons', twg),
+      br: cellByTitle('Building Relationships', twg),
+      mv: cellByTitle('Modeling Virtues', twg),
+    }
+  })
+}
+
 export function recordsFor(subject: ReportSubject, data: RawData, cfg: FundConfig, target: number): ReportRow[] {
   if (subject === 'people') return buildPeopleRecords(data, cfg, target)
   if (subject === 'activities') return buildActivityRecords(data)
+  if (subject === 'observations') return buildObservationRecords(data)
   return buildFundingRecords(data)
 }
 
@@ -301,6 +388,7 @@ const DATE_KEY: Record<ReportSubject, string> = {
   people: 'last_activity_date',
   activities: 'activity_date',
   funding: 'created_at',
+  observations: 'observed_at',
 }
 
 function filterRecords(subject: ReportSubject, records: ReportRow[], f: ReportFilters): ReportRow[] {
@@ -463,5 +551,12 @@ export const CANNED_REPORTS: CannedReport[] = [
     description: 'Every person with core profile fields',
     subject: 'people',
     columns: ['last_name', 'first_name', 'email', 'title', 'division', 'department', 'employee_type', 'access', 'employee_id', 'primary_supervisor'],
+  },
+  {
+    id: 'twg-observations',
+    name: 'Teaching with Grace Observations',
+    description: 'Each observation with the four pillar areas',
+    subject: 'observations',
+    columns: ['person', 'division', 'department', 'observed_at', 'mode', 'dc', 'tl', 'br', 'mv'],
   },
 ]

@@ -70,6 +70,13 @@ export default function FrameworksPage() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // Detail-view management (edit header fields / delete)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState({ title: '', division: '', department: '', description: '' })
+  const [usageCount, setUsageCount] = useState<number | null>(null)
+  const [managing, setManaging] = useState(false)
+  const [manageError, setManageError] = useState<string | null>(null)
+
   // Form state
   const [fwForm, setFwForm] = useState({ title: '', division: '', department: '', description: '' })
   const [domains, setDomains] = useState<DomainInput[]>([
@@ -92,6 +99,62 @@ export default function FrameworksPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // When a framework detail opens, seed the edit form and count its usage.
+  useEffect(() => {
+    if (!selected) { setUsageCount(null); return }
+    setEditing(false)
+    setManageError(null)
+    setEditForm({
+      title: selected.title,
+      division: selected.division ?? '',
+      department: selected.department ?? '',
+      description: selected.description ?? '',
+    })
+    supabase
+      .from('observations')
+      .select('id', { count: 'exact', head: true })
+      .eq('framework_id', selected.id)
+      .then(({ count }) => setUsageCount(count ?? 0))
+  }, [selected])
+
+  const handleSaveHeader = async () => {
+    if (!selected) return
+    setManaging(true)
+    setManageError(null)
+    const { data, error } = await supabase
+      .from('frameworks')
+      .update({
+        title: editForm.title.trim() || selected.title,
+        division: editForm.division.trim() || null,
+        department: editForm.department.trim() || null,
+        description: editForm.description.trim() || null,
+      })
+      .eq('id', selected.id)
+      .select('*, domains:framework_domains(*, indicators:framework_indicators(*))')
+      .single()
+    setManaging(false)
+    if (error) { setManageError(`Save failed: ${error.message}`); return }
+    setSelected(data as unknown as Framework)
+    setEditing(false)
+    load()
+  }
+
+  const handleDelete = async () => {
+    if (!selected) return
+    const used = usageCount && usageCount > 0
+    const msg = used
+      ? `Delete “${selected.title}”? ${usageCount} observation${usageCount === 1 ? '' : 's'} use it — those are kept but unlinked from this framework. Its domains and indicators are permanently removed. This cannot be undone.`
+      : `Delete “${selected.title}”? Its domains and indicators are permanently removed. This cannot be undone.`
+    if (!window.confirm(msg)) return
+    setManaging(true)
+    setManageError(null)
+    const { error } = await supabase.from('frameworks').delete().eq('id', selected.id)
+    setManaging(false)
+    if (error) { setManageError(`Delete failed: ${error.message}`); return }
+    setSelected(null)
+    load()
+  }
 
   const addDomain = () =>
     setDomains((prev) => [...prev, { title: '', description: '', indicators: [{ title: '', description: '' }] }])
@@ -212,18 +275,66 @@ export default function FrameworksPage() {
           ← Back to Frameworks
         </button>
         <div className="card p-6">
-          <div className="flex items-start justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">{selected.title}</h2>
-              {(selected.division || selected.department) && (
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {[selected.division, selected.department].filter(Boolean).join(' · ')}
-                </p>
-              )}
+          {editing ? (
+            <div className="space-y-4">
+              <h3 className="font-semibold text-gray-900 text-lg">Edit framework</h3>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="label">Title</label>
+                  <input className="input" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Division</label>
+                  <input className="input" value={editForm.division} onChange={(e) => setEditForm({ ...editForm, division: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Department</label>
+                  <input className="input" value={editForm.department} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Description</label>
+                  <textarea rows={2} className="input resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Domain &amp; indicator editing isn’t inline here yet — tell me if you want that.</p>
+              {manageError && <p className="text-red-600 text-sm">{manageError}</p>}
+              <div className="flex gap-3">
+                <button onClick={() => setEditing(false)} className="btn-secondary flex-1">Cancel</button>
+                <button onClick={handleSaveHeader} disabled={managing} className="btn-primary flex-1">{managing ? 'Saving…' : 'Save'}</button>
+              </div>
             </div>
-            <span className="badge badge-navy">{(selected.domains ?? []).length} domains</span>
-          </div>
-          <FrameworkDetail fw={selected} />
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">{selected.title}</h2>
+                  {(selected.division || selected.department) && (
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {[selected.division, selected.department].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <span className="badge badge-navy">{(selected.domains ?? []).length} domains</span>
+              </div>
+              <FrameworkDetail fw={selected} />
+              {isSupervisorOrAdmin && (
+                <div className="flex items-center gap-4 mt-6 pt-4 border-t border-gray-100">
+                  <button onClick={() => setEditing(true)} className="btn-secondary text-sm">Edit</button>
+                  {userRole === 'admin' && (
+                    <button onClick={handleDelete} disabled={managing} className="text-sm text-red-600 hover:text-red-800 font-medium">
+                      {managing ? 'Deleting…' : 'Delete framework'}
+                    </button>
+                  )}
+                  {usageCount != null && (
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {usageCount} observation{usageCount === 1 ? '' : 's'} use this
+                    </span>
+                  )}
+                </div>
+              )}
+              {manageError && <p className="text-red-600 text-sm mt-3">{manageError}</p>}
+            </>
+          )}
         </div>
       </div>
     )

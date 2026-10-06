@@ -165,3 +165,69 @@ export async function sendSpotlightEmail(
     return { status: 'failed', to, cc, subject, error: message }
   }
 }
+
+// ── Observation published notification ───────────────────────────
+function escHtml(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+}
+
+function buildObservationHtml(teacher: Profile, observer: Profile, visit: string, dateStr: string, overall: string | null) {
+  const teacherName = escHtml(`${teacher.first_name} ${teacher.last_name}`)
+  const observerName = escHtml(`${observer.first_name} ${observer.last_name}`)
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Your observation is ready</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <tr><td style="background:#003882;padding:32px 40px;text-align:center;">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;"><span style="font-size:20px;font-weight:900;color:#003882;line-height:1;">GCS</span></div>
+          <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
+          <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Your observation is ready</p>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <p style="color:#374151;font-size:16px;margin:0 0 8px;">Hi ${teacherName},</p>
+          <p style="color:#374151;font-size:15px;margin:0 0 24px;"><strong>${observerName}</strong> has shared a Teaching with Grace observation with you (${escHtml(visit)} · ${escHtml(dateStr)}).</p>
+          ${overall ? `<div style="background:#f8fafc;border-left:4px solid #003882;border-radius:0 8px 8px 0;padding:20px 24px;margin-bottom:24px;"><p style="color:#003882;font-size:15px;line-height:1.7;margin:0;">${escHtml(overall)}</p></div>` : ''}
+          <div style="text-align:center;margin-top:24px;"><a href="${APP_URL}/dashboard/observations" style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">View the full observation</a></div>
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;"><p style="color:#9ca3af;font-size:12px;margin:0;">Grace Church School · Professional Development Platform</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+// Never throws; returns a structured result (like sendSpotlightEmail).
+export async function sendObservationEmail(
+  teacher: Profile,
+  observer: Profile,
+  visit: string,
+  dateStr: string,
+  overall: string | null
+): Promise<EmailResult> {
+  const to = [teacher.email].filter(Boolean) as string[]
+  const cc: string[] = []
+  const subject = `Your Teaching with Grace observation from ${observer.first_name} ${observer.last_name}`
+
+  const resend = getResend()
+  if (!resend) {
+    console.warn('[sendObservationEmail] RESEND_API_KEY not set — skipping email send.')
+    return { status: 'skipped', to, cc, subject }
+  }
+  try {
+    const { data, error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html: buildObservationHtml(teacher, observer, visit, dateStr, overall) })
+    if (error) {
+      console.error('[sendObservationEmail] Resend error:', error)
+      return { status: 'failed', to, cc, subject, error: error.message }
+    }
+    return { status: 'sent', to, cc, subject, providerId: data?.id }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown send error'
+    console.error('[sendObservationEmail] unexpected error:', err)
+    return { status: 'failed', to, cc, subject, error: message }
+  }
+}

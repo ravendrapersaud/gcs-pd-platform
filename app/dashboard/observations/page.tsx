@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Observation, Profile, Framework, FrameworkDomain, ObsType } from '@/lib/types'
+import { MODES } from '@/lib/twg'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
@@ -22,6 +24,7 @@ function ObservationCard({
 }) {
   const [expanded, setExpanded] = useState(false)
   const canSignOff = !obs.signed_off && obs.observed_id === currentUserId
+  const twg = obs.twg_data
 
   return (
     <div className="card overflow-hidden">
@@ -32,7 +35,9 @@ function ObservationCard({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="badge badge-navy capitalize">{obs.obs_type}</span>
+              {twg
+                ? <span className="badge badge-navy">Teaching with Grace · {MODES[twg.mode].label}</span>
+                : <span className="badge badge-navy capitalize">{obs.obs_type}</span>}
               {obs.signed_off && (
                 <span className="badge badge-green">Signed Off</span>
               )}
@@ -61,9 +66,35 @@ function ObservationCard({
 
       {expanded && (
         <div className="border-t border-gray-100 p-5 space-y-4">
+          {twg && (
+            <div className="space-y-3">
+              {(twg.categories ?? []).map((c) => {
+                const a = twg.analysis[c.id]
+                if (!a || (!a.strengths && !a.growth && !a.flag)) return null
+                return (
+                  <div key={c.id}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                      {c.title}
+                      {a.flag && <span className="ml-2 text-red-600 normal-case font-normal">⚑ follow-up support</span>}
+                    </p>
+                    {a.strengths && <p className="text-sm text-gray-700"><span className="text-gray-400">Strengths:</span> {a.strengths}</p>}
+                    {a.growth && <p className="text-sm text-gray-700"><span className="text-gray-400">Growth:</span> {a.growth}</p>}
+                  </div>
+                )
+              })}
+              {twg.wrap?.next && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Next steps</p>
+                  <p className="text-sm text-gray-700">{twg.wrap.next}</p>
+                </div>
+              )}
+            </div>
+          )}
           {obs.notes && (
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Observer Notes</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                {twg ? 'Overall' : 'Observer Notes'}
+              </p>
               <p className="text-sm text-gray-700">{obs.notes}</p>
             </div>
           )}
@@ -111,9 +142,10 @@ interface NewObsForm {
 
 export default function ObservationsPage() {
   const supabase = createClient()
-  const [tab, setTab] = useState<'mine' | 'pending'>('mine')
+  const [tab, setTab] = useState<'mine' | 'pending' | 'drafts'>('mine')
   const [observations, setObservations] = useState<Observation[]>([])
   const [pending, setPending] = useState<Observation[]>([])
+  const [drafts, setDrafts] = useState<Observation[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [frameworks, setFrameworks] = useState<Framework[]>([])
   const [userId, setUserId] = useState<string | null>(null)
@@ -150,17 +182,25 @@ export default function ObservationsPage() {
       ratings:observation_ratings(*, domain:framework_domains(id, title))
     `
 
-    const [{ data: mine }, { data: pendingObs }, { data: profs }, { data: fws }] = await Promise.all([
+    const [{ data: mine }, { data: pendingObs }, { data: draftObs }, { data: profs }, { data: fws }] = await Promise.all([
       supabase
         .from('observations')
         .select(obsSelect)
         .eq('observed_id', user.id)
+        .eq('status', 'published')
         .order('observed_at', { ascending: false }),
       supabase
         .from('observations')
         .select(obsSelect)
         .eq('signed_off', false)
+        .eq('status', 'published')
         .or(`observer_id.eq.${user.id},observed_id.eq.${user.id}`)
+        .order('observed_at', { ascending: false }),
+      supabase
+        .from('observations')
+        .select(obsSelect)
+        .eq('observer_id', user.id)
+        .eq('status', 'draft')
         .order('observed_at', { ascending: false }),
       supabase.from('profiles').select('*').order('first_name'),
       supabase.from('frameworks').select('*, domains:framework_domains(*, indicators:framework_indicators(*))').order('title'),
@@ -168,6 +208,7 @@ export default function ObservationsPage() {
 
     setObservations((mine ?? []) as unknown as Observation[])
     setPending((pendingObs ?? []) as unknown as Observation[])
+    setDrafts((draftObs ?? []) as unknown as Observation[])
     setProfiles((profs ?? []) as Profile[])
     setFrameworks((fws ?? []) as unknown as Framework[])
     setLoading(false)
@@ -291,11 +332,19 @@ export default function ObservationsPage() {
           >
             Pending Sign-Off
           </button>
+          {isSupervisorOrAdmin && (
+            <button
+              onClick={() => setTab('drafts')}
+              className={clsx('tab', tab === 'drafts' ? 'tab-active' : 'tab-inactive')}
+            >
+              Drafts{drafts.length > 0 ? ` (${drafts.length})` : ''}
+            </button>
+          )}
         </div>
         {isSupervisorOrAdmin && (
-          <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
-            + New Observation
-          </button>
+          <Link href="/dashboard/observations/twg" className="btn-primary text-sm">
+            + New observation
+          </Link>
         )}
       </div>
 
@@ -424,6 +473,33 @@ export default function ObservationsPage() {
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="card h-20 animate-pulse bg-gray-100" />)}
         </div>
+      ) : tab === 'drafts' ? (
+        drafts.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">No drafts in progress.</div>
+        ) : (
+          <div className="space-y-3">
+            {drafts.map((obs) => {
+              const who = obs.observed as unknown as Profile | undefined
+              return (
+                <div key={obs.id} className="card p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="badge badge-yellow">Draft</span>
+                      {obs.twg_data && <span className="badge badge-gray">{MODES[obs.twg_data.mode].label}</span>}
+                    </div>
+                    <p className="font-medium text-gray-900 mt-1 truncate">
+                      {who ? `${who.first_name} ${who.last_name}` : 'Observation'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(obs.observed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <Link href={`/dashboard/observations/twg?id=${obs.id}`} className="btn-primary text-sm shrink-0">Continue</Link>
+                </div>
+              )
+            })}
+          </div>
+        )
       ) : currentObs.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           No observations in this section.

@@ -228,6 +228,11 @@ export interface Observation {
   signed_off: boolean
   signed_off_at: string | null
   created_at: string
+  // 'draft' (observer still working, hidden from the teacher) | 'published'.
+  status: 'draft' | 'published'
+  // Rich "Teaching with Grace" capture payload (see lib/twg.ts TwgData);
+  // null for generic observations created via the standard form.
+  twg_data: import('./twg').TwgData | null
   // joined
   observer?: Profile
   observed?: Profile

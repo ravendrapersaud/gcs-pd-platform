@@ -39,7 +39,7 @@ export default function ReportBuilder() {
         supabase.from('profiles').select('id, first_name, last_name, email, title, division, department, employee_type, role, employee_id, pd_allotment, needs_setup'),
         supabase.from('pd_activities').select('user_id, title, type, activity_date, hours, verified, notes'),
         supabase.from('funding_requests').select('user_id, title, amount, status, is_overseas_travel, decision_note, reviewed_by, reviewed_at, created_at'),
-        supabase.from('observations').select('observed_id'),
+        supabase.from('observations').select('observed_id, observer_id, observed_at, signed_off, obs_type, twg_data'),
         supabase.from('goals').select('owner_id'),
         supabase.from('supervisor_assignments').select('staff_id, is_primary, supervisor:profiles!supervisor_assignments_supervisor_id_fkey(first_name, last_name)'),
         supabase.from('spotlights').select('to_user_id'),
@@ -51,7 +51,7 @@ export default function ReportBuilder() {
         profiles: (profiles ?? []) as unknown as RawData['profiles'],
         activities: (activities ?? []) as unknown as RawData['activities'],
         funding: (funding ?? []) as unknown as RawData['funding'],
-        observations: (observations ?? []) as RawData['observations'],
+        observations: (observations ?? []) as unknown as RawData['observations'],
         goals: (goals ?? []) as RawData['goals'],
         assignments: (assignments ?? []) as unknown as RawData['assignments'],
         spotlights: (spotlights ?? []) as RawData['spotlights'],
@@ -234,7 +234,7 @@ export default function ReportBuilder() {
                 {pdTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             )}
-            {(subject === 'activities' || subject === 'funding') && (
+            {(subject === 'activities' || subject === 'funding' || subject === 'observations') && (
               <>
                 <input type="date" className="input w-auto" value={filters.dateFrom ?? ''} onChange={(e) => patchFilter({ dateFrom: e.target.value || undefined })} title="From date" />
                 <input type="date" className="input w-auto" value={filters.dateTo ?? ''} onChange={(e) => patchFilter({ dateTo: e.target.value || undefined })} title="To date" />
