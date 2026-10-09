@@ -108,6 +108,14 @@ export interface ResourceFavorite {
   created_at: string
 }
 
+export type GoalType = 'standard' | 'faculty_inquiry'
+
+export interface FacultyInquiryDetails {
+  question?: string
+  capture?: string
+  reflection?: string
+}
+
 export interface Goal {
   id: string
   title: string
@@ -117,6 +125,8 @@ export interface Goal {
   progress_pct: number
   status: GoalStatus
   created_at: string
+  goal_type: GoalType
+  details: FacultyInquiryDetails | null
   // joined
   owner?: Profile
   collaborators?: Profile[]

@@ -24,6 +24,13 @@ export function pdHoursTarget(rows: AppSettingRow[] | null | undefined): number 
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_PD_HOURS_TARGET
 }
 
+// Deadline (YYYY-MM-DD) for faculty to formulate their inquiry question.
+export const DEFAULT_FACULTY_GOAL_QUESTION_DUE = '2026-10-13'
+export function facultyGoalQuestionDue(rows: AppSettingRow[] | null | undefined): string {
+  const raw = (settingsMap(rows)['faculty_goal_question_due'] ?? '').trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : DEFAULT_FACULTY_GOAL_QUESTION_DUE
+}
+
 // Funding requests above this amount require admin approval.
 // null = no threshold configured (blank setting).
 export function fundingAdminThreshold(rows: AppSettingRow[] | null | undefined): number | null {

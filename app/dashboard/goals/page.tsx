@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Goal, Profile, GoalStatus } from '@/lib/types'
+import type { Goal, Profile, GoalStatus, GoalType } from '@/lib/types'
+import { facultyGoalQuestionDue, DEFAULT_FACULTY_GOAL_QUESTION_DUE } from '@/lib/appSettings'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
+
+const fmtDate = (d: string) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
 type TabId = 'mine' | 'collab' | 'archived'
 
@@ -50,11 +54,21 @@ function GoalCard({ goal, onUpdate, onEdit }: GoalCardProps) {
     <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-gray-900 leading-snug">{goal.title}</h3>
-        <span className={`badge ${statusColor[goal.status]} shrink-0`}>{goal.status}</span>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className={`badge ${statusColor[goal.status]}`}>{goal.status}</span>
+          {goal.goal_type === 'faculty_inquiry' && <span className="badge badge-navy">Inquiry</span>}
+        </div>
       </div>
 
-      {goal.description && (
-        <p className="text-sm text-gray-500 line-clamp-2">{goal.description}</p>
+      {goal.goal_type === 'faculty_inquiry' ? (
+        (goal.details?.capture || goal.details?.reflection) && (
+          <div className="text-sm text-gray-500 space-y-1">
+            {goal.details?.capture && <p className="line-clamp-2"><span className="text-gray-400">Capture:</span> {goal.details.capture}</p>}
+            {goal.details?.reflection && <p className="line-clamp-2"><span className="text-gray-400">Reflect:</span> {goal.details.reflection}</p>}
+          </div>
+        )
+      ) : (
+        goal.description && <p className="text-sm text-gray-500 line-clamp-2">{goal.description}</p>
       )}
 
       <div>
@@ -150,80 +164,110 @@ interface GoalFormProps {
   initial?: Partial<Goal>
   profiles: Profile[]
   currentUserId?: string | null
+  defaultVariant: GoalType
+  questionDue: string
 }
 
-function GoalForm({ onSave, onCancel, initial, profiles, currentUserId }: GoalFormProps) {
+function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultVariant, questionDue }: GoalFormProps) {
+  const editing = Boolean(initial?.id)
+  const [variant, setVariant] = useState<GoalType>(initial?.goal_type ?? defaultVariant)
   const [form, setForm] = useState({
     title: initial?.title ?? '',
     description: initial?.description ?? '',
     due_date: initial?.due_date ?? '',
+    question: initial?.details?.question ?? (initial?.goal_type === 'faculty_inquiry' ? initial?.title ?? '' : ''),
+    capture: initial?.details?.capture ?? '',
+    reflection: initial?.details?.reflection ?? '',
   })
   const [collaborators, setCollaborators] = useState<Profile[]>([])
   const [saving, setSaving] = useState(false)
 
+  const overdue = new Date().toISOString().slice(0, 10) > questionDue
+  const canSave = variant === 'faculty_inquiry' ? form.question.trim().length > 0 : form.title.trim().length > 0
+
   const handleSave = async () => {
     setSaving(true)
-    await onSave(
-      {
+    if (variant === 'faculty_inquiry') {
+      await onSave({
         ...initial,
+        goal_type: 'faculty_inquiry',
+        title: form.question.trim(),
+        description: null,
+        details: { question: form.question.trim(), capture: form.capture.trim(), reflection: form.reflection.trim() },
+        due_date: form.due_date || undefined,
+      }, collaborators)
+    } else {
+      await onSave({
+        ...initial,
+        goal_type: 'standard',
         title: form.title,
         description: form.description || undefined,
+        details: null,
         due_date: form.due_date || undefined,
-      },
-      collaborators
-    )
+      }, collaborators)
+    }
     setSaving(false)
   }
 
   return (
     <div className="card p-6 space-y-4">
-      <h3 className="font-semibold text-gray-900">{initial?.id ? 'Edit Goal' : 'New Goal'}</h3>
-      <div>
-        <label className="label">Title <span className="text-red-500">*</span></label>
-        <input
-          className="input"
-          required
-          placeholder="Goal title"
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="label">Description</label>
-        <textarea
-          rows={3}
-          className="input resize-none"
-          placeholder="What does success look like?"
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="label">Due Date</label>
-        <input
-          type="date"
-          className="input"
-          value={form.due_date}
-          onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-        />
-      </div>
-      {!initial?.id && (
-        <div>
-          <label className="label">Co-owners</label>
-          <PersonPicker
-            multiple
-            profiles={profiles}
-            exclude={currentUserId ? [currentUserId] : []}
-            value={collaborators}
-            onChange={setCollaborators}
-            placeholder="Search colleagues by name…"
-          />
+      <h3 className="font-semibold text-gray-900">{editing ? 'Edit Goal' : 'New Goal'}</h3>
+
+      {!editing && (
+        <div className="flex gap-2">
+          {([['faculty_inquiry', 'Faculty inquiry goal'], ['standard', 'Standard goal']] as [GoalType, string][]).map(([v, label]) => (
+            <button key={v} onClick={() => setVariant(v)} className={clsx('tab', variant === v ? 'tab-active' : 'tab-inactive')}>{label}</button>
+          ))}
         </div>
       )}
+
+      {variant === 'faculty_inquiry' ? (
+        <div className="space-y-4">
+          <div>
+            <label className="label">1. Formulate a question about your classroom culture or pedagogical practices.</label>
+            <textarea rows={2} className="input resize-none" placeholder="Your inquiry question…" value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} />
+            <p className={clsx('text-xs mt-1', overdue ? 'text-red-600 font-medium' : 'text-gray-400')}>
+              {overdue ? `Past the ${fmtDate(questionDue)} deadline for the question.` : `Formulate your question by ${fmtDate(questionDue)}.`}
+            </p>
+          </div>
+          <div>
+            <label className="label">2. How will you systematically capture low-stakes (non-evaluative) information about your question?</label>
+            <textarea rows={3} className="input resize-none" placeholder="Journaling, peer observation, exit tickets, etc." value={form.capture} onChange={(e) => setForm({ ...form, capture: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">3. How will you reflect on what you find, and develop an action plan?</label>
+            <textarea rows={3} className="input resize-none" value={form.reflection} onChange={(e) => setForm({ ...form, reflection: e.target.value })} />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className="label">Title <span className="text-red-500">*</span></label>
+            <input className="input" required placeholder="Goal title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <textarea rows={3} className="input resize-none" placeholder="What does success look like?" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
+        </>
+      )}
+
+      <div>
+        <label className="label">{variant === 'faculty_inquiry' ? 'Overall target date (optional)' : 'Due Date'}</label>
+        <input type="date" className="input" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+      </div>
+
+      {!editing && (
+        <div>
+          <label className="label">Co-owners</label>
+          <PersonPicker multiple profiles={profiles} exclude={currentUserId ? [currentUserId] : []} value={collaborators} onChange={setCollaborators} placeholder="Search colleagues by name…" />
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
-        <button onClick={handleSave} disabled={saving || !form.title} className="btn-primary flex-1">
-          {saving ? 'Saving…' : initial?.id ? 'Update Goal' : 'Create Goal'}
+        <button onClick={handleSave} disabled={saving || !canSave} className="btn-primary flex-1">
+          {saving ? 'Saving…' : editing ? 'Update Goal' : 'Create Goal'}
         </button>
       </div>
     </div>
@@ -238,6 +282,8 @@ export default function GoalsPage() {
   const [archivedGoals, setArchivedGoals] = useState<Goal[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [userId, setUserId] = useState<string | null>(null)
+  const [myEmployeeType, setMyEmployeeType] = useState<string | null>(null)
+  const [questionDue, setQuestionDue] = useState<string>(DEFAULT_FACULTY_GOAL_QUESTION_DUE)
   const [showForm, setShowForm] = useState(false)
   const [editGoal, setEditGoal] = useState<Goal | null>(null)
   const [loading, setLoading] = useState(true)
@@ -249,7 +295,7 @@ export default function GoalsPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: myGoals }, { data: collabs }, { data: archived }, { data: allProfiles }] =
+    const [{ data: myGoals }, { data: collabs }, { data: archived }, { data: allProfiles }, { data: settings }] =
       await Promise.all([
         supabase
           .from('goals')
@@ -267,7 +313,12 @@ export default function GoalsPage() {
           .eq('owner_id', user.id)
           .eq('status', 'archived'),
         supabase.from('profiles').select('*').order('first_name'),
+        supabase.from('app_settings').select('key, value'),
       ])
+
+    const me = (allProfiles ?? []).find((p) => p.id === user.id) as Profile | undefined
+    setMyEmployeeType(me?.employee_type ?? null)
+    setQuestionDue(facultyGoalQuestionDue(settings))
 
     const mine = (myGoals ?? []) as Goal[]
     const collaborative = (collabs ?? []).flatMap((c) => (c.goals ? [c.goals as unknown as Goal] : []))
@@ -318,6 +369,8 @@ export default function GoalsPage() {
         owner_id: userId,
         progress_pct: 0,
         status: 'active',
+        goal_type: data.goal_type ?? 'standard',
+        details: data.details ?? null,
       })
       .select()
       .single()
@@ -347,7 +400,7 @@ export default function GoalsPage() {
     setSaveError(null)
     const { error } = await supabase
       .from('goals')
-      .update({ title: data.title, description: data.description, due_date: data.due_date })
+      .update({ title: data.title, description: data.description ?? null, due_date: data.due_date ?? null, details: data.details ?? null })
       .eq('id', data.id)
     if (error) {
       setSaveError(error.message)
@@ -411,6 +464,8 @@ export default function GoalsPage() {
           onCancel={() => { setShowForm(false); setSaveError(null) }}
           profiles={profiles}
           currentUserId={userId}
+          defaultVariant={myEmployeeType === 'faculty' ? 'faculty_inquiry' : 'standard'}
+          questionDue={questionDue}
         />
       )}
 
@@ -422,6 +477,8 @@ export default function GoalsPage() {
           onCancel={() => { setEditGoal(null); setSaveError(null) }}
           profiles={profiles}
           currentUserId={userId}
+          defaultVariant={editGoal.goal_type ?? 'standard'}
+          questionDue={questionDue}
         />
       )}
 
