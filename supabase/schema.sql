@@ -492,3 +492,21 @@ create policy "Observers can update ratings"
     )
     or get_user_role() in ('supervisor', 'admin')
   );
+
+-- ── Data API grants ──────────────────────────────────────────────
+-- From Oct 30 2026 Supabase stops auto-granting Data API access to new
+-- tables in `public`. Grant every current table and set default privileges
+-- so future tables (and `supabase db reset` / preview branches) keep working.
+-- RLS still governs row access; these are table-level grants only.
+
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select on all tables in schema public to anon;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to anon, authenticated, service_role;
+
+alter default privileges in schema public grant select on tables to anon;
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables to service_role;
+alter default privileges in schema public grant usage, select on sequences to anon, authenticated, service_role;
