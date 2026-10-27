@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
-import { DIVISION_OPTIONS, DEPARTMENT_GROUPS } from '@/lib/taxonomy'
+import { DIVISION_OPTIONS } from '@/lib/taxonomy'
+import { departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
 import { parseFundSettings, isInFundYear } from '@/lib/funds'
 import { roleAccessLabel } from '@/lib/roles'
 import clsx from 'clsx'
@@ -36,6 +37,7 @@ export default function StaffRosterPage() {
   // Whether the signed-in user is a Platform Admin — gates the Access
   // (role) dropdowns, which only admins may change.
   const [isAdmin, setIsAdmin] = useState(false)
+  const [deptGroups, setDeptGroups] = useState<DepartmentGroup[]>(() => departmentGroups(null))
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
   const [allotmentInput, setAllotmentInput] = useState('')
@@ -74,6 +76,7 @@ export default function StaffRosterPage() {
     ])
 
     const fundCfg = parseFundSettings(settingsRows)
+    setDeptGroups(departmentGroups(settingsRows))
     const typeById: Record<string, string | null> = {}
     for (const p of profiles ?? []) typeById[p.id] = (p as Profile).employee_type
 
@@ -124,7 +127,7 @@ export default function StaffRosterPage() {
   const departments = Array.from(new Set(staff.map((s) => s.department).filter(Boolean))).sort() as string[]
   // Department values already in use that aren't in the canonical groups —
   // surfaced under an "Other" optgroup so existing data stays selectable.
-  const canonicalDepts = new Set(DEPARTMENT_GROUPS.flatMap((g) => g.options))
+  const canonicalDepts = new Set(deptGroups.flatMap((g) => g.options))
   const otherDepts = departments.filter((d) => !canonicalDepts.has(d))
   const supervisorOptions = allProfiles
     .filter((p) => p.role === 'supervisor' || p.role === 'admin')
@@ -376,7 +379,7 @@ export default function StaffRosterPage() {
                 <label className="label">Department</label>
                 <select className="input" value={editForm.department ?? ''} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}>
                   <option value="">Unspecified</option>
-                  {DEPARTMENT_GROUPS.map((g) => (
+                  {deptGroups.map((g) => (
                     <optgroup key={g.label} label={g.label}>
                       {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
                     </optgroup>
@@ -536,7 +539,7 @@ export default function StaffRosterPage() {
                   <label className="label">Department</label>
                   <select className="input" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}>
                     <option value="">Unspecified</option>
-                    {DEPARTMENT_GROUPS.map((g) => (
+                    {deptGroups.map((g) => (
                       <optgroup key={g.label} label={g.label}>
                         {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
                       </optgroup>

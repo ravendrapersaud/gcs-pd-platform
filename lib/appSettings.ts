@@ -3,6 +3,8 @@
 // Admin → Settings). Pure module (no Supabase imports): pages fetch
 // the rows and pass them to these parsers, mirroring lib/funds.ts.
 
+import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from './taxonomy'
+
 export interface AppSettingRow {
   key: string
   value: string
@@ -49,6 +51,23 @@ export function allowOverBalanceRequests(rows: AppSettingRow[] | null | undefine
 // Whether new resource submissions need admin approval (default off).
 export function resourceModerationOn(rows: AppSettingRow[] | null | undefined): boolean {
   return (settingsMap(rows)['resource_moderation'] ?? 'off') === 'on'
+}
+
+// Roster department options, grouped academic vs. administrative, read from
+// the admin-editable settings (one department per line) with the built-in
+// lists as the fallback.
+export interface DepartmentGroup { label: string; options: string[] }
+function parseLines(v: string | undefined): string[] {
+  return (v ?? '').split('\n').map((s) => s.trim()).filter(Boolean)
+}
+export function departmentGroups(rows: AppSettingRow[] | null | undefined): DepartmentGroup[] {
+  const map = settingsMap(rows)
+  const academic = (map['academic_departments'] ?? '').trim() ? parseLines(map['academic_departments']) : [...DEFAULT_ACADEMIC_DEPARTMENTS]
+  const operational = (map['operational_departments'] ?? '').trim() ? parseLines(map['operational_departments']) : [...DEFAULT_OPERATIONAL_DEPARTMENTS]
+  return [
+    { label: 'Academic', options: academic },
+    { label: 'Administrative & Operations', options: operational },
+  ]
 }
 
 // Who can create workspaces (default: supervisors/admins + granted).

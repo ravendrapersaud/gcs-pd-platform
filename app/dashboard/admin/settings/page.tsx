@@ -13,6 +13,7 @@ import {
   DEFAULT_PD_HOURS_TARGET,
   settingsMap,
 } from '@/lib/appSettings'
+import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from '@/lib/taxonomy'
 import type { TaxonomyTerm, TaxonomyCategory } from '@/lib/taxonomyDb'
 import clsx from 'clsx'
 
@@ -23,6 +24,9 @@ const MONTHS = [
 
 const fmtDate = (d: Date) =>
   d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+// One trimmed, non-empty entry per line.
+const normalizeList = (v: string) => v.split('\n').map((s) => s.trim()).filter(Boolean).join('\n')
 
 // End of a [start, end) range, shown inclusively (day before next start).
 const inclusiveEnd = (end: Date) => new Date(end.getTime() - 24 * 60 * 60 * 1000)
@@ -317,6 +321,8 @@ export default function AdminSettingsPage() {
   const [allowOverBalance, setAllowOverBalance] = useState(true)
   const [moderation, setModeration] = useState(false)
   const [wsPolicy, setWsPolicy] = useState<'supervisors' | 'everyone'>('supervisors')
+  const [academicDepts, setAcademicDepts] = useState(DEFAULT_ACADEMIC_DEPARTMENTS.join('\n'))
+  const [operationalDepts, setOperationalDepts] = useState(DEFAULT_OPERATIONAL_DEPARTMENTS.join('\n'))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -345,6 +351,8 @@ export default function AdminSettingsPage() {
     setAllowOverBalance((map['allow_over_balance_requests'] ?? 'true') !== 'false')
     setModeration((map['resource_moderation'] ?? 'off') === 'on')
     setWsPolicy(map['workspace_creation_policy'] === 'everyone' ? 'everyone' : 'supervisors')
+    setAcademicDepts((map['academic_departments'] ?? '').trim() || DEFAULT_ACADEMIC_DEPARTMENTS.join('\n'))
+    setOperationalDepts((map['operational_departments'] ?? '').trim() || DEFAULT_OPERATIONAL_DEPARTMENTS.join('\n'))
 
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -405,6 +413,8 @@ export default function AdminSettingsPage() {
       { key: 'allow_over_balance_requests', value: allowOverBalance ? 'true' : 'false', updated_by: userId, updated_at: now },
       { key: 'resource_moderation', value: moderation ? 'on' : 'off', updated_by: userId, updated_at: now },
       { key: 'workspace_creation_policy', value: wsPolicy, updated_by: userId, updated_at: now },
+      { key: 'academic_departments', value: normalizeList(academicDepts), updated_by: userId, updated_at: now },
+      { key: 'operational_departments', value: normalizeList(operationalDepts), updated_by: userId, updated_at: now },
     ]
 
     const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
@@ -617,6 +627,40 @@ export default function AdminSettingsPage() {
             <span className="text-sm text-gray-700">All faculty and staff</span>
           </label>
         </div>
+      </div>
+
+      {/* ── Departments ────────────────────────────────────────── */}
+      <div className="card p-6 space-y-4">
+        <div>
+          <h2 className="font-semibold text-gray-900 text-lg">Departments</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            The department choices in the Roster, grouped academic vs. administrative. One department per line.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Academic departments</label>
+            <textarea
+              rows={10}
+              className="input resize-y text-sm"
+              value={academicDepts}
+              onChange={(e) => { setAcademicDepts(e.target.value); touch() }}
+            />
+          </div>
+          <div>
+            <label className="label">Administrative &amp; operations departments</label>
+            <textarea
+              rows={10}
+              className="input resize-y text-sm"
+              value={operationalDepts}
+              onChange={(e) => { setOperationalDepts(e.target.value); touch() }}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-400">
+          These set the dropdown choices only. People already assigned a department keep it, and any department
+          already in use still appears in the Roster even if it&apos;s not listed here.
+        </p>
       </div>
 
       <div className="flex justify-end">

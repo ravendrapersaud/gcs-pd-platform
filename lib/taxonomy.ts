@@ -54,18 +54,19 @@ export const DIVISION_OPTIONS: string[] = [
 ]
 
 // Department options for the roster, grouped: academic (teaching faculty)
-// vs. role-based (staff & administration). Not exhaustive — the roster UI
-// merges any other value already present in the data so nothing is lost.
+// vs. role-based (staff & administration). These are the DEFAULTS — admins
+// can override both lists in Admin → Settings, which are then read via
+// appSettings.departmentGroups(). The roster UI also merges any other value
+// already present in the data so nothing is lost.
+export const DEFAULT_ACADEMIC_DEPARTMENTS: string[] = [...SUBJECTS]
+export const DEFAULT_OPERATIONAL_DEPARTMENTS: string[] = [
+  'Administration', 'Admissions', 'Advancement', 'Athletics',
+  'Business Office', 'College Office', 'Communications', 'Facilities',
+  'Health Services', 'Human Resources', 'Operations', 'Technology',
+]
 export const DEPARTMENT_GROUPS: { label: string; options: readonly string[] }[] = [
-  { label: 'Academic', options: SUBJECTS },
-  {
-    label: 'Administrative & Operations',
-    options: [
-      'Administration', 'Admissions', 'Advancement', 'Athletics',
-      'Business Office', 'College Office', 'Communications', 'Facilities',
-      'Health Services', 'Human Resources', 'Operations', 'Technology',
-    ],
-  },
+  { label: 'Academic', options: DEFAULT_ACADEMIC_DEPARTMENTS },
+  { label: 'Administrative & Operations', options: DEFAULT_OPERATIONAL_DEPARTMENTS },
 ]
 
 // Employee types (job category, distinct from access role). 'admin' =
