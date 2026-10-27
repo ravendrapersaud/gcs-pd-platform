@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { parseFundSettings } from '@/lib/funds'
-import { pdHoursTarget } from '@/lib/appSettings'
+import { pdHoursTarget, departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
 import { EMPLOYEE_TYPES } from '@/lib/taxonomy'
 import clsx from 'clsx'
 import {
@@ -19,6 +19,7 @@ export default function ReportBuilder() {
   const [raw, setRaw] = useState<RawData | null>(null)
   const [cfg, setCfg] = useState(parseFundSettings(null))
   const [target, setTarget] = useState(0)
+  const [deptGroups, setDeptGroups] = useState<DepartmentGroup[]>(() => departmentGroups(null))
   const [loading, setLoading] = useState(true)
 
   // Report spec
@@ -47,6 +48,7 @@ export default function ReportBuilder() {
       ])
       setCfg(parseFundSettings(settings))
       setTarget(pdHoursTarget(settings))
+      setDeptGroups(departmentGroups(settings))
       setRaw({
         profiles: (profiles ?? []) as unknown as RawData['profiles'],
         activities: (activities ?? []) as unknown as RawData['activities'],
@@ -82,6 +84,11 @@ export default function ReportBuilder() {
     () => Array.from(new Set((raw?.profiles ?? []).map((p) => p.department).filter(Boolean))).sort() as string[],
     [raw]
   )
+  // Departments present in the data but not in the configured groups.
+  const otherDepts = useMemo(() => {
+    const canon = new Set(deptGroups.flatMap((g) => g.options))
+    return departments.filter((d) => !canon.has(d))
+  }, [departments, deptGroups])
   const statuses = useMemo(
     () => Array.from(new Set((raw?.funding ?? []).map((f) => f.status).filter(Boolean))).sort() as string[],
     [raw]
@@ -216,7 +223,16 @@ export default function ReportBuilder() {
             </select>
             <select className="input w-auto" value={filters.department ?? ''} onChange={(e) => patchFilter({ department: e.target.value || undefined })}>
               <option value="">All departments</option>
-              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+              {deptGroups.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </optgroup>
+              ))}
+              {otherDepts.length > 0 && (
+                <optgroup label="Other (in use)">
+                  {otherDepts.map((o) => <option key={o} value={o}>{o}</option>)}
+                </optgroup>
+              )}
             </select>
             <select className="input w-auto" value={filters.employeeType ?? ''} onChange={(e) => patchFilter({ employeeType: e.target.value || undefined })}>
               <option value="">All employee types</option>

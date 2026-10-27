@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import PersonPicker from '@/components/PersonPicker'
 import type { Profile, Framework, FrameworkDomain } from '@/lib/types'
 import { DIVISION_OPTIONS } from '@/lib/taxonomy'
+import { departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
 import clsx from 'clsx'
 import {
   MODES, WHO, MODE_TO_OBS_TYPE, TWG_FRAMEWORK_TITLE,
@@ -44,6 +45,7 @@ export default function ObservationCapturePage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [frameworks, setFrameworks] = useState<Framework[]>([])
   const [frameworkId, setFrameworkId] = useState<string>('')
+  const [deptGroups, setDeptGroups] = useState<DepartmentGroup[]>(() => departmentGroups(null))
 
   const [step, setStep] = useState<string>('setup')
   const [obsId, setObsId] = useState<string | null>(null)
@@ -89,13 +91,15 @@ export default function ObservationCapturePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setReady(true); return }
       setUserId(user.id)
-      const [{ data: profile }, { data: profs }, { data: fws }] = await Promise.all([
+      const [{ data: profile }, { data: profs }, { data: fws }, { data: settings }] = await Promise.all([
         supabase.from('profiles').select('role').eq('id', user.id).single(),
         supabase.from('profiles').select('*').order('first_name'),
         supabase.from('frameworks').select('*, domains:framework_domains(*, indicators:framework_indicators(*))').order('title'),
+        supabase.from('app_settings').select('key, value'),
       ])
       setAllowed(profile?.role === 'supervisor' || profile?.role === 'admin')
       setProfiles((profs ?? []) as Profile[])
+      setDeptGroups(departmentGroups(settings))
       const fwList = (fws ?? []) as unknown as Framework[]
       setFrameworks(fwList)
 
@@ -460,7 +464,14 @@ export default function ObservationCapturePage() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="label">Teacher <span className="text-red-500">*</span></label>
-                <PersonPicker profiles={profiles} exclude={userId ? [userId] : []} value={person} onChange={setPerson} placeholder="Search staff by name or title…" />
+                <PersonPicker profiles={profiles} exclude={userId ? [userId] : []} value={person} placeholder="Search staff by name or title…"
+                  onChange={(p) => {
+                    setPerson(p)
+                    const upd: Partial<TwgData> = {}
+                    if (p?.division && !twg.division) upd.division = p.division
+                    if (p?.department && !twg.department) upd.department = p.department
+                    if (Object.keys(upd).length) patch(upd)
+                  }} />
               </div>
               <div>
                 <label className="label">Date &amp; time</label>
@@ -476,6 +487,20 @@ export default function ObservationCapturePage() {
                   <option value="">Select division…</option>
                   {DIVISION_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                   {twg.division && !DIVISION_OPTIONS.includes(twg.division) && <option value={twg.division}>{twg.division}</option>}
+                </select>
+              </div>
+              <div>
+                <label className="label">Department</label>
+                <select className="input" value={twg.department} onChange={(e) => patch({ department: e.target.value })}>
+                  <option value="">Select department…</option>
+                  {deptGroups.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </optgroup>
+                  ))}
+                  {twg.department && !deptGroups.some((g) => g.options.includes(twg.department)) && (
+                    <option value={twg.department}>{twg.department}</option>
+                  )}
                 </select>
               </div>
             </div>

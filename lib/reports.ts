@@ -358,8 +358,8 @@ export function buildObservationRecords(data: RawData): ReportRow[] {
     const twg = o.twg_data
     return {
       person: name(p),
-      division: p?.division ?? '',
-      department: p?.department ?? '',
+      division: (twg?.division || p?.division) ?? '',
+      department: (twg?.department || p?.department) ?? '',
       employee_type: p?.employee_type ?? '',
       observer: name(observer),
       observed_at: o.observed_at,

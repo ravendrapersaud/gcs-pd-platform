@@ -287,6 +287,7 @@ export interface TwgData {
   categories: CaptureCategory[]
   course: string
   division: string
+  department: string
   pre: TwgPre
   notes: TwgNote[]
   analysis: Record<string, CategoryAnalysis>
@@ -317,6 +318,7 @@ export function emptyTwgData(mode: ObsMode): TwgData {
     categories: [],
     course: '',
     division: '',
+    department: '',
     pre: { focus: '', objective: '', unit: '', style: '' },
     notes: [],
     analysis: {},
@@ -344,6 +346,7 @@ export function normalizeCapture(raw: unknown, domains: { id: string; title: str
     mode: (r.mode as ObsMode) ?? 'full',
     course: typeof r.course === 'string' ? r.course : '',
     division: typeof r.division === 'string' ? r.division : '',
+    department: typeof r.department === 'string' ? r.department : '',
     pre: { ...base.pre, ...(r.pre as object ?? {}) },
     wrap: { ...base.wrap, ...(r.wrap as object ?? {}) },
     durationMs: typeof r.durationMs === 'number' ? r.durationMs : null,
