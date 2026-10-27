@@ -207,8 +207,27 @@ create policy "Users can view collaborators on visible goals"
   on public.goal_collaborators for select
   using (auth.uid() is not null);
 
-create policy "Goal owners can manage collaborators"
-  on public.goal_collaborators for all
+-- NOTE: scoped to write commands only (not FOR ALL). A FOR ALL policy here
+-- would also apply to SELECT, and since the goals SELECT policy subqueries
+-- goal_collaborators while this subqueries goals, that mutual reference makes
+-- Postgres raise "infinite recursion detected in policy for relation goals".
+-- SELECT on this table is already covered by the permissive policy above.
+create policy "Goal owners can insert collaborators"
+  on public.goal_collaborators for insert
+  with check (
+    auth.uid() in (select owner_id from public.goals where id = goal_id)
+    or get_user_role() = 'admin'
+  );
+
+create policy "Goal owners can update collaborators"
+  on public.goal_collaborators for update
+  using (
+    auth.uid() in (select owner_id from public.goals where id = goal_id)
+    or get_user_role() = 'admin'
+  );
+
+create policy "Goal owners can delete collaborators"
+  on public.goal_collaborators for delete
   using (
     auth.uid() in (select owner_id from public.goals where id = goal_id)
     or get_user_role() = 'admin'
