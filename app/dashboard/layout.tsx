@@ -27,32 +27,51 @@ export default async function DashboardLayout({
     redirect('/login?error=domain')
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', session.user.id)
-    .single()
+    .maybeSingle()
 
-  if (!profile) {
-    // Profile not yet created — insert minimal row from OAuth data,
-    // flagged needs_setup so admins can complete title/division/dept.
+  // Only provision when the read SUCCEEDED and genuinely returned no row.
+  // A read error (RLS/grant hiccup, transient failure) must NOT trigger
+  // provisioning: the row may already exist, and an upsert here would
+  // overwrite an existing admin back down to role:'staff' + needs_setup.
+  let provisioned: Profile | null = null
+  if (!profileError && !profile) {
+    // New user — create a minimal row from OAuth data, flagged needs_setup
+    // so admins can complete title/division/dept. ignoreDuplicates makes this
+    // an INSERT ... ON CONFLICT DO NOTHING, so it can never modify an existing
+    // profile's role or setup flag.
     const meta = session.user.user_metadata
     const nameParts = (meta?.full_name || meta?.name || '').split(' ')
     const firstName = nameParts[0] || ''
     const lastName = nameParts.slice(1).join(' ') || ''
 
-    await supabase.from('profiles').upsert({
-      id: session.user.id,
-      email: session.user.email!,
-      first_name: firstName,
-      last_name: lastName,
-      avatar_url: meta?.avatar_url || meta?.picture || null,
-      role: 'staff',
-      needs_setup: true,
-    })
+    await supabase.from('profiles').upsert(
+      {
+        id: session.user.id,
+        email: session.user.email!,
+        first_name: firstName,
+        last_name: lastName,
+        avatar_url: meta?.avatar_url || meta?.picture || null,
+        role: 'staff',
+        needs_setup: true,
+      },
+      { onConflict: 'id', ignoreDuplicates: true }
+    )
+
+    // Re-read so this request renders the real row (including anything an
+    // existing row kept) rather than a synthetic fallback.
+    const { data: created } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle()
+    provisioned = (created as Profile | null) ?? null
   }
 
-  const currentProfile = (profile as Profile | null) ?? {
+  const currentProfile = (profile as Profile | null) ?? provisioned ?? {
     id: session.user.id,
     email: session.user.email!,
     first_name: session.user.user_metadata?.full_name?.split(' ')[0] || 'User',
