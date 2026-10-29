@@ -5,7 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import type { PdActivity, FundingRequest, PdType, FundingStatus } from '@/lib/types'
 import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, type FundConfig } from '@/lib/funds'
 import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget, allowOverBalanceRequests } from '@/lib/appSettings'
+import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
+
+const PD_TABS = ['log', 'funding'] as const
 
 const PD_TYPES: PdType[] = [
   'workshop', 'conference', 'course', 'webinar', 'book_study',
@@ -23,7 +26,7 @@ const statusColors: Record<FundingStatus, string> = {
 
 export default function PdLogPage() {
   const supabase = createClient()
-  const [tab, setTab] = useState<'log' | 'funding'>('log')
+  const [tab, setTab] = useTabParam<'log' | 'funding'>(PD_TABS, 'log')
   const [activities, setActivities] = useState<PdActivity[]>([])
   const [fundingRequests, setFundingRequests] = useState<FundingRequest[]>([])
   const [userId, setUserId] = useState<string | null>(null)

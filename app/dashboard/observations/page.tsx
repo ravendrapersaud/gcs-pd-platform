@@ -5,10 +5,12 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Observation, Profile, Framework, FrameworkDomain, ObsType } from '@/lib/types'
 import { MODES, PILLAR_MAP, PILLAR_COLORS, type PillarKey } from '@/lib/twg'
+import { useTabParam } from '@/lib/useTabParam'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
 const OBS_TYPES: ObsType[] = ['formal', 'informal', 'walkthrough', 'self']
+const OBS_TABS = ['mine', 'pending', 'drafts'] as const
 
 const ratingLabels = ['', 'Developing', 'Basic', 'Proficient', 'Distinguished']
 const ratingColors = ['', 'bg-red-100 text-red-700', 'bg-yellow-100 text-yellow-700', 'bg-blue-100 text-blue-700', 'bg-green-100 text-green-700']
@@ -219,7 +221,7 @@ interface NewObsForm {
 
 export default function ObservationsPage() {
   const supabase = createClient()
-  const [tab, setTab] = useState<'mine' | 'pending' | 'drafts'>('mine')
+  const [tab, setTab] = useTabParam<'mine' | 'pending' | 'drafts'>(OBS_TABS, 'mine')
   const [observations, setObservations] = useState<Observation[]>([])
   const [pending, setPending] = useState<Observation[]>([])
   const [drafts, setDrafts] = useState<Observation[]>([])

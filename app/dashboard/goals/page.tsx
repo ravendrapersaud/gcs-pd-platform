@@ -4,8 +4,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Goal, Profile, GoalStatus, GoalType } from '@/lib/types'
 import { facultyGoalQuestionDue, DEFAULT_FACULTY_GOAL_QUESTION_DUE } from '@/lib/appSettings'
+import { useTabParam } from '@/lib/useTabParam'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
+
+const GOAL_TABS = ['mine', 'collab', 'team', 'all', 'archived'] as const
 
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
@@ -388,7 +391,7 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
 
 export default function GoalsPage() {
   const supabase = createClient()
-  const [tab, setTab] = useState<TabId>('mine')
+  const [tab, setTab] = useTabParam<TabId>(GOAL_TABS, 'mine')
   const [goals, setGoals] = useState<Goal[]>([])
   const [collabGoals, setCollabGoals] = useState<Goal[]>([])
   const [teamGoals, setTeamGoals] = useState<Goal[]>([])

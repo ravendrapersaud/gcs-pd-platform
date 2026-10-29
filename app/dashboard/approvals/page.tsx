@@ -6,7 +6,10 @@ import type { FundingRequest, FundingStatus, Resource } from '@/lib/types'
 import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, formatUSD, type FundConfig } from '@/lib/funds'
 import { fundingAdminThreshold, resourceModerationOn } from '@/lib/appSettings'
 import { RESOURCE_TYPE_LABELS } from '@/lib/taxonomy'
+import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
+
+const APPROVAL_TABS = ['pending', 'decided', 'resources'] as const
 
 // Pending resource with the submitter's name joined in.
 type PendingResource = Resource & {
@@ -25,7 +28,7 @@ const fmtDate = (d: string) =>
 
 export default function ApprovalsPage() {
   const supabase = createClient()
-  const [tab, setTab] = useState<'pending' | 'decided' | 'resources'>('pending')
+  const [tab, setTab] = useTabParam<'pending' | 'decided' | 'resources'>(APPROVAL_TABS, 'pending')
   const [requests, setRequests] = useState<FundingRequest[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)

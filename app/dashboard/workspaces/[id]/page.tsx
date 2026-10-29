@@ -7,9 +7,11 @@ import type {
   Profile, Workspace, WorkspaceMember, WorkspacePost, WorkspaceFile,
 } from '@/lib/types'
 import { openDrivePicker, driveIconFromUrl } from '@/lib/googleDrive'
+import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
 
 type Tab = 'feed' | 'files' | 'members'
+const WORKSPACE_TABS = ['feed', 'files', 'members'] as const
 
 const FILE_ICONS: Record<string, string> = {
   doc: '📄', sheet: '📊', slide: '📽', form: '📋', pdf: '📕', file: '📁', upload: '⬆',
@@ -64,7 +66,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
   const [posts, setPosts] = useState<WorkspacePost[]>([])
   const [files, setFiles] = useState<WorkspaceFile[]>([])
   const [me, setMe] = useState<Profile | null>(null)
-  const [tab, setTab] = useState<Tab>('feed')
+  const [tab, setTab] = useTabParam<Tab>(WORKSPACE_TABS, 'feed')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
