@@ -245,9 +245,9 @@ export default function SpotlightsPage() {
       <div className="card p-5 flex items-center gap-4 overflow-hidden">
         <Image
           src="/shoutout-griffin.png"
-          alt="Grace griffin shouting out of a megaphone"
-          width={1025}
-          height={440}
+          alt="Grace griffin speaking into a megaphone"
+          width={952}
+          height={380}
           priority
           className="h-16 w-auto shrink-0"
         />
