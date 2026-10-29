@@ -404,7 +404,7 @@ export default function ObservationsPage() {
     (hasRating || !frameworkHasDomains)
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-[1180px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex gap-2">
           <button

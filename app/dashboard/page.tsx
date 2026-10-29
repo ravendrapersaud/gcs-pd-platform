@@ -359,6 +359,27 @@ export default async function DashboardPage() {
         />
       </div>
 
+      {/* Peer feedback — a quick, collegial action any adult can take */}
+      <Link
+        href="/dashboard/observations/peer"
+        className="card p-5 flex items-center justify-between gap-4 hover:border-navy-300 transition-colors"
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <span className="w-11 h-11 rounded-xl bg-navy-50 text-navy-800 grid place-items-center shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-semibold text-gray-900">Give peer feedback</h2>
+            <p className="text-sm text-gray-500">
+              Dropped into a colleague’s class? Share a quick, collegial note — it stays just between the two of you.
+            </p>
+          </div>
+        </div>
+        <span className="btn-primary text-sm shrink-0">Start →</span>
+      </Link>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Goals */}
         <div className="lg:col-span-2 card p-6">

@@ -387,7 +387,7 @@ export default function ObservationCapturePage() {
     }
     const title = esc(twg.frameworkTitle ?? 'Observation')
     return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${title} — Observation</title></head>` +
-      `<body style="font-family:'Segoe UI',Arial,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;color:#1f2937">` +
+      `<body style="font-family:'Segoe UI',Arial,sans-serif;max-width:920px;margin:24px auto;padding:0 20px;color:#1f2937">` +
       `<h1 style="color:#003882;font-size:24px">${title} — Observation</h1>` +
       `<table style="border-collapse:collapse;margin:12px 0 4px">${meta.map(([k, v]) => `<tr><td style="padding:3px 16px 3px 0;color:#6b7280">${esc(k)}</td><td style="padding:3px 0;font-weight:600">${esc(v)}</td></tr>`).join('')}</table>` +
       `${sections.join('')}</body></html>`
