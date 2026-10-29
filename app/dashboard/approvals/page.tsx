@@ -218,7 +218,7 @@ export default function ApprovalsPage() {
 
   if (!loading && role !== null && role !== 'supervisor' && role !== 'admin') {
     return (
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-[1180px] mx-auto">
         <div className="card p-10 text-center">
           <p className="text-gray-600 font-medium">Nothing to approve — this area is for supervisors.</p>
           <p className="text-sm text-gray-400 mt-1">
@@ -230,7 +230,7 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-[1180px] mx-auto space-y-6">
       <div className="flex gap-2">
         <button
           onClick={() => setTab('pending')}

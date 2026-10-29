@@ -601,7 +601,7 @@ export default function GoalsPage() {
   const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null) }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-[1180px] mx-auto space-y-6">
       {/* Tabs + Add */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex gap-2 flex-wrap">

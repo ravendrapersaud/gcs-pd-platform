@@ -256,7 +256,7 @@ export default async function DashboardPage() {
   const pendingFundingCount = fundingRequests?.length ?? 0
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-[1180px] mx-auto space-y-8">
       {/* Team section (supervisors and admins) */}
       {team && (
         <section className="space-y-4">

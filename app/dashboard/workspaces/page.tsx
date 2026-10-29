@@ -197,7 +197,7 @@ export default function WorkspacesPage() {
   )
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-[1180px] mx-auto space-y-6">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {error}
