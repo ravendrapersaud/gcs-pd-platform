@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Observation, Profile, Framework, FrameworkDomain, ObsType } from '@/lib/types'
-import { MODES } from '@/lib/twg'
+import { MODES, PILLAR_MAP, PILLAR_COLORS, type PillarKey } from '@/lib/twg'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
@@ -30,6 +30,66 @@ function ObservationCard({
   const canSignOff = !obs.signed_off && obs.observed_id === currentUserId
   const canDelete = obs.observer_id === currentUserId || isAdmin
   const twg = obs.twg_data
+
+  // Peer feedback renders as its own simple card (no sign-off, no ratings).
+  if (obs.is_peer) {
+    const peer = obs.peer_data
+    const observer = obs.observer as unknown as Profile | undefined
+    const mine = obs.observed_id === currentUserId
+    const focus = (peer?.focus ?? []).filter((k): k is PillarKey => k in PILLAR_MAP)
+    return (
+      <div className="card p-5 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <span className="badge badge-green">Peer feedback</span>
+            <p className="font-semibold text-gray-900 mt-2">
+              {mine
+                ? `From ${observer ? `${observer.first_name} ${observer.last_name}` : 'a colleague'}`
+                : `To ${(obs.observed as unknown as Profile | undefined)?.first_name ?? 'a colleague'}`}
+            </p>
+            {peer?.context && <p className="text-sm text-gray-500 mt-0.5">{peer.context}</p>}
+          </div>
+          <p className="text-sm text-gray-500 shrink-0">
+            {new Date(obs.observed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+
+        {focus.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {focus.map((k) => (
+              <span key={k} className="rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: PILLAR_COLORS[k] }}>
+                {PILLAR_MAP[k].name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {peer?.glow && (
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">What stood out</p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{peer.glow}</p>
+          </div>
+        )}
+        {peer?.suggestion && (
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">A wondering or suggestion</p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{peer.suggestion}</p>
+          </div>
+        )}
+
+        {canDelete && (
+          <div className="pt-1">
+            <button
+              onClick={() => onDelete(obs.id)}
+              className="text-sm text-red-600 hover:text-red-800 font-medium"
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="card overflow-hidden">
@@ -211,6 +271,7 @@ export default function ObservationsPage() {
         .select(obsSelect)
         .eq('signed_off', false)
         .eq('status', 'published')
+        .eq('is_peer', false)
         .or(`observer_id.eq.${user.id},observed_id.eq.${user.id}`)
         .order('observed_at', { ascending: false }),
       supabase
@@ -365,11 +426,16 @@ export default function ObservationsPage() {
             </button>
           )}
         </div>
-        {isSupervisorOrAdmin && (
-          <Link href="/dashboard/observations/twg" className="btn-primary text-sm">
-            + New observation
+        <div className="flex gap-2">
+          <Link href="/dashboard/observations/peer" className="btn-secondary text-sm">
+            Give peer feedback
           </Link>
-        )}
+          {isSupervisorOrAdmin && (
+            <Link href="/dashboard/observations/twg" className="btn-primary text-sm">
+              + New observation
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* New observation form */}

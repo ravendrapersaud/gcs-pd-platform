@@ -171,9 +171,14 @@ function escHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
 }
 
-function buildObservationHtml(teacher: Profile, observer: Profile, visit: string, dateStr: string, overall: string | null) {
+function buildObservationHtml(teacher: Profile, observer: Profile, visit: string, dateStr: string, overall: string | null, peer = false) {
   const teacherName = escHtml(`${teacher.first_name} ${teacher.last_name}`)
   const observerName = escHtml(`${observer.first_name} ${observer.last_name}`)
+  const heading = peer ? 'A colleague shared feedback' : 'Your observation is ready'
+  const intro = peer
+    ? `<strong>${observerName}</strong> shared some quick peer feedback with you (${escHtml(dateStr)}).`
+    : `<strong>${observerName}</strong> has shared a Teaching with Grace observation with you (${escHtml(visit)} · ${escHtml(dateStr)}).`
+  const cta = peer ? 'View the feedback' : 'View the full observation'
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -185,13 +190,13 @@ function buildObservationHtml(teacher: Profile, observer: Profile, visit: string
         <tr><td style="background:#003882;padding:32px 40px;text-align:center;">
           <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;"><span style="font-size:20px;font-weight:900;color:#003882;line-height:1;">GCS</span></div>
           <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
-          <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Your observation is ready</p>
+          <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">${heading}</p>
         </td></tr>
         <tr><td style="padding:40px;">
           <p style="color:#374151;font-size:16px;margin:0 0 8px;">Hi ${teacherName},</p>
-          <p style="color:#374151;font-size:15px;margin:0 0 24px;"><strong>${observerName}</strong> has shared a Teaching with Grace observation with you (${escHtml(visit)} · ${escHtml(dateStr)}).</p>
+          <p style="color:#374151;font-size:15px;margin:0 0 24px;">${intro}</p>
           ${overall ? `<div style="background:#f8fafc;border-left:4px solid #003882;border-radius:0 8px 8px 0;padding:20px 24px;margin-bottom:24px;"><p style="color:#003882;font-size:15px;line-height:1.7;margin:0;">${escHtml(overall)}</p></div>` : ''}
-          <div style="text-align:center;margin-top:24px;"><a href="${APP_URL}/dashboard/observations" style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">View the full observation</a></div>
+          <div style="text-align:center;margin-top:24px;"><a href="${APP_URL}/dashboard/observations" style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">${cta}</a></div>
         </td></tr>
         <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;"><p style="color:#9ca3af;font-size:12px;margin:0;">Grace Church School · Professional Development Platform</p></td></tr>
       </table>
@@ -207,11 +212,14 @@ export async function sendObservationEmail(
   observer: Profile,
   visit: string,
   dateStr: string,
-  overall: string | null
+  overall: string | null,
+  peer = false
 ): Promise<EmailResult> {
   const to = [teacher.email].filter(Boolean) as string[]
   const cc: string[] = []
-  const subject = `Your Teaching with Grace observation from ${observer.first_name} ${observer.last_name}`
+  const subject = peer
+    ? `${observer.first_name} ${observer.last_name} shared some peer feedback with you`
+    : `Your Teaching with Grace observation from ${observer.first_name} ${observer.last_name}`
 
   const resend = getResend()
   if (!resend) {
@@ -219,7 +227,7 @@ export async function sendObservationEmail(
     return { status: 'skipped', to, cc, subject }
   }
   try {
-    const { data, error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html: buildObservationHtml(teacher, observer, visit, dateStr, overall) })
+    const { data, error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html: buildObservationHtml(teacher, observer, visit, dateStr, overall, peer) })
     if (error) {
       console.error('[sendObservationEmail] Resend error:', error)
       return { status: 'failed', to, cc, subject, error: error.message }

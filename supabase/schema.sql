@@ -450,6 +450,11 @@ create table if not exists public.observations (
   notes         text,
   signed_off    boolean not null default false,
   signed_off_at timestamptz,
+  -- Peer observations (see migration_peer_observations.sql): a collegial,
+  -- private observation one teacher gives another. Policies that keep peer
+  -- rows visible to only the two teachers live in that migration.
+  is_peer       boolean not null default false,
+  peer_data     jsonb,
   created_at    timestamptz not null default now()
 );
 

@@ -21,6 +21,7 @@ const routeMeta: Record<string, { title: string; action?: { label: string; href:
   '/dashboard/workspaces': { title: 'Workspaces' },
   '/dashboard/spotlights': { title: 'Spotlights' },
   '/dashboard/observations': { title: 'Observations' },
+  '/dashboard/observations/peer': { title: 'Peer Feedback' },
   '/dashboard/approvals': { title: 'Funding Approvals' },
   '/dashboard/frameworks': { title: 'Frameworks' },
   '/dashboard/admin/staff': { title: 'Roster' },

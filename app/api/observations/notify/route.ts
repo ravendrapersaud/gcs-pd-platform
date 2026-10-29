@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const { data: obs } = await supabase
       .from('observations')
       .select(`
-        id, observer_id, status, observed_at, notes, twg_data,
+        id, observer_id, status, observed_at, notes, twg_data, is_peer,
         observed:profiles!observations_observed_id_fkey(id, first_name, last_name, email),
         observer:profiles!observations_observer_id_fkey(id, first_name, last_name, email)
       `)
@@ -45,11 +45,13 @@ export async function POST(request: NextRequest) {
 
     const twg = obs.twg_data as { mode?: string } | null
     const modeKey = twg?.mode as keyof typeof MODES | undefined
-    const visit = modeKey && MODES[modeKey] ? MODES[modeKey].label : 'Observation'
+    const visit = obs.is_peer
+      ? 'Peer feedback'
+      : modeKey && MODES[modeKey] ? MODES[modeKey].label : 'Observation'
     const dateStr = new Date(obs.observed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     const overall = (obs.notes as string | null) || null
 
-    const result = await sendObservationEmail(teacher, observer, visit, dateStr, overall)
+    const result = await sendObservationEmail(teacher, observer, visit, dateStr, overall, Boolean(obs.is_peer))
 
     // Audit trail — best-effort, must not fail the request.
     const { error: logErr } = await supabase.from('email_log').insert({

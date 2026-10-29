@@ -243,11 +243,25 @@ export interface Observation {
   // Rich "Teaching with Grace" capture payload (see lib/twg.ts TwgData);
   // null for generic observations created via the standard form.
   twg_data: import('./twg').TwgData | null
+  // Quick, collegial peer observation (see PeerData). When true, the row is
+  // visible only to the observer and observed teacher — never admins.
+  is_peer?: boolean
+  peer_data?: PeerData | null
   // joined
   observer?: Profile
   observed?: Profile
   framework?: Framework
   ratings?: ObservationRating[]
+}
+
+// Payload for a quick peer observation (observations.peer_data). Deliberately
+// light: what stood out, an optional wondering, which pillars it touched, and
+// the class context.
+export interface PeerData {
+  focus: string[]      // Teaching with Grace pillar keys the feedback touches
+  glow: string         // what stood out / a strength noticed
+  suggestion: string   // an optional wondering or suggestion
+  context: string      // optional: subject/class/what was happening
 }
 
 export interface ObservationRating {
