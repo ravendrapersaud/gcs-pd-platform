@@ -166,6 +166,36 @@ function MetricCard({
   )
 }
 
+// A dashboard action tile that links straight to a task.
+function ActionTile({ href, icon, label, desc }: { href: string; icon: string; label: string; desc: string }) {
+  return (
+    <Link href={href} className="card p-4 flex items-start gap-3 hover:border-navy-300 transition-colors">
+      <span className="w-10 h-10 rounded-xl bg-navy-50 grid place-items-center text-xl shrink-0" aria-hidden>{icon}</span>
+      <div className="min-w-0">
+        <p className="font-semibold text-gray-900 text-sm">{label}</p>
+        <p className="text-xs text-gray-500 line-clamp-2">{desc}</p>
+      </div>
+    </Link>
+  )
+}
+
+interface DashAction { href: string; icon: string; label: string; desc: string; roles: string[] }
+const DASH_ACTIONS: DashAction[] = [
+  { href: '/dashboard/pd-log', icon: '📝', label: 'Log PD', desc: 'Record a workshop, course, or activity', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/observations/peer', icon: '💬', label: 'Give peer feedback', desc: 'A quick, collegial note to a colleague', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/goals', icon: '🎯', label: 'Set a goal', desc: 'Start or update a growth goal', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/pd-log?tab=funding', icon: '💵', label: 'Request funding', desc: 'Submit a PD funding request', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/shout-outs', icon: '📣', label: 'Give a shout-out', desc: 'Recognize a colleague', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/resources', icon: '📚', label: 'Browse resources', desc: 'Find shared PD resources', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/approvals', icon: '✅', label: 'Review approvals', desc: 'Decide pending funding requests', roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/observations/twg', icon: '👁️', label: 'Record an observation', desc: 'Teaching with Grace capture', roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/goals?tab=team', icon: '👥', label: "Team goals", desc: "Your team's growth goals", roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/observations?tab=pending', icon: '✍️', label: 'Sign off observations', desc: 'Review and sign pending observations', roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/admin/staff', icon: '📋', label: 'Roster', desc: 'Manage staff and roles', roles: ['admin'] },
+  { href: '/dashboard/admin/reports', icon: '📊', label: 'Reports', desc: 'Build and export reports', roles: ['admin'] },
+  { href: '/dashboard/admin/settings', icon: '⚙️', label: 'Settings', desc: 'Platform configuration', roles: ['admin'] },
+]
+
 function ProgressBar({ pct }: { pct: number }) {
   return (
     <div className="w-full bg-gray-200 rounded-full h-2">
@@ -194,7 +224,8 @@ export default async function DashboardPage() {
     .eq('id', userId)
     .single()
 
-  const team = await fetchTeamData(supabase, userId, myProfile?.role ?? 'staff')
+  const role = myProfile?.role ?? 'staff'
+  const team = await fetchTeamData(supabase, userId, role)
 
   // PD activities for THIS fund year only. The hours target is annual, so
   // an all-time total would let hours from earlier years count toward it.
@@ -257,7 +288,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="max-w-[1180px] mx-auto space-y-8">
-      {/* Team section (supervisors and admins) */}
+      {/* Quick actions — role-tailored; each tile links straight to the task */}
+      <section className="space-y-3">
+        <h2 className="font-semibold text-gray-900 text-lg">Quick actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {DASH_ACTIONS.filter((a) => a.roles.includes(role)).map((a) => (
+            <ActionTile key={a.href} href={a.href} icon={a.icon} label={a.label} desc={a.desc} />
+          ))}
+        </div>
+      </section>
+
+      {/* Team summary (supervisors and admins) */}
       {team && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
@@ -299,34 +340,12 @@ export default async function DashboardPage() {
           </div>
 
           {team.reports.length > 0 && (
-            <div className="card overflow-hidden">
-              <ul className="divide-y divide-gray-100">
-                {team.reports.slice(0, 8).map((r) => (
-                  <li key={r.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-8 h-8 rounded-full bg-navy-100 flex items-center justify-center shrink-0">
-                      <span className="text-navy-800 text-xs font-bold">
-                        {(r.first_name?.[0] ?? '')}{(r.last_name?.[0] ?? '')}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {r.first_name} {r.last_name}
-                      </p>
-                      {r.title && <p className="text-xs text-gray-400 truncate">{r.title}</p>}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-navy-800">{r.pdHours.toFixed(1)} hrs</p>
-                      <p className="text-xs text-gray-400">{formatUSD(r.remainingFunds)} PD funds left</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {team.reports.length > 8 && (
-                <p className="px-4 py-2.5 text-xs text-gray-400 border-t border-gray-100">
-                  + {team.reports.length - 8} more
-                </p>
-              )}
-            </div>
+            <Link
+              href={role === 'admin' ? '/dashboard/admin/staff' : '/dashboard/goals?tab=team'}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-700 hover:underline"
+            >
+              View {team.label === 'My Team' ? 'your team' : 'all staff'} ({team.reports.length}) →
+            </Link>
           )}
         </section>
       )}
@@ -358,27 +377,6 @@ export default async function DashboardPage() {
           color="yellow"
         />
       </div>
-
-      {/* Peer feedback — a quick, collegial action any adult can take */}
-      <Link
-        href="/dashboard/observations/peer"
-        className="card p-5 flex items-center justify-between gap-4 hover:border-navy-300 transition-colors"
-      >
-        <div className="flex items-center gap-4 min-w-0">
-          <span className="w-11 h-11 rounded-xl bg-navy-50 text-navy-800 grid place-items-center shrink-0">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </span>
-          <div className="min-w-0">
-            <h2 className="font-semibold text-gray-900">Give peer feedback</h2>
-            <p className="text-sm text-gray-500">
-              Dropped into a colleague’s class? Share a quick, collegial note — it stays just between the two of you.
-            </p>
-          </div>
-        </div>
-        <span className="btn-primary text-sm shrink-0">Start →</span>
-      </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Goals */}
@@ -425,13 +423,13 @@ export default async function DashboardPage() {
           {/* Spotlights */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-900">Recent Spotlights</h2>
-              <Link href="/dashboard/spotlights" className="text-sm text-navy-700 hover:underline">
+              <h2 className="font-semibold text-gray-900">Recent Shout-outs</h2>
+              <Link href="/dashboard/shout-outs" className="text-sm text-navy-700 hover:underline">
                 All
               </Link>
             </div>
             {!spotlights || spotlights.length === 0 ? (
-              <p className="text-gray-400 text-sm py-4 text-center">No spotlights yet.</p>
+              <p className="text-gray-400 text-sm py-4 text-center">No shout-outs yet.</p>
             ) : (
               <ul className="space-y-3">
                 {spotlights.map((s) => {
@@ -439,7 +437,7 @@ export default async function DashboardPage() {
                   return (
                     <li key={s.id} className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
                       <p className="text-xs text-yellow-800 font-medium mb-1">
-                        ⭐ from {from ? `${from.first_name} ${from.last_name}` : 'a colleague'}
+                        📣 from {from ? `${from.first_name} ${from.last_name}` : 'a colleague'}
                       </p>
                       <p className="text-sm text-gray-700 line-clamp-2">{s.message}</p>
                     </li>
