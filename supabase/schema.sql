@@ -235,6 +235,9 @@ create policy "Goal owners can delete collaborators"
 
 -- Collaborator-aware SELECT policy for goals (defined here now that
 -- goal_collaborators exists).
+-- Admins read all goals; supervisors read the goals of staff assigned to
+-- them (see migration_goals_supervisor_visibility.sql). Owners and co-owners
+-- always have access.
 create policy "Users see own goals or collaborated goals"
   on public.goals for select
   using (
@@ -242,7 +245,13 @@ create policy "Users see own goals or collaborated goals"
     or auth.uid() in (
       select user_id from public.goal_collaborators where goal_id = goals.id
     )
-    or get_user_role() in ('supervisor', 'admin')
+    or get_user_role() = 'admin'
+    or (
+      get_user_role() = 'supervisor'
+      and owner_id in (
+        select staff_id from public.supervisor_assignments where supervisor_id = auth.uid()
+      )
+    )
   );
 
 -- ── goal_updates ──────────────────────────────────────────────
