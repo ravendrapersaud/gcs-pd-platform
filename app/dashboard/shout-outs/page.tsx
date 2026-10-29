@@ -246,8 +246,8 @@ export default function SpotlightsPage() {
         <Image
           src="/shoutout-griffin.png"
           alt="Grace griffin shouting out of a megaphone"
-          width={723}
-          height={273}
+          width={1025}
+          height={440}
           priority
           className="h-16 w-auto shrink-0"
         />

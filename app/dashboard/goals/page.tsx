@@ -513,6 +513,11 @@ export default function GoalsPage() {
     loadGoals()
   }, [loadGoals])
 
+  // Deep-link from the dashboard "Set a goal" quick action: ?new=1 opens the form.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('new') === '1') setShowForm(true)
+  }, [])
+
   const handleCreate = async (data: Partial<Goal>, collaborators: Profile[]) => {
     if (!userId) return
     setSaveError(null)

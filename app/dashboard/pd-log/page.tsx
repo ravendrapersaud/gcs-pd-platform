@@ -98,6 +98,15 @@ export default function PdLogPage() {
     load()
   }, [load])
 
+  // Deep-link from the dashboard quick actions: ?new=1 opens the matching form.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('new') === '1') {
+      if (p.get('tab') === 'funding') setShowFundingForm(true)
+      else setShowActivityForm(true)
+    }
+  }, [])
+
   const handleLogActivity = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId) return

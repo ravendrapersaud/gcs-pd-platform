@@ -179,21 +179,19 @@ function ActionTile({ href, icon, label, desc }: { href: string; icon: string; l
   )
 }
 
+// Quick actions earn a tile only when they reduce clicks or surface a feature
+// that isn't a one-click sidebar destination — so no plain duplicates of the
+// sidebar (Resources, Approvals, Roster, Reports, Settings, Shout-outs). The
+// ?new / ?tab deep-links open a form or sub-view the sidebar can't reach directly.
 interface DashAction { href: string; icon: string; label: string; desc: string; roles: string[] }
 const DASH_ACTIONS: DashAction[] = [
-  { href: '/dashboard/pd-log', icon: '📝', label: 'Log PD', desc: 'Record a workshop, course, or activity', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/pd-log?new=1', icon: '📝', label: 'Log PD', desc: 'Record a workshop, course, or activity', roles: ['staff', 'supervisor', 'admin'] },
   { href: '/dashboard/observations/peer', icon: '💬', label: 'Give peer feedback', desc: 'A quick, collegial note to a colleague', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/goals', icon: '🎯', label: 'Set a goal', desc: 'Start or update a growth goal', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/pd-log?tab=funding', icon: '💵', label: 'Request funding', desc: 'Submit a PD funding request', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/shout-outs', icon: '📣', label: 'Give a shout-out', desc: 'Recognize a colleague', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/resources', icon: '📚', label: 'Browse resources', desc: 'Find shared PD resources', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/approvals', icon: '✅', label: 'Review approvals', desc: 'Decide pending funding requests', roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/goals?new=1', icon: '🎯', label: 'Set a goal', desc: 'Start a new growth or inquiry goal', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/pd-log?tab=funding&new=1', icon: '💵', label: 'Request funding', desc: 'Submit a PD funding request', roles: ['staff', 'supervisor', 'admin'] },
   { href: '/dashboard/observations/twg', icon: '👁️', label: 'Record an observation', desc: 'Teaching with Grace capture', roles: ['supervisor', 'admin'] },
-  { href: '/dashboard/goals?tab=team', icon: '👥', label: "Team goals", desc: "Your team's growth goals", roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/goals?tab=team', icon: '👥', label: 'Team goals', desc: "Your team's growth goals", roles: ['supervisor', 'admin'] },
   { href: '/dashboard/observations?tab=pending', icon: '✍️', label: 'Sign off observations', desc: 'Review and sign pending observations', roles: ['supervisor', 'admin'] },
-  { href: '/dashboard/admin/staff', icon: '📋', label: 'Roster', desc: 'Manage staff and roles', roles: ['admin'] },
-  { href: '/dashboard/admin/reports', icon: '📊', label: 'Reports', desc: 'Build and export reports', roles: ['admin'] },
-  { href: '/dashboard/admin/settings', icon: '⚙️', label: 'Settings', desc: 'Platform configuration', roles: ['admin'] },
 ]
 
 function ProgressBar({ pct }: { pct: number }) {
