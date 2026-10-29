@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import type { Spotlight, Profile } from '@/lib/types'
 
@@ -19,7 +20,7 @@ function SpotlightCard({ spotlight }: { spotlight: Spotlight }) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-xl shrink-0">
-            ⭐
+            📣
           </div>
           <div>
             <p className="font-semibold text-gray-900">
@@ -91,7 +92,7 @@ function SpotlightForm({
     setError(null)
 
     try {
-      const res = await fetch('/api/spotlights', {
+      const res = await fetch('/api/shout-outs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,7 +103,7 @@ function SpotlightForm({
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Failed to send spotlight')
+        throw new Error(data.error || 'Failed to send shout-out')
       }
       setRecipientSearch('')
       setSelectedRecipient(null)
@@ -118,12 +119,12 @@ function SpotlightForm({
 
   return (
     <div className="card p-6">
-      <h2 className="font-bold text-gray-900 text-lg mb-5">✨ Send a Spotlight</h2>
+      <h2 className="font-bold text-gray-900 text-lg mb-5">📣 Send a Shout-out</h2>
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Recipient search */}
         <div className="relative">
-          <label className="label">Spotlight who?</label>
+          <label className="label">Shout out who?</label>
           {selectedRecipient ? (
             <div className="flex items-center gap-2 p-3 border border-navy-300 rounded-lg bg-navy-50">
               <span className="font-medium text-navy-900">
@@ -168,7 +169,7 @@ function SpotlightForm({
 
         {/* Message */}
         <div>
-          <label className="label">Your spotlight message</label>
+          <label className="label">Your shout-out message</label>
           <textarea
             required
             rows={4}
@@ -205,7 +206,7 @@ function SpotlightForm({
           disabled={submitting || !selectedRecipient || !message.trim()}
           className="btn-primary w-full"
         >
-          {submitting ? 'Sending…' : '⭐ Send Spotlight'}
+          {submitting ? 'Sending…' : '📣 Send Shout-out'}
         </button>
       </form>
     </div>
@@ -241,11 +242,28 @@ export default function SpotlightsPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      <div className="card p-5 flex items-center gap-4 overflow-hidden">
+        <Image
+          src="/shoutout-griffin.png"
+          alt="Grace griffin shouting out of a megaphone"
+          width={723}
+          height={273}
+          priority
+          className="h-16 w-auto shrink-0"
+        />
+        <div className="min-w-0">
+          <h1 className="text-xl font-display text-gray-900">Give a Shout-out</h1>
+          <p className="text-gray-500 text-sm">
+            Recognize a colleague who’s gone above and beyond — they’ll get a note in their inbox.
+          </p>
+        </div>
+      </div>
+
       <SpotlightForm profiles={profiles} onSuccess={load} />
 
       <div>
         <h2 className="font-semibold text-gray-700 text-sm uppercase tracking-wide mb-4">
-          Recent Spotlights
+          Recent Shout-outs
         </h2>
         {loading ? (
           <div className="space-y-4">
@@ -255,7 +273,7 @@ export default function SpotlightsPage() {
           </div>
         ) : spotlights.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
-            No spotlights yet — be the first to recognize a colleague!
+            No shout-outs yet — be the first to recognize a colleague!
           </div>
         ) : (
           <div className="space-y-4">
