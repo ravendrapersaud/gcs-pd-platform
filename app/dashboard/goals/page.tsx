@@ -10,7 +10,7 @@ import clsx from 'clsx'
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
-type TabId = 'mine' | 'collab' | 'team' | 'archived'
+type TabId = 'mine' | 'collab' | 'team' | 'all' | 'archived'
 
 const statusColor: Record<GoalStatus, string> = {
   active: 'badge-green',
@@ -19,20 +19,92 @@ const statusColor: Record<GoalStatus, string> = {
   paused: 'badge-yellow',
 }
 
-// Group goals by their owner for the oversight "Team"/"All Goals" tab,
-// sorted by the owner's name. Each goal carries a joined `owner` profile.
-function groupByOwner(items: Goal[]): { owner?: Profile; items: Goal[] }[] {
-  const byId = new Map<string, { owner?: Profile; items: Goal[] }>()
-  for (const g of items) {
-    const key = g.owner_id
-    if (!byId.has(key)) byId.set(key, { owner: g.owner, items: [] })
-    byId.get(key)!.items.push(g)
+// Oversight "My Team" / "All Goals" view: a roster of people, each clickable
+// to drill into that person's goals (read-only). `roster` lists the people to
+// show explicitly (supervisees, including those with no goals); when empty,
+// the roster is derived from the goal owners (used for the admin All-Goals
+// view, which only surfaces people who have goals).
+function OversightPanel({
+  roster, goals, selected, onSelect, onBack, emptyRoster,
+}: {
+  roster: Profile[]
+  goals: Goal[]
+  selected: string | null
+  onSelect: (id: string) => void
+  onBack: () => void
+  emptyRoster: string
+}) {
+  const byOwner = new Map<string, Goal[]>()
+  for (const g of goals) {
+    const arr = byOwner.get(g.owner_id) ?? []
+    arr.push(g)
+    byOwner.set(g.owner_id, arr)
   }
-  return Array.from(byId.values()).sort((a, b) => {
-    const an = a.owner ? `${a.owner.last_name} ${a.owner.first_name}` : 'zzz'
-    const bn = b.owner ? `${b.owner.last_name} ${b.owner.first_name}` : 'zzz'
-    return an.localeCompare(bn)
-  })
+
+  if (selected) {
+    const items = byOwner.get(selected) ?? []
+    const person = roster.find((p) => p.id === selected) ?? items[0]?.owner
+    return (
+      <div className="space-y-4">
+        <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">← Back to list</button>
+        <div className="flex items-baseline gap-2">
+          <h2 className="font-display text-xl text-gray-900">
+            {person ? `${person.first_name} ${person.last_name}` : 'Goals'}
+          </h2>
+          {person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
+        </div>
+        {items.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">No goals on file yet.</div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {items.map((g) => (
+              <GoalCard key={g.id} goal={g} onUpdate={async () => {}} onEdit={() => {}} readOnly />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const people = (roster.length > 0
+    ? roster
+    : (Array.from(byOwner.keys()).map((id) => byOwner.get(id)![0].owner).filter(Boolean) as Profile[])
+  ).slice().sort((a, b) =>
+    `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`)
+  )
+
+  if (people.length === 0) {
+    return <div className="text-center py-16 text-gray-400">{emptyRoster}</div>
+  }
+
+  return (
+    <div className="card divide-y divide-gray-100">
+      {people.map((p) => {
+        const count = (byOwner.get(p.id) ?? []).length
+        return (
+          <button
+            key={p.id}
+            onClick={() => onSelect(p.id)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors first:rounded-t-xl last:rounded-b-xl"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-9 h-9 rounded-full bg-navy-100 text-navy-800 text-sm font-semibold flex items-center justify-center shrink-0">
+                {(p.first_name?.[0] ?? '')}{(p.last_name?.[0] ?? '')}
+              </span>
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900 truncate">{p.first_name} {p.last_name}</p>
+                {p.title && <p className="text-xs text-gray-400 truncate">{p.title}</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 text-gray-400">
+              <span className="text-xs">{count} goal{count === 1 ? '' : 's'}</span>
+              <span className="text-lg leading-none">›</span>
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function ProgressBar({ pct }: { pct: number }) {
@@ -299,6 +371,9 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [collabGoals, setCollabGoals] = useState<Goal[]>([])
   const [teamGoals, setTeamGoals] = useState<Goal[]>([])
+  const [allGoals, setAllGoals] = useState<Goal[]>([])
+  const [supervisees, setSupervisees] = useState<Profile[]>([])
+  const [selectedOwner, setSelectedOwner] = useState<string | null>(null)
   const [archivedGoals, setArchivedGoals] = useState<Goal[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [userId, setUserId] = useState<string | null>(null)
@@ -347,37 +422,39 @@ export default function GoalsPage() {
     const collaborative = (collabs ?? []).flatMap((c) => (c.goals ? [c.goals as unknown as Goal] : []))
     const arch = (archived ?? []) as Goal[]
 
-    // Oversight: admins see everyone's goals; supervisors see their assigned
-    // reports' goals (RLS enforces the same scope). Read-only "Team" tab.
-    let team: Goal[] = []
-    if (role === 'admin') {
-      const { data } = await supabase
-        .from('goals')
-        .select('*')
-        .neq('owner_id', user.id)
-        .in('status', ['active', 'completed', 'paused'])
-        .order('created_at', { ascending: false })
-      team = (data ?? []) as Goal[]
-    } else if (role === 'supervisor') {
-      const { data: assigns } = await supabase
-        .from('supervisor_assignments')
-        .select('staff_id')
-        .eq('supervisor_id', user.id)
-      const reportIds = (assigns ?? []).map((a) => a.staff_id as string).filter((id) => id !== user.id)
-      if (reportIds.length > 0) {
-        const { data } = await supabase
-          .from('goals')
-          .select('*')
-          .in('owner_id', reportIds)
-          .in('status', ['active', 'completed', 'paused'])
-          .order('created_at', { ascending: false })
-        team = (data ?? []) as Goal[]
-      }
-    }
+    const profById = new Map((allProfiles ?? []).map((p) => [p.id, p as Profile]))
+
+    // Oversight. "My Team" = the people assigned to me as supervisor (any
+    // role); admins additionally get "All Goals" across the school. RLS
+    // enforces the same scope. Both views are read-only, roster-first.
+    const { data: assigns } = await supabase
+      .from('supervisor_assignments')
+      .select('staff_id')
+      .eq('supervisor_id', user.id)
+    const superviseeIds = Array.from(
+      new Set((assigns ?? []).map((a) => a.staff_id as string).filter((id) => id !== user.id))
+    )
+    const supervisees = superviseeIds
+      .map((id) => profById.get(id))
+      .filter((p): p is Profile => Boolean(p))
+      .sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
+    setSupervisees(supervisees)
+
+    const [{ data: teamRows }, { data: allRows }] = await Promise.all([
+      superviseeIds.length > 0
+        ? supabase.from('goals').select('*').in('owner_id', superviseeIds)
+            .in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as Goal[] }),
+      role === 'admin'
+        ? supabase.from('goals').select('*').neq('owner_id', user.id)
+            .in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as Goal[] }),
+    ])
+    const team = (teamRows ?? []) as Goal[]
+    const all = (allRows ?? []) as Goal[]
 
     // Batched fetch of collaborators for all visible goals.
-    const profById = new Map((allProfiles ?? []).map((p) => [p.id, p as Profile]))
-    const allIds = Array.from(new Set([...mine, ...collaborative, ...arch, ...team].map((g) => g.id)))
+    const allIds = Array.from(new Set([...mine, ...collaborative, ...arch, ...team, ...all].map((g) => g.id)))
     if (allIds.length > 0) {
       const { data: collabRows } = await supabase
         .from('goal_collaborators')
@@ -395,11 +472,13 @@ export default function GoalsPage() {
       setCollabGoals(collaborative.map(attach))
       setArchivedGoals(arch.map(attach))
       setTeamGoals(team.map(attach))
+      setAllGoals(all.map(attach))
     } else {
       setGoals(mine)
       setCollabGoals(collaborative)
       setArchivedGoals(arch)
       setTeamGoals([])
+      setAllGoals([])
     }
 
     setProfiles((allProfiles ?? []) as Profile[])
@@ -481,15 +560,19 @@ export default function GoalsPage() {
   }
 
   const currentGoals =
-    tab === 'mine' ? goals : tab === 'collab' ? collabGoals : tab === 'team' ? teamGoals : archivedGoals
+    tab === 'mine' ? goals : tab === 'collab' ? collabGoals : archivedGoals
 
-  const isOversight = myRole === 'supervisor' || myRole === 'admin'
-  const tabs: TabId[] = isOversight ? ['mine', 'collab', 'team', 'archived'] : ['mine', 'collab', 'archived']
+  const tabs: TabId[] = ['mine', 'collab']
+  if (supervisees.length > 0) tabs.push('team')
+  if (myRole === 'admin') tabs.push('all')
+  tabs.push('archived')
   const tabLabel = (t: TabId) =>
     t === 'mine' ? 'My Goals'
     : t === 'collab' ? 'Collaborative'
-    : t === 'team' ? (myRole === 'admin' ? 'All Goals' : 'My Team')
+    : t === 'team' ? 'My Team'
+    : t === 'all' ? 'All Goals'
     : 'Archived'
+  const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null) }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -499,11 +582,11 @@ export default function GoalsPage() {
           {tabs.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => selectTab(t)}
               className={clsx('tab', tab === t ? 'tab-active' : 'tab-inactive')}
             >
               {tabLabel(t)}
-              {t === 'team' && teamGoals.length > 0 ? ` (${teamGoals.length})` : ''}
+              {t === 'team' && supervisees.length > 0 ? ` (${supervisees.length})` : ''}
             </button>
           ))}
         </div>
@@ -552,34 +635,20 @@ export default function GoalsPage() {
             <div key={i} className="card h-40 animate-pulse bg-gray-100" />
           ))}
         </div>
+      ) : tab === 'team' || tab === 'all' ? (
+        <OversightPanel
+          roster={tab === 'team' ? supervisees : []}
+          goals={tab === 'team' ? teamGoals : allGoals}
+          selected={selectedOwner}
+          onSelect={setSelectedOwner}
+          onBack={() => setSelectedOwner(null)}
+          emptyRoster={tab === 'team'
+            ? 'No one is assigned to you to supervise yet.'
+            : 'No one else has goals on file yet.'}
+        />
       ) : currentGoals.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
-          <p>
-            {tab === 'team'
-              ? (myRole === 'admin'
-                  ? 'No one else has goals on file yet.'
-                  : 'None of your team members have goals on file yet.')
-              : 'No goals in this section.'}
-          </p>
-        </div>
-      ) : tab === 'team' ? (
-        <div className="space-y-6">
-          {groupByOwner(teamGoals).map(({ owner, items }) => (
-            <div key={owner?.id ?? 'unknown'} className="space-y-3">
-              <div className="flex items-baseline gap-2">
-                <h2 className="font-display text-gray-900">
-                  {owner ? `${owner.first_name} ${owner.last_name}` : 'Unknown'}
-                </h2>
-                {owner?.title && <span className="text-sm text-gray-400">{owner.title}</span>}
-                <span className="text-xs text-gray-400">· {items.length} goal{items.length === 1 ? '' : 's'}</span>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {items.map((goal) => (
-                  <GoalCard key={goal.id} goal={goal} onUpdate={handleUpdate} onEdit={setEditGoal} readOnly />
-                ))}
-              </div>
-            </div>
-          ))}
+          <p>No goals in this section.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
