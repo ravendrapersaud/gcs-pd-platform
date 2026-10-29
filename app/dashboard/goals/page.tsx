@@ -44,24 +44,23 @@ function RosterRow({ person, count, onClick }: { person: Profile; count: number;
 }
 
 // Oversight "My Team" / "All Goals" view: a roster of people, each clickable
-// to drill into that person's goals. `roster` lists the people to show
-// explicitly (supervisees, including those with no goals); when empty, the
+// to drill into that person's goals (read-only). `roster` lists the people to
+// show explicitly (supervisees, including those with no goals); when empty, the
 // roster is derived from the goal owners (the admin All-Goals view, which only
-// surfaces people who have goals). When `self` is passed (the My Team view),
-// the viewer's own goals appear in a separate tile above the team, and drilling
-// into them is editable; team members are read-only.
+// surfaces people who have goals). When `self`/`onSelf` are passed (My Team),
+// the viewer's own goals show as a separate tile that links to the My Goals
+// tab — their canonical, editable home — rather than opening in place here.
 function OversightPanel({
-  roster, goals, self, selected, onSelect, onBack, emptyRoster, onUpdate, onEdit,
+  roster, goals, self, onSelf, selected, onSelect, onBack, emptyRoster,
 }: {
   roster: Profile[]
   goals: Goal[]
   self?: { profile: Profile; goals: Goal[] }
+  onSelf?: () => void
   selected: string | null
   onSelect: (id: string) => void
   onBack: () => void
   emptyRoster: string
-  onUpdate: (goalId: string, pct: number, note: string) => Promise<void>
-  onEdit: (goal: Goal) => void
 }) {
   const byOwner = new Map<string, Goal[]>()
   for (const g of goals) {
@@ -71,30 +70,23 @@ function OversightPanel({
   }
 
   if (selected) {
-    const isSelf = self?.profile.id === selected
-    const items = isSelf ? self!.goals : (byOwner.get(selected) ?? [])
-    const person = isSelf ? self!.profile : (roster.find((p) => p.id === selected) ?? items[0]?.owner)
+    const items = byOwner.get(selected) ?? []
+    const person = roster.find((p) => p.id === selected) ?? items[0]?.owner
     return (
       <div className="space-y-4">
         <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">← Back to list</button>
         <div className="flex items-baseline gap-2">
           <h2 className="font-display text-xl text-gray-900">
-            {isSelf ? 'My goals' : person ? `${person.first_name} ${person.last_name}` : 'Goals'}
+            {person ? `${person.first_name} ${person.last_name}` : 'Goals'}
           </h2>
-          {!isSelf && person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
+          {person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
         </div>
         {items.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No goals on file yet.</div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
             {items.map((g) => (
-              <GoalCard
-                key={g.id}
-                goal={g}
-                onUpdate={onUpdate}
-                onEdit={onEdit}
-                readOnly={!isSelf}
-              />
+              <GoalCard key={g.id} goal={g} onUpdate={async () => {}} onEdit={() => {}} readOnly />
             ))}
           </div>
         )}
@@ -115,7 +107,7 @@ function OversightPanel({
         <div className="space-y-2">
           <p className="label mb-0">You</p>
           <div className="card">
-            <RosterRow person={self.profile} count={self.goals.length} onClick={() => onSelect(self.profile.id)} />
+            <RosterRow person={self.profile} count={self.goals.length} onClick={() => onSelf?.()} />
           </div>
         </div>
       )}
@@ -671,11 +663,10 @@ export default function GoalsPage() {
           roster={tab === 'team' ? supervisees : []}
           goals={tab === 'team' ? teamGoals : allGoals}
           self={tab === 'team' && meProfile ? { profile: meProfile, goals } : undefined}
+          onSelf={() => selectTab('mine')}
           selected={selectedOwner}
           onSelect={setSelectedOwner}
           onBack={() => setSelectedOwner(null)}
-          onUpdate={handleUpdate}
-          onEdit={setEditGoal}
           emptyRoster={tab === 'team'
             ? 'No one is assigned to you to supervise yet.'
             : 'No one else has goals on file yet.'}
