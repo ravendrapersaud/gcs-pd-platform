@@ -14,6 +14,8 @@ import {
   emptyTwgData, normalizeCapture, formatElapsed, segmentsFromSpans, excerptsForNote, categoryColor,
   type ObsMode, type TwgData, type TwgNote, type CategoryAnalysis, type CaptureCategory,
 } from '@/lib/twg'
+import { buildNoteSheetHtml } from '@/lib/twgSheets'
+import { writerDocHtml, TWG_WRITER_CHANNEL } from '@/lib/twgWriter'
 
 const STEPS: [string, string][] = [
   ['setup', 'Set up'], ['notes', 'Live notes'], ['analysis', 'Analysis'], ['share', 'Share'],
@@ -392,10 +394,115 @@ export default function ObservationCapturePage() {
   }
   const downloadHtml = () => triggerDownload(buildSummaryHtml(), 'text/html;charset=utf-8;', 'html')
 
-  if (!ready) return <div className="card h-64 animate-pulse bg-gray-100 max-w-3xl mx-auto" />
+  // ── Printable paper note sheet (blank, for writing on in the room) ─
+  const observerName = (() => {
+    const me = profiles.find((p) => p.id === userId)
+    return me ? `${me.first_name} ${me.last_name}` : ''
+  })()
+  const sheetArgs = () => {
+    const d = new Date(observedAt)
+    const ok = !isNaN(d.getTime())
+    return {
+      frameworkTitle: twg.frameworkTitle ?? TWG_FRAMEWORK_TITLE,
+      modeLabel: MODES[twg.mode].label,
+      modeTime: MODES[twg.mode].time,
+      isPopin: twg.mode === 'popin',
+      teacher: person ? `${person.first_name} ${person.last_name}` : '',
+      observer: observerName,
+      course: twg.course,
+      division: twg.division,
+      department: twg.department,
+      dateStr: ok ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '',
+      timeStr: ok ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '',
+      pre: twg.pre,
+      categories: twg.categories.map((c) => ({
+        title: catTitle(c.id),
+        color: catColor(c.id),
+        description: catDescription(c.id),
+        lookfors: indicatorsFor(c.id).map((i) => i.title),
+      })),
+    }
+  }
+  const openNoteSheet = () => {
+    const w = window.open('', '_blank')
+    if (!w) { setError('Allow pop-ups to open the printable note sheet.'); return }
+    w.document.open(); w.document.write(buildNoteSheetHtml(sheetArgs())); w.document.close()
+  }
+  const downloadNoteSheet = () => triggerDownload(buildNoteSheetHtml(sheetArgs()), 'text/html;charset=utf-8;', 'notes.html')
+
+  // ── Pop-out writing window (live notes, synced via BroadcastChannel) ─
+  const startedAtRef = useRef<number | null>(null)
+  useEffect(() => { startedAtRef.current = startedAt }, [startedAt])
+  const writerChannelRef = useRef<BroadcastChannel | null>(null)
+  const writerWinRef = useRef<Window | null>(null)
+
+  const addNoteFrom = useCallback((who: string, text: string, tags: string[]) => {
+    const t = text.trim(); if (!t) return
+    let start = startedAtRef.current
+    if (start == null) { start = Date.now(); startedAtRef.current = start; setStartedAt(start) }
+    const note: TwgNote = { id: newId('n'), t: Date.now() - start, who, text: t, tags: [...(tags ?? [])] }
+    setTwg((tw) => ({ ...tw, notes: [...tw.notes, note] }))
+  }, [])
+
+  const postWriterCtx = () => {
+    const ch = writerChannelRef.current
+    if (!ch) return
+    ch.postMessage({
+      type: 'ctx',
+      teacher: person ? `${person.first_name} ${person.last_name}` : '',
+      whoOrder: WHO_ORDER,
+      whoLabels: WHO,
+      clock: formatElapsed(elapsed),
+      tags: twg.categories.map((c) => ({ id: c.id, label: catTitle(c.id), color: catColor(c.id) })),
+      notes: twg.notes.map((n) => ({
+        t: formatElapsed(n.t),
+        who: n.who,
+        text: n.text,
+        tagLabels: n.tags.map((k) => ({ label: catTitle(k), color: catColor(k) })),
+      })),
+    })
+  }
+
+  // Refs let the channel handler (bound once) call the latest closures.
+  const writerApi = useRef({ postCtx: () => {}, addFrom: (_w: string, _t: string, _g: string[]) => {} })
+  writerApi.current.postCtx = postWriterCtx
+  writerApi.current.addFrom = addNoteFrom
+
+  const openWriter = () => {
+    if (typeof BroadcastChannel === 'undefined') { setError('This browser cannot open the writing window.'); return }
+    if (writerWinRef.current && !writerWinRef.current.closed) { writerWinRef.current.focus(); return }
+    const w = window.open('', 'twg-writer', 'width=780,height=900')
+    if (!w) { setError('Allow pop-ups to open the writing window.'); return }
+    writerWinRef.current = w
+    w.document.open(); w.document.write(writerDocHtml()); w.document.close()
+    if (!writerChannelRef.current) {
+      const ch = new BroadcastChannel(TWG_WRITER_CHANNEL)
+      ch.onmessage = (e: MessageEvent) => {
+        const d = e.data
+        if (d?.type === 'add') writerApi.current.addFrom(d.who, d.text, d.tags || [])
+        else if (d?.type === 'hello') writerApi.current.postCtx()
+      }
+      writerChannelRef.current = ch
+    }
+    setTimeout(() => writerApi.current.postCtx(), 150)
+  }
+
+  // Keep the writing window current as notes / tags / teacher change.
+  useEffect(() => {
+    if (writerChannelRef.current) writerApi.current.postCtx()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [twg.notes, twg.categories, person])
+
+  // Tear down the channel and window when leaving the capture page.
+  useEffect(() => () => {
+    writerChannelRef.current?.close()
+    if (writerWinRef.current && !writerWinRef.current.closed) writerWinRef.current.close()
+  }, [])
+
+  if (!ready) return <div className="card h-64 animate-pulse bg-gray-100 max-w-[1180px] mx-auto" />
   if (!allowed) {
     return (
-      <div className="max-w-3xl mx-auto card p-8 text-center">
+      <div className="max-w-[1180px] mx-auto card p-8 text-center">
         <p className="text-gray-700 font-medium">Observations are recorded by supervisors and admins.</p>
         <Link href="/dashboard/observations" className="btn-secondary text-sm mt-4 inline-block">Back to observations</Link>
       </div>
@@ -403,7 +510,7 @@ export default function ObservationCapturePage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="max-w-[1180px] mx-auto space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-gray-900">{twg.frameworkTitle ?? 'Observation'}</h1>
@@ -618,6 +725,19 @@ export default function ObservationCapturePage() {
             </>
           )}
 
+          <div className="card p-5 bg-gray-50/60">
+            <h3 className="font-semibold text-gray-900">Paper note sheet</h3>
+            <p className="text-sm text-gray-500 mt-1 mb-3 max-w-prose">
+              Prefer pen and paper in the room? Print a sheet with everything above — the visit
+              details, the pre-observation notes, your focus areas with look-fors as checkboxes,
+              and lined, timestamped note pages. Finish Set up first so the sheet includes it.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={openNoteSheet} className="btn-secondary text-sm">Print note sheet</button>
+              <button onClick={downloadNoteSheet} className="btn-ghost text-sm">Download (.html)</button>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <button onClick={() => setStep('notes')} className="btn-primary">Start notes →</button>
           </div>
@@ -631,6 +751,7 @@ export default function ObservationCapturePage() {
             <div className="flex items-center justify-between">
               <span className="text-2xl font-bold tabular-nums text-navy-900">{formatElapsed(elapsed)}</span>
               <div className="flex gap-2">
+                <button onClick={openWriter} className="btn-secondary text-sm" title="Open a separate, distraction-free window just for writing notes">⤢ Writing window</button>
                 {startedAt == null && <button onClick={() => setStartedAt(Date.now())} className="btn-secondary text-sm">Start timer</button>}
                 {startedAt != null && stoppedAt == null && <button onClick={() => setStoppedAt(Date.now())} className="btn-secondary text-sm">Stop</button>}
                 {stoppedAt != null && <button onClick={() => setStoppedAt(null)} className="btn-secondary text-sm">Resume</button>}
