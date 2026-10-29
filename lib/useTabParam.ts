@@ -33,3 +33,26 @@ export function useTabParam<T extends string>(
 
   return [tab, setTab]
 }
+
+// Free-form URL param state (string or null), synced like useTabParam. Use for
+// a drill-in selection (e.g. the opened person) so it is linkable and survives
+// a refresh. null / '' clears the param.
+export function useQueryParam(key: string): [string | null, (v: string | null) => void] {
+  const [value, setValueState] = useState<string | null>(null)
+
+  useEffect(() => {
+    setValueState(new URLSearchParams(window.location.search).get(key))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const setValue = useCallback((v: string | null) => {
+    setValueState(v)
+    const params = new URLSearchParams(window.location.search)
+    if (v == null || v === '') params.delete(key)
+    else params.set(key, v)
+    const qs = params.toString()
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+  }, [key])
+
+  return [value, setValue]
+}

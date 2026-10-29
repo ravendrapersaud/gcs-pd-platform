@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Goal, Profile, GoalStatus, GoalType } from '@/lib/types'
 import { facultyGoalQuestionDue, DEFAULT_FACULTY_GOAL_QUESTION_DUE } from '@/lib/appSettings'
-import { useTabParam } from '@/lib/useTabParam'
+import { useTabParam, useQueryParam } from '@/lib/useTabParam'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
@@ -397,7 +397,7 @@ export default function GoalsPage() {
   const [teamGoals, setTeamGoals] = useState<Goal[]>([])
   const [allGoals, setAllGoals] = useState<Goal[]>([])
   const [supervisees, setSupervisees] = useState<Profile[]>([])
-  const [selectedOwner, setSelectedOwner] = useState<string | null>(null)
+  const [selectedOwner, setSelectedOwner] = useQueryParam('person')
   const [archivedGoals, setArchivedGoals] = useState<Goal[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [userId, setUserId] = useState<string | null>(null)
