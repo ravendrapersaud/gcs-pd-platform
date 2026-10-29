@@ -19,20 +19,49 @@ const statusColor: Record<GoalStatus, string> = {
   paused: 'badge-yellow',
 }
 
+// A single clickable row in an oversight roster.
+function RosterRow({ person, count, onClick }: { person: Profile; count: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors first:rounded-t-xl last:rounded-b-xl"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="w-9 h-9 rounded-full bg-navy-100 text-navy-800 text-sm font-semibold flex items-center justify-center shrink-0">
+          {(person.first_name?.[0] ?? '')}{(person.last_name?.[0] ?? '')}
+        </span>
+        <div className="min-w-0">
+          <p className="font-medium text-gray-900 truncate">{person.first_name} {person.last_name}</p>
+          {person.title && <p className="text-xs text-gray-400 truncate">{person.title}</p>}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 text-gray-400">
+        <span className="text-xs">{count} goal{count === 1 ? '' : 's'}</span>
+        <span className="text-lg leading-none">›</span>
+      </div>
+    </button>
+  )
+}
+
 // Oversight "My Team" / "All Goals" view: a roster of people, each clickable
-// to drill into that person's goals (read-only). `roster` lists the people to
-// show explicitly (supervisees, including those with no goals); when empty,
-// the roster is derived from the goal owners (used for the admin All-Goals
-// view, which only surfaces people who have goals).
+// to drill into that person's goals. `roster` lists the people to show
+// explicitly (supervisees, including those with no goals); when empty, the
+// roster is derived from the goal owners (the admin All-Goals view, which only
+// surfaces people who have goals). When `self` is passed (the My Team view),
+// the viewer's own goals appear in a separate tile above the team, and drilling
+// into them is editable; team members are read-only.
 function OversightPanel({
-  roster, goals, selected, onSelect, onBack, emptyRoster,
+  roster, goals, self, selected, onSelect, onBack, emptyRoster, onUpdate, onEdit,
 }: {
   roster: Profile[]
   goals: Goal[]
+  self?: { profile: Profile; goals: Goal[] }
   selected: string | null
   onSelect: (id: string) => void
   onBack: () => void
   emptyRoster: string
+  onUpdate: (goalId: string, pct: number, note: string) => Promise<void>
+  onEdit: (goal: Goal) => void
 }) {
   const byOwner = new Map<string, Goal[]>()
   for (const g of goals) {
@@ -42,23 +71,30 @@ function OversightPanel({
   }
 
   if (selected) {
-    const items = byOwner.get(selected) ?? []
-    const person = roster.find((p) => p.id === selected) ?? items[0]?.owner
+    const isSelf = self?.profile.id === selected
+    const items = isSelf ? self!.goals : (byOwner.get(selected) ?? [])
+    const person = isSelf ? self!.profile : (roster.find((p) => p.id === selected) ?? items[0]?.owner)
     return (
       <div className="space-y-4">
         <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">← Back to list</button>
         <div className="flex items-baseline gap-2">
           <h2 className="font-display text-xl text-gray-900">
-            {person ? `${person.first_name} ${person.last_name}` : 'Goals'}
+            {isSelf ? 'My goals' : person ? `${person.first_name} ${person.last_name}` : 'Goals'}
           </h2>
-          {person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
+          {!isSelf && person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
         </div>
         {items.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No goals on file yet.</div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
             {items.map((g) => (
-              <GoalCard key={g.id} goal={g} onUpdate={async () => {}} onEdit={() => {}} readOnly />
+              <GoalCard
+                key={g.id}
+                goal={g}
+                onUpdate={onUpdate}
+                onEdit={onEdit}
+                readOnly={!isSelf}
+              />
             ))}
           </div>
         )}
@@ -73,36 +109,29 @@ function OversightPanel({
     `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`)
   )
 
-  if (people.length === 0) {
-    return <div className="text-center py-16 text-gray-400">{emptyRoster}</div>
-  }
-
   return (
-    <div className="card divide-y divide-gray-100">
-      {people.map((p) => {
-        const count = (byOwner.get(p.id) ?? []).length
-        return (
-          <button
-            key={p.id}
-            onClick={() => onSelect(p.id)}
-            className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors first:rounded-t-xl last:rounded-b-xl"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="w-9 h-9 rounded-full bg-navy-100 text-navy-800 text-sm font-semibold flex items-center justify-center shrink-0">
-                {(p.first_name?.[0] ?? '')}{(p.last_name?.[0] ?? '')}
-              </span>
-              <div className="min-w-0">
-                <p className="font-medium text-gray-900 truncate">{p.first_name} {p.last_name}</p>
-                {p.title && <p className="text-xs text-gray-400 truncate">{p.title}</p>}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 text-gray-400">
-              <span className="text-xs">{count} goal{count === 1 ? '' : 's'}</span>
-              <span className="text-lg leading-none">›</span>
-            </div>
-          </button>
-        )
-      })}
+    <div className="space-y-5">
+      {self && (
+        <div className="space-y-2">
+          <p className="label mb-0">You</p>
+          <div className="card">
+            <RosterRow person={self.profile} count={self.goals.length} onClick={() => onSelect(self.profile.id)} />
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {self && <p className="label mb-0">Those you supervise</p>}
+        {people.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">{emptyRoster}</div>
+        ) : (
+          <div className="card divide-y divide-gray-100">
+            {people.map((p) => (
+              <RosterRow key={p.id} person={p} count={(byOwner.get(p.id) ?? []).length} onClick={() => onSelect(p.id)} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -562,6 +591,8 @@ export default function GoalsPage() {
   const currentGoals =
     tab === 'mine' ? goals : tab === 'collab' ? collabGoals : archivedGoals
 
+  const meProfile = profiles.find((p) => p.id === userId)
+
   const tabs: TabId[] = ['mine', 'collab']
   if (supervisees.length > 0) tabs.push('team')
   if (myRole === 'admin') tabs.push('all')
@@ -639,9 +670,12 @@ export default function GoalsPage() {
         <OversightPanel
           roster={tab === 'team' ? supervisees : []}
           goals={tab === 'team' ? teamGoals : allGoals}
+          self={tab === 'team' && meProfile ? { profile: meProfile, goals } : undefined}
           selected={selectedOwner}
           onSelect={setSelectedOwner}
           onBack={() => setSelectedOwner(null)}
+          onUpdate={handleUpdate}
+          onEdit={setEditGoal}
           emptyRoster={tab === 'team'
             ? 'No one is assigned to you to supervise yet.'
             : 'No one else has goals on file yet.'}
