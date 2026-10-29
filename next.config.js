@@ -14,6 +14,12 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    // Spotlights was rebranded to Shout-outs; keep old links working.
+    return [
+      { source: '/dashboard/spotlights', destination: '/dashboard/shout-outs', permanent: true },
+    ]
+  },
 }
 
 module.exports = nextConfig
