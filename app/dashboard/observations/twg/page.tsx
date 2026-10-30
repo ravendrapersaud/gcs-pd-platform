@@ -15,7 +15,8 @@ import {
   emptyTwgData, normalizeCapture, formatElapsed, segmentsFromSpans, excerptsForNote, categoryColor,
   type ObsMode, type TwgData, type TwgNote, type CategoryAnalysis, type CaptureCategory,
 } from '@/lib/twg'
-import { buildNoteSheetHtml } from '@/lib/twgSheets'
+import qrcode from 'qrcode-generator'
+import { buildNoteSheetHtml, twgSheetPayload, TWG_SHEET_VERSION } from '@/lib/twgSheets'
 import { writerDocHtml, TWG_WRITER_CHANNEL } from '@/lib/twgWriter'
 
 const STEPS: [string, string][] = [
@@ -424,12 +425,33 @@ export default function ObservationCapturePage() {
       })),
     }
   }
-  const openNoteSheet = () => {
+  // Build the sheet HTML, embedding a QR + reference that ties a photographed
+  // sheet back to this observation for a future OCR import. Anchoring needs a
+  // real observation id, so if a teacher is chosen but no draft exists yet we
+  // save one first; a blank sheet (no teacher) prints without a QR.
+  const buildSheetHtml = async (): Promise<string> => {
+    let ref = obsId
+    if (!ref && person) ref = await saveObservation('draft')
+    const base = sheetArgs()
+    if (!ref) return buildNoteSheetHtml(base)
+    const qr = qrcode(0, 'M')
+    qr.addData(twgSheetPayload(TWG_SHEET_VERSION, ref))
+    qr.make()
+    return buildNoteSheetHtml({
+      ...base,
+      ref,
+      version: TWG_SHEET_VERSION,
+      qrSvg: qr.createSvgTag({ cellSize: 2, margin: 0, scalable: true }),
+    })
+  }
+  const openNoteSheet = async () => {
+    // Open the window synchronously (before any await) so pop-up blockers allow it.
     const w = window.open('', '_blank')
     if (!w) { setError('Allow pop-ups to open the printable note sheet.'); return }
-    w.document.open(); w.document.write(buildNoteSheetHtml(sheetArgs())); w.document.close()
+    const html = await buildSheetHtml()
+    w.document.open(); w.document.write(html); w.document.close()
   }
-  const downloadNoteSheet = () => triggerDownload(buildNoteSheetHtml(sheetArgs()), 'text/html;charset=utf-8;', 'notes.html')
+  const downloadNoteSheet = async () => triggerDownload(await buildSheetHtml(), 'text/html;charset=utf-8;', 'notes.html')
 
   // ── Pop-out writing window (live notes, synced via BroadcastChannel) ─
   const startedAtRef = useRef<number | null>(null)
@@ -736,6 +758,11 @@ export default function ObservationCapturePage() {
               Prefer pen and paper in the room? Print a sheet with everything above — the visit
               details, the pre-observation notes, your focus areas with look-fors as checkboxes,
               and lined, timestamped note pages. Finish Set up first so the sheet includes it.
+            </p>
+            <p className="text-xs text-gray-400 mb-3 max-w-prose">
+              Each printed sheet carries a QR code and reference that links it back to this
+              observation, so a photo of your handwritten notes can be imported later. Printing
+              with a teacher selected saves a draft here first to create that link.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={openNoteSheet} className="btn-secondary text-sm">Print note sheet</button>

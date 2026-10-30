@@ -5,6 +5,15 @@
 // checkboxes, and lined/timestamped note pages. Built from Set up, before the
 // visit — so it has no dependency on the live app state.
 
+// Bump when the printed layout changes in a way a future OCR importer would
+// need to parse differently. The QR encodes this, so an uploaded sheet declares
+// which field map it was printed with. Payload format: `gcs-pd:twg:v<N>:<ref>`.
+export const TWG_SHEET_VERSION = 1
+
+export function twgSheetPayload(version: number, ref: string): string {
+  return `gcs-pd:twg:v${version}:${ref}`
+}
+
 export interface SheetCategory {
   title: string
   color: string
@@ -26,6 +35,12 @@ export interface NoteSheetArgs {
   timeStr: string
   pre: { focus: string; objective: string; unit: string; style: string }
   categories: SheetCategory[]
+  /** Machine-readable reference (observation id) embedded for later OCR import. */
+  ref?: string
+  /** Pre-rendered QR <svg> string encoding twgSheetPayload(version, ref). */
+  qrSvg?: string
+  /** Template version printed alongside the reference. */
+  version?: number
 }
 
 function esc(s: unknown): string {
@@ -69,6 +84,11 @@ export function buildNoteSheetHtml(a: NoteSheetArgs): string {
 *{box-sizing:border-box}
 body{font:12.5px/1.45 "Helvetica Neue",Arial,sans-serif;color:var(--ink);max-width:780px;margin:24px auto;padding:0 20px;background:#fff}
 h1{font:700 1.45rem Georgia,serif;margin:0}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+.qr{flex:0 0 auto;text-align:center;line-height:1}
+.qr svg{width:86px;height:86px;display:block}
+.qr .qcap{font:600 .58rem ui-monospace,Menlo,Consolas,monospace;letter-spacing:.06em;color:var(--muted);margin-top:3px;text-transform:uppercase}
+.refline{font:.68rem/1.3 ui-monospace,Menlo,Consolas,monospace;color:var(--muted);letter-spacing:.02em;margin-top:6px;word-break:break-all}
 h2{font:600 1.05rem Georgia,serif;margin:18px 0 8px;padding-bottom:4px;border-bottom:1.5px solid var(--ink)}
 h3{font:600 .98rem Georgia,serif;margin:0 0 2px;display:flex;align-items:center;gap:7px;color:var(--c,var(--ink))}
 .sub{color:var(--muted);margin:2px 0 12px}
@@ -97,8 +117,10 @@ footer{margin-top:14px;color:var(--muted);font-size:.8em}
 @media print{.bar{display:none}body{margin:0;padding:0;max-width:none}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
 <div class="bar"><span>Print this sheet, or choose <b>Save as PDF</b> in the print window.</span><button onclick="window.print()">Print</button></div>
+<div class="hd"><div>
 <h1>${esc(a.frameworkTitle)} · Observation notes</h1>
 <p class="sub">${esc(a.modeLabel)} observation${a.teacher ? ' · ' + esc(a.teacher) : ''}${a.dateStr ? ' · ' + esc(a.dateStr) : ''}</p>
+</div>${a.qrSvg ? `<div class="qr">${a.qrSvg}<div class="qcap">TWG v${a.version ?? 1}</div></div>` : ''}</div>
 <div class="meta">${meta.map(([k, v]) => `<div><span class="lbl">${esc(k)}</span>${val(v)}</div>`).join('')}</div>
 ${a.isPopin ? '' : `<h2>From the pre-observation conversation</h2>
 ${box('What the teacher wants feedback on', a.pre.focus, 2)}
@@ -118,6 +140,6 @@ ${a.categories.length ? a.categories.map(catHTML).join('') : '<p class="sub">No 
 ${box('Strengths I noticed', '', 3)}
 ${box('Growth and support', '', 3)}
 ${box('Questions for our conversation', '', 2)}
-<footer>Type these notes into the Teaching with Grace observation page afterward to tag them and build the summary.</footer></div>
+<footer>Type these notes into the Teaching with Grace observation page afterward to tag them and build the summary.${a.ref ? `<div class="refline">Sheet reference (for import — please don’t alter): gcs-pd:twg:v${a.version ?? 1}:${esc(a.ref)}</div>` : ''}</footer></div>
 </body></html>`
 }
