@@ -15,7 +15,11 @@ import {
 } from '@/lib/appSettings'
 import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from '@/lib/taxonomy'
 import type { TaxonomyTerm, TaxonomyCategory } from '@/lib/taxonomyDb'
+import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
+
+const SETTINGS_TABS = ['funding', 'library', 'taxonomy'] as const
+type SettingsTab = (typeof SETTINGS_TABS)[number]
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -309,6 +313,8 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [tab, setTab] = useTabParam(SETTINGS_TABS, 'funding')
 
   // Form state — fund policy
   const [allotment, setAllotment] = useState(String(FALLBACK_FUND_CONFIG.defaultAllotment))
@@ -372,7 +378,9 @@ export default function AdminSettingsPage() {
   const mmdd = (v: { month: number; day: number }) =>
     `${String(v.month + 1).padStart(2, '0')}-${String(v.day).padStart(2, '0')}`
 
-  const touch = () => setSaved(false)
+  const touch = () => { setSaved(false); setDirty(true) }
+
+  const discard = () => { setSaved(false); setSaveError(null); setDirty(false); load() }
 
   const handleSave = async () => {
     setSaving(true)
@@ -422,6 +430,7 @@ export default function AdminSettingsPage() {
       setSaveError(`Save failed: ${error.message}`)
     } else {
       setSaved(true)
+      setDirty(false)
     }
     setSaving(false)
   }
@@ -448,7 +457,7 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 pb-24">
       {saveError && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {saveError}
@@ -456,10 +465,20 @@ export default function AdminSettingsPage() {
       )}
       {saved && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-          Saved. Settings across the platform now use these values.
+          Saved — these values now apply across the platform.
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {([['funding', 'PD & Funding'], ['library', 'Library & Workspaces'], ['taxonomy', 'Departments & Tags']] as [SettingsTab, string][]).map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k)} className={clsx('tab', tab === k ? 'tab-active' : 'tab-inactive')}>{label}</button>
+        ))}
+      </div>
+
+      {/* ══ PD & Funding ═══════════════════════════════════════ */}
+      {tab === 'funding' && (
+      <div className="space-y-6">
       {/* ── PD fund policy ─────────────────────────────────────── */}
       <div className="card p-6 space-y-5">
         <div>
@@ -549,8 +568,7 @@ export default function AdminSettingsPage() {
             onChange={(e) => { setThreshold(e.target.value); touch() }}
           />
           <p className="text-xs text-gray-400 mt-1">
-            Supervisors can&apos;t approve or deny requests over this amount — only admins can.
-            Blank = no threshold.
+            Above this, only admins can approve. Blank = no threshold.
           </p>
         </div>
         <label className="flex items-start gap-3 cursor-pointer">
@@ -570,7 +588,12 @@ export default function AdminSettingsPage() {
           </span>
         </label>
       </div>
+      </div>
+      )}
 
+      {/* ══ Library & Workspaces ═══════════════════════════════ */}
+      {tab === 'library' && (
+      <div className="space-y-6">
       {/* ── Resource library ───────────────────────────────────── */}
       <div className="card p-6 space-y-4">
         <div>
@@ -628,13 +651,18 @@ export default function AdminSettingsPage() {
           </label>
         </div>
       </div>
+      </div>
+      )}
 
+      {/* ══ Departments & Tags ═════════════════════════════════ */}
+      {tab === 'taxonomy' && (
+      <div className="space-y-6">
       {/* ── Departments ────────────────────────────────────────── */}
       <div className="card p-6 space-y-4">
         <div>
           <h2 className="font-semibold text-gray-900 text-lg">Departments</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            The department choices in the Roster, grouped academic vs. administrative. One department per line.
+            Department choices for the Roster, grouped academic vs. administrative. One per line.
           </p>
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
@@ -658,19 +686,29 @@ export default function AdminSettingsPage() {
           </div>
         </div>
         <p className="text-xs text-gray-400">
-          These set the dropdown choices only. People already assigned a department keep it, and any department
-          already in use still appears in the Roster even if it&apos;s not listed here.
+          Sets the dropdown choices only. Departments already in use still appear in the Roster.
         </p>
       </div>
 
-      <div className="flex justify-end">
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? 'Saving…' : 'Save Settings'}
-        </button>
-      </div>
-
+      <p className="text-xs text-gray-400">Tag edits below save automatically as you make them.</p>
       {/* ── Tags & taxonomy (mutations apply immediately) ─────── */}
       <TaxonomySection />
+      </div>
+      )}
+
+      {/* Sticky unsaved-changes bar — governs the form settings above
+          (taxonomy tags save on their own). */}
+      {dirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+            <p className="text-sm text-gray-600">You have unsaved changes.</p>
+            <div className="flex items-center gap-2">
+              <button onClick={discard} disabled={saving} className="btn-ghost text-sm">Discard</button>
+              <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">{saving ? 'Saving…' : 'Save changes'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
