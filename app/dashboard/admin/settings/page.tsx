@@ -305,6 +305,199 @@ function TaxonomySection() {
   )
 }
 
+const DEPT_GROUPS: { key: 'academic' | 'operational'; settingKey: string; label: string; defaults: readonly string[] }[] = [
+  { key: 'academic', settingKey: 'academic_departments', label: 'Academic', defaults: DEFAULT_ACADEMIC_DEPARTMENTS },
+  { key: 'operational', settingKey: 'operational_departments', label: 'Administrative & operations', defaults: DEFAULT_OPERATIONAL_DEPARTMENTS },
+]
+
+// Row-based editor for the Roster's department choices. Mutations save
+// immediately (like the taxonomy editor). Renaming a department also reassigns
+// every profile currently in it, so a rename actually MOVES people rather than
+// just changing the list of choices.
+function DepartmentsSection() {
+  const supabase = createClient()
+  const [userId, setUserId] = useState<string | null>(null)
+  const [lists, setLists] = useState<Record<'academic' | 'operational', string[]>>({ academic: [], operational: [] })
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [group, setGroup] = useState<'academic' | 'operational'>('academic')
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [newName, setNewName] = useState('')
+
+  const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setUserId(user?.id ?? null)
+    const [{ data: settings }, { data: profs }] = await Promise.all([
+      supabase.from('app_settings').select('key, value'),
+      supabase.from('profiles').select('department'),
+    ])
+    const map = settingsMap(settings)
+    const parse = (v: string | undefined, defaults: readonly string[]) =>
+      (v ?? '').trim() ? v!.split('\n').map((s) => s.trim()).filter(Boolean) : [...defaults]
+    setLists({
+      academic: parse(map['academic_departments'], DEFAULT_ACADEMIC_DEPARTMENTS),
+      operational: parse(map['operational_departments'], DEFAULT_OPERATIONAL_DEPARTMENTS),
+    })
+    const tally: Record<string, number> = {}
+    for (const p of profs ?? []) {
+      const d = (p as { department: string | null }).department?.trim()
+      if (d) tally[d] = (tally[d] ?? 0) + 1
+    }
+    setCounts(tally)
+    setLoaded(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const current = DEPT_GROUPS.find((g) => g.key === group)!
+  const items = lists[group]
+
+  // Write the group's list back to app_settings. `extra` runs first (e.g. the
+  // profile reassign on rename) and aborts the whole op on failure.
+  const run = async (next: string[], extra?: () => Promise<string | null>) => {
+    setBusy(true); setError(null)
+    if (extra) {
+      const pre = await extra()
+      if (pre) { setError(pre); setBusy(false); return }
+    }
+    const { error: err } = await supabase.from('app_settings').upsert(
+      { key: current.settingKey, value: normalizeList(next.join('\n')), updated_by: userId, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    if (err) setError(err.message)
+    await load()
+    setBusy(false)
+  }
+
+  const addDept = async () => {
+    const name = newName.trim()
+    if (!name) return
+    if (items.some((d) => d.toLowerCase() === name.toLowerCase())) { setError('That department is already in the list.'); return }
+    setNewName('')
+    await run([...items, name])
+  }
+
+  const removeDept = async (i: number) => {
+    const name = items[i]
+    const n = counts[name] ?? 0
+    const msg = n > 0
+      ? `${n} ${n === 1 ? 'person is' : 'people are'} assigned to “${name}”. Removing it from the list won’t change their department — it will still show in the Roster under “Other (in use)”. Remove from the choices anyway?`
+      : `Remove “${name}” from the department choices?`
+    if (!window.confirm(msg)) return
+    await run(items.filter((_, idx) => idx !== i))
+  }
+
+  const move = async (i: number, dir: -1 | 1) => {
+    const j = i + dir
+    if (j < 0 || j >= items.length) return
+    const next = [...items]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    await run(next)
+  }
+
+  const saveRename = async (i: number) => {
+    const old = items[i]
+    const name = editValue.trim()
+    setEditingIdx(null)
+    if (!name || name === old) return
+    if (items.some((d, idx) => idx !== i && d.toLowerCase() === name.toLowerCase())) { setError('Another department already has that name.'); return }
+    const n = counts[old] ?? 0
+    if (n > 0 && !window.confirm(`Rename “${old}” to “${name}” and move ${n} ${n === 1 ? 'person' : 'people'} to it?`)) return
+    const next = items.map((d, idx) => (idx === i ? name : d))
+    await run(next, async () => {
+      if (n === 0) return null
+      // Reassign everyone in the old department before updating the choice list.
+      const { error: e } = await supabase.from('profiles').update({ department: name }).eq('department', old).select('id')
+      return e ? `Reassigning people failed: ${e.message}` : null
+    })
+  }
+
+  return (
+    <div className="card p-6 space-y-5">
+      <div>
+        <h2 className="font-semibold text-gray-900 text-lg">Departments</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Department choices for the Roster. Renaming one moves everyone assigned to it.</p>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
+
+      <div className="flex gap-2">
+        {DEPT_GROUPS.map((g) => (
+          <button
+            key={g.key}
+            onClick={() => { setGroup(g.key); setEditingIdx(null); setNewName('') }}
+            className={clsx('tab', group === g.key ? 'tab-active' : 'tab-inactive')}
+          >
+            {g.label}
+          </button>
+        ))}
+      </div>
+
+      {!loaded ? (
+        <div className="h-32 animate-pulse bg-gray-100 rounded-lg" />
+      ) : items.length === 0 ? (
+        <p className="text-sm text-gray-400 py-4">No departments in this group yet — add one below.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+          {items.map((name, i) => {
+            const n = counts[name] ?? 0
+            return (
+              <li key={`${name}-${i}`} className="flex items-center gap-2 px-3 py-2">
+                <div className="flex flex-col shrink-0">
+                  <button onClick={() => move(i, -1)} disabled={busy || i === 0} aria-label={`Move ${name} up`} className="text-gray-400 hover:text-navy-800 disabled:opacity-30 text-xs leading-none px-1">▲</button>
+                  <button onClick={() => move(i, 1)} disabled={busy || i === items.length - 1} aria-label={`Move ${name} down`} className="text-gray-400 hover:text-navy-800 disabled:opacity-30 text-xs leading-none px-1">▼</button>
+                </div>
+
+                {editingIdx === i ? (
+                  <input
+                    className="input flex-1 py-1 text-sm"
+                    value={editValue}
+                    autoFocus
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveRename(i); if (e.key === 'Escape') setEditingIdx(null) }}
+                  />
+                ) : (
+                  <span className="flex-1 text-sm text-gray-800 min-w-0 truncate">{name}</span>
+                )}
+
+                {n > 0 && editingIdx !== i && <span className="badge badge-gray text-[10px] shrink-0">{n} in use</span>}
+
+                {editingIdx === i ? (
+                  <>
+                    <button onClick={() => saveRename(i)} disabled={busy} className="text-xs font-medium text-navy-800 hover:underline shrink-0">Save</button>
+                    <button onClick={() => setEditingIdx(null)} className="text-xs font-medium text-gray-500 hover:underline shrink-0">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => { setEditingIdx(i); setEditValue(name) }} disabled={busy} className="text-xs font-medium text-navy-800 hover:underline shrink-0">Rename</button>
+                    <button onClick={() => removeDept(i)} disabled={busy} className="text-xs font-medium text-red-600 hover:underline shrink-0">Remove</button>
+                  </>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          className="input flex-1"
+          placeholder={`New ${current.label.toLowerCase()} department…`}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addDept() }}
+        />
+        <button onClick={addDept} disabled={busy || !newName.trim()} className="btn-secondary shrink-0">+ Add department</button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSettingsPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -327,8 +520,6 @@ export default function AdminSettingsPage() {
   const [allowOverBalance, setAllowOverBalance] = useState(true)
   const [moderation, setModeration] = useState(false)
   const [wsPolicy, setWsPolicy] = useState<'supervisors' | 'everyone'>('supervisors')
-  const [academicDepts, setAcademicDepts] = useState(DEFAULT_ACADEMIC_DEPARTMENTS.join('\n'))
-  const [operationalDepts, setOperationalDepts] = useState(DEFAULT_OPERATIONAL_DEPARTMENTS.join('\n'))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -357,8 +548,6 @@ export default function AdminSettingsPage() {
     setAllowOverBalance((map['allow_over_balance_requests'] ?? 'true') !== 'false')
     setModeration((map['resource_moderation'] ?? 'off') === 'on')
     setWsPolicy(map['workspace_creation_policy'] === 'everyone' ? 'everyone' : 'supervisors')
-    setAcademicDepts((map['academic_departments'] ?? '').trim() || DEFAULT_ACADEMIC_DEPARTMENTS.join('\n'))
-    setOperationalDepts((map['operational_departments'] ?? '').trim() || DEFAULT_OPERATIONAL_DEPARTMENTS.join('\n'))
 
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -421,8 +610,6 @@ export default function AdminSettingsPage() {
       { key: 'allow_over_balance_requests', value: allowOverBalance ? 'true' : 'false', updated_by: userId, updated_at: now },
       { key: 'resource_moderation', value: moderation ? 'on' : 'off', updated_by: userId, updated_at: now },
       { key: 'workspace_creation_policy', value: wsPolicy, updated_by: userId, updated_at: now },
-      { key: 'academic_departments', value: normalizeList(academicDepts), updated_by: userId, updated_at: now },
-      { key: 'operational_departments', value: normalizeList(operationalDepts), updated_by: userId, updated_at: now },
     ]
 
     const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
@@ -657,40 +844,9 @@ export default function AdminSettingsPage() {
       {/* ══ Departments & Tags ═════════════════════════════════ */}
       {tab === 'taxonomy' && (
       <div className="space-y-6">
-      {/* ── Departments ────────────────────────────────────────── */}
-      <div className="card p-6 space-y-4">
-        <div>
-          <h2 className="font-semibold text-gray-900 text-lg">Departments</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Department choices for the Roster, grouped academic vs. administrative. One per line.
-          </p>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="label">Academic departments</label>
-            <textarea
-              rows={10}
-              className="input resize-y text-sm"
-              value={academicDepts}
-              onChange={(e) => { setAcademicDepts(e.target.value); touch() }}
-            />
-          </div>
-          <div>
-            <label className="label">Administrative &amp; operations departments</label>
-            <textarea
-              rows={10}
-              className="input resize-y text-sm"
-              value={operationalDepts}
-              onChange={(e) => { setOperationalDepts(e.target.value); touch() }}
-            />
-          </div>
-        </div>
-        <p className="text-xs text-gray-400">
-          Sets the dropdown choices only. Departments already in use still appear in the Roster.
-        </p>
-      </div>
-
-      <p className="text-xs text-gray-400">Tag edits below save automatically as you make them.</p>
+      <p className="text-xs text-gray-400">Changes on this tab save automatically as you make them.</p>
+      {/* ── Departments (row editor, rename-with-reassign) ─────── */}
+      <DepartmentsSection />
       {/* ── Tags & taxonomy (mutations apply immediately) ─────── */}
       <TaxonomySection />
       </div>
