@@ -12,6 +12,8 @@ interface NavItem {
   label: string
   icon: React.ReactNode
   minRole?: 'supervisor' | 'admin'
+  // Departments (case-insensitive) that also get this item, regardless of role.
+  extraDepartments?: string[]
 }
 
 interface NavSection {
@@ -122,7 +124,7 @@ const navSections: NavSection[] = [
       { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard /> },
       { href: '/dashboard/resources', label: 'Resource Library', icon: <IconLibrary /> },
       { href: '/dashboard/goals', label: 'Goals', icon: <IconGoals /> },
-      { href: '/dashboard/goals-directory', label: 'Goals Directory', icon: <IconDirectory />, minRole: 'admin' },
+      { href: '/dashboard/goals-directory', label: 'School Goals', icon: <IconDirectory />, minRole: 'admin', extraDepartments: ['Academic Administration'] },
       { href: '/dashboard/pd-log', label: 'PD Log', icon: <IconPD /> },
       { href: '/dashboard/calendar', label: 'PD Calendar', icon: <IconCalendar /> },
       { href: '/dashboard/workspaces', label: 'Workspaces', icon: <IconWorkspaces /> },
@@ -197,9 +199,11 @@ export default function Sidebar({ profile }: SidebarProps) {
           const minLevel = section.minRole ? roleLevel(section.minRole) : 1
           if (userRoleLevel < minLevel) return null
 
-          const visibleItems = section.items.filter(
-            (item) => userRoleLevel >= (item.minRole ? roleLevel(item.minRole) : 1)
-          )
+          const dept = (profile.department ?? '').toLowerCase()
+          const visibleItems = section.items.filter((item) => {
+            if (userRoleLevel >= (item.minRole ? roleLevel(item.minRole) : 1)) return true
+            return Boolean(item.extraDepartments?.some((d) => d.toLowerCase() === dept))
+          })
           if (visibleItems.length === 0) return null
 
           return (

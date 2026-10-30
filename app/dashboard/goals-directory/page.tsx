@@ -19,6 +19,7 @@ const statusColor: Record<string, string> = {
 export default function GoalsDirectoryPage() {
   const supabase = createClient()
   const [role, setRole] = useState<string | null>(null)
+  const [myDepartment, setMyDepartment] = useState<string | null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [deptGroups, setDeptGroups] = useState<DepartmentGroup[]>(() => departmentGroups(null))
   const [loading, setLoading] = useState(true)
@@ -33,8 +34,9 @@ export default function GoalsDirectoryPage() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: me } = await supabase.from('profiles').select('role, department').eq('id', user.id).single()
     setRole(me?.role ?? 'staff')
+    setMyDepartment(me?.department ?? null)
 
     const [{ data: goals }, { data: profs }, { data: settings }] = await Promise.all([
       supabase.from('goals').select('*').order('created_at', { ascending: false }),
@@ -69,10 +71,11 @@ export default function GoalsDirectoryPage() {
   const hasFilters = division || department || status || type || q.trim()
   const clear = () => { setDivision(''); setDepartment(''); setStatus(''); setType(''); setQ('') }
 
-  if (role && role !== 'admin') {
+  const allowed = role === 'admin' || (myDepartment ?? '').toLowerCase() === 'academic administration'
+  if (role && !allowed) {
     return (
       <div className="max-w-[1180px] mx-auto">
-        <div className="card p-8 text-center text-gray-600">The Goals Directory is available to administrators.</div>
+        <div className="card p-8 text-center text-gray-600">School Goals is available to administrators and the academic administration team.</div>
       </div>
     )
   }

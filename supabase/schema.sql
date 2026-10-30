@@ -72,6 +72,18 @@ as $$
   select role from public.profiles where id = auth.uid();
 $$;
 
+-- Current user's department (SECURITY DEFINER, like get_user_role) — used to
+-- open the School Goals directory to the academic administration team.
+create or replace function get_user_department()
+returns text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select department from public.profiles where id = auth.uid();
+$$;
+
 alter table public.profiles enable row level security;
 
 create policy "Users can view all profiles"
@@ -252,6 +264,7 @@ create policy "Users see own goals or collaborated goals"
         select staff_id from public.supervisor_assignments where supervisor_id = auth.uid()
       )
     )
+    or lower(coalesce(get_user_department(), '')) = 'academic administration'
   );
 
 -- ── goal_updates ──────────────────────────────────────────────

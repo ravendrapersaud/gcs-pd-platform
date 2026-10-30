@@ -60,7 +60,7 @@ export const DIVISION_OPTIONS: string[] = [
 // already present in the data so nothing is lost.
 export const DEFAULT_ACADEMIC_DEPARTMENTS: string[] = [...SUBJECTS]
 export const DEFAULT_OPERATIONAL_DEPARTMENTS: string[] = [
-  'Administration', 'Admissions', 'Advancement', 'Athletics',
+  'Academic Administration', 'Administration', 'Admissions', 'Advancement', 'Athletics',
   'Business Office', 'College Office', 'Communications', 'Facilities',
   'Health Services', 'Human Resources', 'Operations', 'Technology',
 ]
