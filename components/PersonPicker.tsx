@@ -61,7 +61,10 @@ export default function PersonPicker(props: PersonPickerProps) {
           `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) ||
           (p.title ?? '').toLowerCase().includes(q)
       )
-      .slice(0, 8)
+      // Cap the rendered list for performance; the dropdown scrolls. High
+      // enough that a normal roster is fully reachable without typing (an 8-row
+      // cap used to hide anyone late in the alphabet, e.g. Sarah before Tom).
+      .slice(0, 50)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profiles, query, exclude.join(','), selectedIds.join(',')])
 
