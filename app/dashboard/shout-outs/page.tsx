@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import type { Spotlight, Profile } from '@/lib/types'
+import { IconMegaphone } from '@/components/icons'
 
 const SPOTLIGHT_TAGS = [
   'Innovation', 'Student-Centered Learning', 'Collaboration', 'Leadership',
@@ -19,8 +20,8 @@ function SpotlightCard({ spotlight }: { spotlight: Spotlight }) {
     <div className="card p-6 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-xl shrink-0">
-            📣
+          <div className="w-10 h-10 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center shrink-0">
+            <IconMegaphone className="w-5 h-5" />
           </div>
           <div>
             <p className="font-semibold text-gray-900">
@@ -119,7 +120,7 @@ function SpotlightForm({
 
   return (
     <div className="card p-6">
-      <h2 className="font-bold text-gray-900 text-lg mb-5">📣 Send a Shout-out</h2>
+      <h2 className="font-semibold text-gray-900 text-lg mb-5 flex items-center gap-2"><IconMegaphone className="w-5 h-5 text-navy-700" /> Send a Shout-out</h2>
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Recipient search */}
@@ -206,7 +207,7 @@ function SpotlightForm({
           disabled={submitting || !selectedRecipient || !message.trim()}
           className="btn-primary w-full"
         >
-          {submitting ? 'Sending…' : '📣 Send Shout-out'}
+          {submitting ? 'Sending…' : <span className="inline-flex items-center gap-1.5"><IconMegaphone className="w-4 h-4" /> Send Shout-out</span>}
         </button>
       </form>
     </div>

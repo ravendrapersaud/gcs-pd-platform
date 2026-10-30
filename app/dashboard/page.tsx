@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiveAllotment, formatUSD } from '@/lib/funds'
 import { pdHoursTarget } from '@/lib/appSettings'
+import { IconMegaphone } from '@/components/icons'
 
 interface ReportRow {
   id: string
@@ -432,8 +433,8 @@ export default async function DashboardPage() {
                   const from = s.from_user as unknown as { first_name: string; last_name: string } | null
                   return (
                     <li key={s.id} className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
-                      <p className="text-xs text-yellow-800 font-medium mb-1">
-                        📣 from {from ? `${from.first_name} ${from.last_name}` : 'a colleague'}
+                      <p className="text-xs text-yellow-800 font-medium mb-1 flex items-center gap-1">
+                        <IconMegaphone className="w-3.5 h-3.5" /> from {from ? `${from.first_name} ${from.last_name}` : 'a colleague'}
                       </p>
                       <p className="text-sm text-gray-700 line-clamp-2">{s.message}</p>
                     </li>

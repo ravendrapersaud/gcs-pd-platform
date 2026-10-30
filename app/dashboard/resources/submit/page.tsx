@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Resource, ResourceType } from '@/lib/types'
 import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '@/lib/taxonomy'
+import { IconCheckCircle } from '@/components/icons'
 import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
 import { resourceModerationOn, type AppSettingRow } from '@/lib/appSettings'
 import clsx from 'clsx'
@@ -233,7 +234,7 @@ export default function SubmitResourcePage() {
   if (success) {
     return (
       <div className="max-w-xl mx-auto text-center py-20">
-        <p className="text-4xl mb-4">✅</p>
+        <IconCheckCircle className="w-14 h-14 mx-auto mb-4 text-green-600" />
         <h2 className="text-xl font-semibold text-gray-800">
           {editId ? 'Resource updated.' : moderation ? 'Submitted for approval' : 'Resource submitted!'}
         </h2>

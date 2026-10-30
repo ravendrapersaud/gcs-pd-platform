@@ -8,6 +8,7 @@ import type {
 } from '@/lib/types'
 import { openDrivePicker, driveIconFromUrl } from '@/lib/googleDrive'
 import { useTabParam } from '@/lib/useTabParam'
+import { IconUpload } from '@/components/icons'
 import clsx from 'clsx'
 
 type Tab = 'feed' | 'files' | 'members'
@@ -502,7 +503,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
                               {post.author?.first_name} {post.author?.last_name}
                             </span>
                             <span className="text-xs text-gray-400">{fmtDate(post.created_at)}</span>
-                            {post.is_pinned && <span className="badge badge-yellow">📌 Pinned</span>}
+                            {post.is_pinned && <span className="badge badge-yellow">Pinned</span>}
                           </div>
                           {post.title && (
                             <p className="font-bold text-gray-900 mt-1">{post.title}</p>
@@ -567,7 +568,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
                     disabled={uploading}
                     className="btn-primary text-sm"
                   >
-                    {uploading ? 'Uploading…' : '⬆ Upload file'}
+                    {uploading ? 'Uploading…' : <span className="inline-flex items-center gap-1.5"><IconUpload className="w-4 h-4" /> Upload file</span>}
                   </button>
                   <button onClick={handleDrivePicker} className="btn-secondary text-sm">
                     Add from Google Drive

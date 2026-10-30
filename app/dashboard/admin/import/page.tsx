@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import Papa from 'papaparse'
 import { createClient } from '@/lib/supabase/client'
+import { IconDownload, IconFileDrop } from '@/components/icons'
 
 const REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
 const OPTIONAL_FIELDS = ['title', 'division', 'department', 'employee_id', 'employee_type', 'role', 'primary_supervisor_email', 'secondary_supervisor_email']
@@ -122,10 +123,10 @@ export default function ImportCsvPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* Instructions */}
       <div className="card p-6 space-y-3">
-        <h2 className="font-bold text-gray-900">Import Staff via CSV</h2>
+        <h2 className="font-semibold text-gray-900">Import Staff via CSV</h2>
         <p className="text-sm text-gray-600">
           Upload a CSV file to bulk-create staff accounts. Each row will create a new user in Supabase Auth and a corresponding profile.
         </p>
@@ -153,8 +154,8 @@ export default function ImportCsvPage() {
           Drives the fund-year reset — <code>admin</code> uses the staff window (July 1).
         </p>
 
-        <button onClick={downloadTemplate} className="btn-secondary text-sm">
-          ⬇ Download Template CSV
+        <button onClick={downloadTemplate} className="btn-secondary text-sm inline-flex items-center gap-1.5">
+          <IconDownload className="w-4 h-4" /> Download Template CSV
         </button>
       </div>
 
@@ -168,7 +169,7 @@ export default function ImportCsvPage() {
           dragging ? 'border-navy-500 bg-navy-50' : 'border-gray-300 hover:border-navy-400'
         }`}
       >
-        <div className="text-4xl mb-3">📂</div>
+        <IconFileDrop className="w-10 h-10 mx-auto mb-3 text-gray-400" />
         {fileName ? (
           <p className="font-medium text-navy-800">{fileName}</p>
         ) : (

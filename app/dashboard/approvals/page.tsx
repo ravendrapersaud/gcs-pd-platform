@@ -295,7 +295,7 @@ export default function ApprovalsPage() {
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
                         <p className="font-semibold text-gray-900">{r.title}</p>
                         {r.is_overseas_travel && (
-                          <span className="badge badge-navy text-xs">✈ Overseas travel</span>
+                          <span className="badge badge-navy text-xs">Overseas travel</span>
                         )}
                         {overThreshold && (
                           <span className="badge badge-red text-xs">Admin approval</span>

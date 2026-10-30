@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Resource } from '@/lib/types'
 import { RESOURCE_TYPE_LABELS, RESOURCE_TYPES } from '@/lib/taxonomy'
 import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
+import { IconHeart } from '@/components/icons'
 import clsx from 'clsx'
 import Link from 'next/link'
 
@@ -55,9 +56,9 @@ function ResourceCard({
         <button
           onClick={() => onToggleFav(resource.id, isFav)}
           aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center text-base shadow-sm transition-transform hover:scale-110"
+          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm transition-transform hover:scale-110"
         >
-          {isFav ? '❤️' : '🤍'}
+          <IconHeart filled={isFav} className={`w-4 h-4 ${isFav ? 'text-red-500' : 'text-gray-400'}`} />
         </button>
       </div>
 

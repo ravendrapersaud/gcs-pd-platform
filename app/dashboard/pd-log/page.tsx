@@ -491,7 +491,7 @@ export default function PdLogPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900">{fr.title}</p>
                       {fr.is_overseas_travel && (
-                        <span className="badge badge-navy text-xs">✈ Overseas travel</span>
+                        <span className="badge badge-navy text-xs">Overseas travel</span>
                       )}
                     </div>
                     {fr.description && (
