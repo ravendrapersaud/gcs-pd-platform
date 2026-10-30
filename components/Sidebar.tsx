@@ -123,10 +123,9 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'Feedback',
+    label: 'Observations',
     items: [
       { href: '/dashboard/observations', label: 'Observations', icon: <IconObservations /> },
-      { href: '/dashboard/approvals', label: 'Approvals', icon: <IconApprovals />, minRole: 'supervisor' },
       { href: '/dashboard/frameworks', label: 'Frameworks', icon: <IconFramework /> },
     ],
   },
@@ -134,8 +133,9 @@ const navSections: NavSection[] = [
     label: 'Admin',
     minRole: 'supervisor',
     items: [
+      { href: '/dashboard/approvals', label: 'Approvals', icon: <IconApprovals />, minRole: 'supervisor' },
       { href: '/dashboard/admin/staff', label: 'Roster', icon: <IconStaff /> },
-      { href: '/dashboard/admin/import', label: 'Import CSV', icon: <IconImport /> },
+      { href: '/dashboard/admin/import', label: 'Import', icon: <IconImport /> },
       { href: '/dashboard/admin/reports', label: 'Reports', icon: <IconReports /> },
       { href: '/dashboard/admin/settings', label: 'Settings', icon: <IconSettings />, minRole: 'admin' },
     ],

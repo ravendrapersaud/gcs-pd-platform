@@ -21,7 +21,6 @@ interface TeamData {
   pendingCount: number
   pendingTotal: number
   teamHours: number
-  unsignedObs: number
 }
 
 async function fetchTeamData(
@@ -66,7 +65,6 @@ async function fetchTeamData(
     pendingCount: 0,
     pendingTotal: 0,
     teamHours: 0,
-    unsignedObs: 0,
   }
   if (ids.length === 0) return base
 
@@ -83,7 +81,7 @@ async function fetchTeamData(
   // faculty hours between the two start dates were counted wrongly.)
   const hoursStartDate = earliestStart.toISOString().slice(0, 10)
 
-  const [pendingRes, approvedRes, hoursRes, obsRes] = await Promise.all([
+  const [pendingRes, approvedRes, hoursRes] = await Promise.all([
     supabase
       .from('funding_requests')
       .select('id, amount')
@@ -100,11 +98,6 @@ async function fetchTeamData(
       .select('user_id, hours, activity_date')
       .in('user_id', ids)
       .gte('activity_date', hoursStartDate),
-    supabase
-      .from('observations')
-      .select('id')
-      .in('observed_id', ids)
-      .eq('signed_off', false),
   ])
 
   const typeById: Record<string, string | null> = {}
@@ -135,7 +128,6 @@ async function fetchTeamData(
     // Sum the per-person filtered figures, not the raw rows, so the
     // headline total matches the per-report numbers beneath it.
     teamHours: Object.values(hoursByUser).reduce((s, h) => s + h, 0),
-    unsignedObs: obsRes.data?.length ?? 0,
   }
 }
 
@@ -323,7 +315,7 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <MetricCard
               label={team.label === 'My Team' ? 'Team members' : 'Staff members'}
               value={team.reports.length}
@@ -340,12 +332,6 @@ export default async function DashboardPage() {
               value={team.teamHours.toFixed(1)}
               sub={`Target: ${team.hoursTarget} hrs each`}
               color="green"
-            />
-            <MetricCard
-              label="Unsigned observations"
-              value={team.unsignedObs}
-              sub="awaiting sign-off"
-              color="blue"
             />
           </div>
 

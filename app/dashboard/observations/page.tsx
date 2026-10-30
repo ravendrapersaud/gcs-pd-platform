@@ -10,26 +10,23 @@ import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
 const OBS_TYPES: ObsType[] = ['formal', 'informal', 'walkthrough', 'self']
-const OBS_TABS = ['mine', 'pending', 'drafts'] as const
+const OBS_TABS = ['mine', 'given', 'drafts'] as const
 
 const ratingLabels = ['', 'Developing', 'Basic', 'Proficient', 'Distinguished']
 const ratingColors = ['', 'bg-red-100 text-red-700', 'bg-yellow-100 text-yellow-700', 'bg-blue-100 text-blue-700', 'bg-green-100 text-green-700']
 
 function ObservationCard({
   obs,
-  onSignOff,
   onDelete,
   currentUserId,
   isAdmin,
 }: {
   obs: Observation
-  onSignOff: (id: string) => void
   onDelete: (id: string) => void
   currentUserId: string
   isAdmin: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
-  const canSignOff = !obs.signed_off && obs.observed_id === currentUserId
   const canDelete = obs.observer_id === currentUserId || isAdmin
   const twg = obs.twg_data
 
@@ -105,9 +102,6 @@ function ObservationCard({
               {twg
                 ? <span className="badge badge-navy">Teaching with Grace · {MODES[twg.mode].label}</span>
                 : <span className="badge badge-navy capitalize">{obs.obs_type}</span>}
-              {obs.signed_off && (
-                <span className="badge badge-green">Signed Off</span>
-              )}
             </div>
             <p className="font-semibold text-gray-900">
               {obs.framework
@@ -184,24 +178,14 @@ function ObservationCard({
             </div>
           )}
 
-          {(canSignOff || canDelete) && (
+          {canDelete && (
             <div className="flex items-center gap-3 pt-1">
-              {canSignOff && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onSignOff(obs.id) }}
-                  className="btn-primary text-sm"
-                >
-                  Sign Off Observation
-                </button>
-              )}
-              {canDelete && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(obs.id) }}
-                  className="text-sm text-red-600 hover:text-red-800 font-medium ml-auto"
-                >
-                  Delete
-                </button>
-              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(obs.id) }}
+                className="text-sm text-red-600 hover:text-red-800 font-medium ml-auto"
+              >
+                Delete
+              </button>
             </div>
           )}
         </div>
@@ -221,9 +205,9 @@ interface NewObsForm {
 
 export default function ObservationsPage() {
   const supabase = createClient()
-  const [tab, setTab] = useTabParam<'mine' | 'pending' | 'drafts'>(OBS_TABS, 'mine')
+  const [tab, setTab] = useTabParam<'mine' | 'given' | 'drafts'>(OBS_TABS, 'mine')
   const [observations, setObservations] = useState<Observation[]>([])
-  const [pending, setPending] = useState<Observation[]>([])
+  const [given, setGiven] = useState<Observation[]>([])
   const [drafts, setDrafts] = useState<Observation[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [frameworks, setFrameworks] = useState<Framework[]>([])
@@ -261,20 +245,20 @@ export default function ObservationsPage() {
       ratings:observation_ratings(*, domain:framework_domains(id, title))
     `
 
-    const [{ data: mine }, { data: pendingObs }, { data: draftObs }, { data: profs }, { data: fws }] = await Promise.all([
+    const [{ data: mine }, { data: givenObs }, { data: draftObs }, { data: profs }, { data: fws }] = await Promise.all([
       supabase
         .from('observations')
         .select(obsSelect)
         .eq('observed_id', user.id)
         .eq('status', 'published')
         .order('observed_at', { ascending: false }),
+      // "Given" — formal observations this user recorded and published.
       supabase
         .from('observations')
         .select(obsSelect)
-        .eq('signed_off', false)
+        .eq('observer_id', user.id)
         .eq('status', 'published')
         .eq('is_peer', false)
-        .or(`observer_id.eq.${user.id},observed_id.eq.${user.id}`)
         .order('observed_at', { ascending: false }),
       supabase
         .from('observations')
@@ -287,7 +271,7 @@ export default function ObservationsPage() {
     ])
 
     setObservations((mine ?? []) as unknown as Observation[])
-    setPending((pendingObs ?? []) as unknown as Observation[])
+    setGiven((givenObs ?? []) as unknown as Observation[])
     setDrafts((draftObs ?? []) as unknown as Observation[])
     setProfiles((profs ?? []) as Profile[])
     setFrameworks((fws ?? []) as unknown as Framework[])
@@ -295,14 +279,6 @@ export default function ObservationsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
-
-  const handleSignOff = async (obsId: string) => {
-    await supabase
-      .from('observations')
-      .update({ signed_off: true, signed_off_at: new Date().toISOString() })
-      .eq('id', obsId)
-    load()
-  }
 
   const handleDelete = async (obsId: string) => {
     if (!window.confirm('Delete this observation? This cannot be undone.')) return
@@ -391,7 +367,7 @@ export default function ObservationsPage() {
     }
   }
 
-  const currentObs = tab === 'mine' ? observations : pending
+  const currentObs = tab === 'mine' ? observations : given
   const isSupervisorOrAdmin = userRole === 'supervisor' || userRole === 'admin'
 
   const hasRating = Object.values(form.ratings).some((r) => r.rating >= 1)
@@ -413,19 +389,21 @@ export default function ObservationsPage() {
           >
             My Observations
           </button>
-          <button
-            onClick={() => setTab('pending')}
-            className={clsx('tab', tab === 'pending' ? 'tab-active' : 'tab-inactive')}
-          >
-            Pending Sign-Off
-          </button>
           {isSupervisorOrAdmin && (
-            <button
-              onClick={() => setTab('drafts')}
-              className={clsx('tab', tab === 'drafts' ? 'tab-active' : 'tab-inactive')}
-            >
-              Drafts{drafts.length > 0 ? ` (${drafts.length})` : ''}
-            </button>
+            <>
+              <button
+                onClick={() => setTab('given')}
+                className={clsx('tab', tab === 'given' ? 'tab-active' : 'tab-inactive')}
+              >
+                Given
+              </button>
+              <button
+                onClick={() => setTab('drafts')}
+                className={clsx('tab', tab === 'drafts' ? 'tab-active' : 'tab-inactive')}
+              >
+                Drafts{drafts.length > 0 ? ` (${drafts.length})` : ''}
+              </button>
+            </>
           )}
         </div>
         <div className="flex gap-2">
@@ -605,7 +583,6 @@ export default function ObservationsPage() {
             <ObservationCard
               key={obs.id}
               obs={obs}
-              onSignOff={handleSignOff}
               onDelete={handleDelete}
               currentUserId={userId ?? ''}
               isAdmin={userRole === 'admin'}
