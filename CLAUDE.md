@@ -14,8 +14,13 @@ feedback. See NEXT_STEPS.md for current status and backlog.
   Create Deployment).
 - Supabase project ref: `xhhxecoubvwqyqvctpdf`. Env in `.env.local`
   (never commit): Supabase URL/anon/service-role keys, Google API key +
-  OAuth client id, `NEXT_PUBLIC_APP_URL`, `RESEND_API_KEY` (empty until
-  Resend is set up — email sending degrades gracefully).
+  OAuth client id, `NEXT_PUBLIC_APP_URL`, `RESEND_API_KEY`. Email is now
+  LIVE: Resend is configured with a working key and verified sender
+  (`notify.gcschool.org`), so publishing an observation / sending a
+  shout-out actually delivers mail — test against seeded personas with
+  care (their @gcschool.org addresses may be real mailboxes). The code
+  still degrades gracefully to `skipped` if the key is ever absent. Every
+  send is recorded in the `email_log` table (admin-readable audit trail).
 - Production builds are STRICT: run `npx tsc --noEmit` before pushing.
   Cast Supabase joined rows via `as unknown as T`. No module-level
   constructors that throw on missing env (see lib/email.ts getResend).
