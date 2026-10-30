@@ -58,6 +58,7 @@ create table if not exists public.profiles (
   department    text,
   employee_id   text unique,
   avatar_url    text,
+  favorites_public boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
@@ -173,6 +174,17 @@ alter table public.resource_favorites enable row level security;
 create policy "Users manage own favorites"
   on public.resource_favorites for all
   using (auth.uid() = user_id);
+
+-- Colleagues can view the favorites of users who opted in (favorites_public).
+create policy "View public favorites"
+  on public.resource_favorites for select
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = resource_favorites.user_id
+        and coalesce(p.favorites_public, false) = true
+    )
+  );
 
 -- ── goals ─────────────────────────────────────────────────────
 create table if not exists public.goals (

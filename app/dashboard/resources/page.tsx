@@ -2,12 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Resource } from '@/lib/types'
+import type { Resource, Profile } from '@/lib/types'
 import { RESOURCE_TYPE_LABELS, RESOURCE_TYPES } from '@/lib/taxonomy'
 import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
 import { IconHeart } from '@/components/icons'
+import PersonPicker from '@/components/PersonPicker'
+import { useTabParam, useQueryParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
 import Link from 'next/link'
+
+const VIEWS = ['all', 'mine', 'colleagues'] as const
+type ResourceView = (typeof VIEWS)[number]
 
 const themePillStyle = { backgroundColor: '#FBEAF0', color: '#993556' }
 
@@ -211,13 +216,23 @@ export default function ResourcesPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
 
+  // Favorites views + sharing
+  const [view, setView] = useTabParam(VIEWS, 'all', 'view')
+  const [favoritesPublic, setFavoritesPublic] = useState(false)
+  const [savingPublic, setSavingPublic] = useState(false)
+  const [colleagues, setColleagues] = useState<Profile[]>([])
+  const [whoId, setWhoId] = useQueryParam('who')
+  const [colleagueFavIds, setColleagueFavIds] = useState<Set<string>>(new Set())
+  const [colleagueLoading, setColleagueLoading] = useState(false)
+  const selectedColleague = colleagues.find((c) => c.id === whoId) ?? null
+
   const loadData = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: res }, { data: favs }, { data: tax }, { data: profile }] = await Promise.all([
+    const [{ data: res }, { data: favs }, { data: tax }, { data: profile }, { data: colls }] = await Promise.all([
       supabase
         .from('resources')
         .select('*')
@@ -233,15 +248,25 @@ export default function ResourcesPage() {
         .order('sort_order', { ascending: true }),
       supabase
         .from('profiles')
-        .select('role')
+        .select('role, favorites_public')
         .eq('id', user.id)
         .maybeSingle(),
+      // Colleagues who opted in to sharing their favorites
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('favorites_public', true)
+        .neq('id', user.id)
+        .order('first_name', { ascending: true }),
     ])
 
     setResources((res ?? []) as Resource[])
     setFavIds(new Set((favs ?? []).map((f) => f.resource_id)))
     setTaxTerms((tax ?? []) as TaxonomyTerm[])
-    setUserRole((profile as unknown as { role: string } | null)?.role ?? null)
+    const prof = profile as unknown as { role: string; favorites_public: boolean } | null
+    setUserRole(prof?.role ?? null)
+    setFavoritesPublic(Boolean(prof?.favorites_public))
+    setColleagues((colls ?? []) as Profile[])
     setLoading(false)
   }, [])
 
@@ -273,6 +298,41 @@ export default function ResourcesPage() {
         return next
       })
     }
+  }
+
+  // Load the selected colleague's favorites (RLS only returns rows if they
+  // opted in). Keeps the URL (?who=) as the source of truth so it's linkable.
+  useEffect(() => {
+    if (!whoId) { setColleagueFavIds(new Set()); return }
+    let cancelled = false
+    const run = async () => {
+      setColleagueLoading(true)
+      const { data } = await supabase
+        .from('resource_favorites')
+        .select('resource_id')
+        .eq('user_id', whoId)
+      if (cancelled) return
+      setColleagueFavIds(new Set((data ?? []).map((f) => f.resource_id)))
+      setColleagueLoading(false)
+    }
+    run()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [whoId])
+
+  const toggleFavoritesPublic = async () => {
+    if (!userId) return
+    const next = !favoritesPublic
+    setSavingPublic(true); setPageError(null)
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ favorites_public: next })
+      .eq('id', userId)
+      .select('id')
+    setSavingPublic(false)
+    if (error) { setPageError(error.message); return }
+    if (!data || data.length === 0) { setPageError("Couldn't update your sharing setting — please try again."); return }
+    setFavoritesPublic(next)
   }
 
   const handleDelete = async (id: string) => {
@@ -330,11 +390,76 @@ export default function ResourcesPage() {
     return matchSearch && matchType && matchAudience && matchSubject && matchTheme
   })
 
+  // Narrow the (already search/filter-applied) list to the active view.
+  const visible =
+    view === 'mine' ? filtered.filter((r) => favIds.has(r.id))
+    : view === 'colleagues' ? (whoId ? filtered.filter((r) => colleagueFavIds.has(r.id)) : [])
+    : filtered
+
+  const colleagueFirst = selectedColleague?.first_name ?? 'this colleague'
+
   return (
     <div className="space-y-6">
       {pageError && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {pageError}
+        </div>
+      )}
+
+      {/* View switcher */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {([['all', 'All resources'], ['mine', 'My favorites'], ['colleagues', 'Colleagues’ favorites']] as [ResourceView, string][]).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={clsx('tab', view === k ? 'tab-active' : 'tab-inactive')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* My favorites — sharing control */}
+      {view === 'mine' && (
+        <div className="card p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">Share my favorites with colleagues</p>
+            <p className="text-gray-500 text-xs mt-0.5 max-w-prose">
+              When on, colleagues can browse the resources you’ve favorited here. They can’t see anything else about your account.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={favoritesPublic}
+            onClick={toggleFavoritesPublic}
+            disabled={savingPublic}
+            className={clsx(
+              'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+              favoritesPublic ? 'bg-navy-900' : 'bg-gray-300'
+            )}
+          >
+            <span className={clsx('inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform', favoritesPublic ? 'translate-x-5' : 'translate-x-0.5')} />
+          </button>
+        </div>
+      )}
+
+      {/* Colleagues' favorites — picker */}
+      {view === 'colleagues' && (
+        <div className="card p-4 space-y-2">
+          <p className="font-semibold text-gray-900 text-sm">Browse a colleague’s favorites</p>
+          {colleagues.length === 0 ? (
+            <p className="text-gray-500 text-sm">
+              No colleagues have shared their favorites yet. When someone turns on sharing under <span className="font-medium">My favorites</span>, they’ll appear here.
+            </p>
+          ) : (
+            <PersonPicker
+              profiles={colleagues}
+              value={selectedColleague}
+              onChange={(p) => setWhoId(p?.id ?? null)}
+              placeholder="Choose a colleague…"
+            />
+          )}
         </div>
       )}
 
@@ -380,20 +505,39 @@ export default function ResourcesPage() {
       )}
 
       {/* Grid */}
-      {loading ? (
+      {loading || (view === 'colleagues' && whoId && colleagueLoading) ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="card p-0 h-80 animate-pulse bg-gray-100" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : view === 'colleagues' && !whoId ? (
         <div className="text-center py-16 text-gray-400">
-          <p className="text-lg">No resources found.</p>
-          <p className="text-sm mt-1">Try adjusting your search or filters.</p>
+          <p className="text-lg">Choose a colleague to see their favorites.</p>
+          {colleagues.length === 0 && <p className="text-sm mt-1">No one has shared their favorites yet.</p>}
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          {view === 'mine' ? (
+            <>
+              <p className="text-lg">No favorites yet.</p>
+              <p className="text-sm mt-1">Tap the heart on any resource to save it here.</p>
+            </>
+          ) : view === 'colleagues' ? (
+            <>
+              <p className="text-lg">{colleagueFirst} hasn’t favorited anything matching your filters.</p>
+              <p className="text-sm mt-1">Try clearing the search or filters above.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-lg">No resources found.</p>
+              <p className="text-sm mt-1">Try adjusting your search or filters.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((r) => (
+          {visible.map((r) => (
             <ResourceCard
               key={r.id}
               resource={r}

@@ -49,6 +49,7 @@ export interface Profile {
   needs_setup: boolean
   can_create_workspaces: boolean
   avatar_url: string | null
+  favorites_public?: boolean // opt-in: colleagues may view my Resource Library favorites
   created_at: string
 }
 
