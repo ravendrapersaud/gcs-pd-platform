@@ -493,7 +493,12 @@ export default function GoalsPage() {
       }
       const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id) })
       setGoals(mine.map(attach))
-      setCollabGoals(collaborative.map(attach))
+      // Collaborative = any goal you share with someone: goals others added you
+      // to, PLUS goals you own that have co-owners (so a goal you shared out,
+      // e.g. with a colleague, shows here too — not only in My Goals).
+      const shared = new Set(collaborative.map((g) => g.id))
+      const ownedShared = mine.filter((g) => (collabMap[g.id]?.length ?? 0) > 0 && !shared.has(g.id))
+      setCollabGoals([...collaborative, ...ownedShared].map(attach))
       setArchivedGoals(arch.map(attach))
       setTeamGoals(team.map(attach))
       setAllGoals(all.map(attach))
