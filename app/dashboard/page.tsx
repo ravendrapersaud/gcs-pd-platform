@@ -166,11 +166,24 @@ function MetricCard({
   )
 }
 
+// Line icons matching the sidebar's stroke style (navy, 1.7 weight).
+const Ico = ({ children }: { children: React.ReactNode }) => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+)
+const ICONS: Record<string, React.ReactNode> = {
+  log: <Ico><path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></Ico>,
+  chat: <Ico><path d="M7.5 8.25h9m-9 3H12m8.25.75a8.25 8.25 0 01-11.68 7.5L3 21l1.5-5.57A8.25 8.25 0 1120.25 12z" /></Ico>,
+  flag: <Ico><path d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" /></Ico>,
+  money: <Ico><path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></Ico>,
+  eye: <Ico><path d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></Ico>,
+  team: <Ico><path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></Ico>,
+}
+
 // A dashboard action tile that links straight to a task.
 function ActionTile({ href, icon, label, desc }: { href: string; icon: string; label: string; desc: string }) {
   return (
     <Link href={href} className="card p-4 flex items-start gap-3 hover:border-navy-300 transition-colors">
-      <span className="w-10 h-10 rounded-xl bg-navy-50 grid place-items-center text-xl shrink-0" aria-hidden>{icon}</span>
+      <span className="w-10 h-10 rounded-xl bg-navy-50 text-navy-700 grid place-items-center shrink-0" aria-hidden>{ICONS[icon]}</span>
       <div className="min-w-0">
         <p className="font-semibold text-gray-900 text-sm">{label}</p>
         <p className="text-xs text-gray-500 line-clamp-2">{desc}</p>
@@ -185,12 +198,12 @@ function ActionTile({ href, icon, label, desc }: { href: string; icon: string; l
 // ?new / ?tab deep-links open a form or sub-view the sidebar can't reach directly.
 interface DashAction { href: string; icon: string; label: string; desc: string; roles: string[] }
 const DASH_ACTIONS: DashAction[] = [
-  { href: '/dashboard/pd-log?new=1', icon: '📝', label: 'Log PD', desc: 'Record a workshop, course, or activity', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/observations/peer', icon: '💬', label: 'Give peer feedback', desc: 'A quick, collegial note to a colleague', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/goals?new=1', icon: '🎯', label: 'Set a goal', desc: 'Start a new growth or inquiry goal', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/pd-log?tab=funding&new=1', icon: '💵', label: 'Request funding', desc: 'Submit a PD funding request', roles: ['staff', 'supervisor', 'admin'] },
-  { href: '/dashboard/observations/twg', icon: '👁️', label: 'Record an observation', desc: 'Teaching with Grace capture', roles: ['supervisor', 'admin'] },
-  { href: '/dashboard/goals?tab=team', icon: '👥', label: 'Team goals', desc: "Your team's growth goals", roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/pd-log?new=1', icon: 'log', label: 'Log PD', desc: 'Record a workshop, course, or activity', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/observations/peer', icon: 'chat', label: 'Give peer feedback', desc: 'A quick, collegial note to a colleague', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/goals?new=1', icon: 'flag', label: 'Set a goal', desc: 'Start a new growth or inquiry goal', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/pd-log?tab=funding&new=1', icon: 'money', label: 'Request funding', desc: 'Submit a PD funding request', roles: ['staff', 'supervisor', 'admin'] },
+  { href: '/dashboard/observations/twg', icon: 'eye', label: 'Record an observation', desc: 'Teaching with Grace capture', roles: ['supervisor', 'admin'] },
+  { href: '/dashboard/goals?tab=team', icon: 'team', label: 'Team goals', desc: "Your team's growth goals", roles: ['supervisor', 'admin'] },
 ]
 
 function ProgressBar({ pct }: { pct: number }) {
