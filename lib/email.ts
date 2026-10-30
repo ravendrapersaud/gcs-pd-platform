@@ -52,7 +52,7 @@ function buildSpotlightHtml(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>You received a Spotlight!</title>
+  <title>You received a Shout-out!</title>
 </head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
@@ -67,7 +67,7 @@ function buildSpotlightHtml(
                 <span style="font-size:22px;font-weight:900;color:#003882;line-height:1;">GCS</span>
               </div>
               <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
-              <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">⭐ You've been Spotlighted!</p>
+              <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">📣 You got a Shout-out!</p>
             </td>
           </tr>
 
@@ -76,7 +76,7 @@ function buildSpotlightHtml(
             <td style="padding:40px;">
               <p style="color:#374151;font-size:16px;margin:0 0 8px;">Hi ${recipientName},</p>
               <p style="color:#374151;font-size:15px;margin:0 0 24px;">
-                <strong>${senderName}</strong> sent you a spotlight on ${date}.
+                <strong>${senderName}</strong> sent you a shout-out on ${date}.
               </p>
 
               <!-- Quote block -->
@@ -95,7 +95,7 @@ function buildSpotlightHtml(
 
               <!-- CTA -->
               <div style="text-align:center;margin-top:32px;">
-                <a href="${APP_URL}/dashboard/spotlights"
+                <a href="${APP_URL}/dashboard/shout-outs"
                   style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">
                   View on GCS PD Platform
                 </a>
@@ -134,7 +134,7 @@ export async function sendSpotlightEmail(
   const to = [recipient.email]
   // CC supervisors
   const cc = supervisors.map((s) => s.email).filter(Boolean)
-  const subject = `⭐ Spotlight from ${sender.first_name} ${sender.last_name}`
+  const subject = `📣 Shout-out from ${sender.first_name} ${sender.last_name}`
 
   const resend = getResend()
   if (!resend) {

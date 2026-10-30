@@ -146,7 +146,7 @@ export const SUBJECTS: {
       { key: 'balance_remaining', label: 'Balance Remaining', group: 'Funding', type: 'currency' },
       { key: 'observation_count', label: '# Observations', group: 'Engagement', type: 'number' },
       { key: 'goal_count', label: '# Goals', group: 'Engagement', type: 'number' },
-      { key: 'spotlights_received', label: 'Spotlights Received', group: 'Engagement', type: 'number' },
+      { key: 'spotlights_received', label: 'Shout-outs Received', group: 'Engagement', type: 'number' },
       { key: 'needs_setup', label: 'Needs Setup', group: 'Status', type: 'bool' },
     ],
   },
