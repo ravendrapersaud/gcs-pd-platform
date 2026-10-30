@@ -8,20 +8,31 @@ import type {
 } from '@/lib/types'
 import { openDrivePicker, driveIconFromUrl } from '@/lib/googleDrive'
 import { useTabParam } from '@/lib/useTabParam'
-import { IconUpload } from '@/components/icons'
+import { IconUpload, IconDoc, IconSheet, IconSlide, IconForm } from '@/components/icons'
 import clsx from 'clsx'
 
 type Tab = 'feed' | 'files' | 'members'
 const WORKSPACE_TABS = ['feed', 'files', 'members'] as const
 
-const FILE_ICONS: Record<string, string> = {
-  doc: '📄', sheet: '📊', slide: '📽', form: '📋', pdf: '📕', file: '📁', upload: '⬆',
+const FILE_TYPES: Record<string, { Icon: (p: { className?: string }) => React.ReactElement; color: string }> = {
+  doc: { Icon: IconDoc, color: 'text-navy-700' },
+  sheet: { Icon: IconSheet, color: 'text-green-600' },
+  slide: { Icon: IconSlide, color: 'text-amber-600' },
+  form: { Icon: IconForm, color: 'text-violet-600' },
+  pdf: { Icon: IconDoc, color: 'text-red-600' },
+  file: { Icon: IconDoc, color: 'text-gray-500' },
 }
 
-function fileIcon(f: WorkspaceFile): string {
-  if (f.drive_url) return FILE_ICONS[f.drive_icon ?? 'file'] ?? '📁'
-  if (f.name.toLowerCase().endsWith('.pdf')) return FILE_ICONS.pdf
-  return FILE_ICONS.upload
+function fileTypeKey(f: WorkspaceFile): string {
+  if (f.drive_url) return f.drive_icon ?? 'file'
+  if (f.name.toLowerCase().endsWith('.pdf')) return 'pdf'
+  return 'file'
+}
+
+function FileIcon({ f, className }: { f: WorkspaceFile; className?: string }) {
+  const t = FILE_TYPES[fileTypeKey(f)] ?? FILE_TYPES.file
+  const Icon = t.Icon
+  return <Icon className={`${className ?? ''} ${t.color}`.trim()} />
 }
 
 function fmtDate(d: string) {
@@ -539,7 +550,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
                               rel="noreferrer"
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 hover:border-navy-300"
                             >
-                              <span>{fileIcon(f)}</span>
+                              <FileIcon f={f} className="w-4 h-4 shrink-0" />
                               <span className="truncate max-w-[180px]">{f.name}</span>
                             </a>
                           ))}
@@ -623,7 +634,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
                           rel="noreferrer"
                           className="block space-y-2"
                         >
-                          <div className="text-2xl">{fileIcon(f)}</div>
+                          <FileIcon f={f} className="w-7 h-7" />
                           <p className="font-medium text-sm text-gray-900 break-words">{f.name}</p>
                           <p className="text-xs text-gray-400">
                             {f.uploader
