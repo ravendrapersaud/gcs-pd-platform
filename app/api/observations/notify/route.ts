@@ -4,6 +4,29 @@ import { sendObservationEmail } from '@/lib/email'
 import { MODES } from '@/lib/twg'
 import type { Profile } from '@/lib/types'
 
+const ALLOWED_DOMAIN = '@gcschool.org'
+const MAX_EXTRA_RECIPIENTS = 25
+
+// Normalize a cc/bcc list from the request: strings only, valid @gcschool.org
+// addresses, de-duped against each other and anything already receiving the
+// message. Keeps mail inside the school and prevents accidental leaks.
+function cleanRecipients(raw: unknown, alreadyUsed: Set<string>): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set(alreadyUsed)
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const email = item.trim().toLowerCase()
+    if (!email.endsWith(ALLOWED_DOMAIN)) continue
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue
+    if (seen.has(email)) continue
+    seen.add(email)
+    out.push(email)
+    if (out.length >= MAX_EXTRA_RECIPIENTS) break
+  }
+  return out
+}
+
 // Emails the observed teacher that a published observation is ready.
 // Called after the observer publishes. Email is best-effort — a send
 // failure never un-publishes the observation.
@@ -43,6 +66,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'The teacher has no email address on file.' }, { status: 422 })
     }
 
+    // Extra recipients. Peer feedback is strictly between the two teachers, so
+    // cc/bcc are ignored for peer observations regardless of what was sent.
+    let cc: string[] = []
+    let bcc: string[] = []
+    if (!obs.is_peer) {
+      const used = new Set<string>([teacher.email.toLowerCase()])
+      cc = cleanRecipients(body?.cc, used)
+      cc.forEach((e) => used.add(e))
+      bcc = cleanRecipients(body?.bcc, used)
+    }
+
     const twg = obs.twg_data as { mode?: string } | null
     const modeKey = twg?.mode as keyof typeof MODES | undefined
     const visit = obs.is_peer
@@ -51,13 +85,14 @@ export async function POST(request: NextRequest) {
     const dateStr = new Date(obs.observed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     const overall = (obs.notes as string | null) || null
 
-    const result = await sendObservationEmail(teacher, observer, visit, dateStr, overall, Boolean(obs.is_peer))
+    const result = await sendObservationEmail(teacher, observer, visit, dateStr, overall, Boolean(obs.is_peer), cc, bcc)
 
     // Audit trail — best-effort, must not fail the request.
     const { error: logErr } = await supabase.from('email_log').insert({
       email_type: 'observation',
       to_email: result.to[0] ?? teacher.email,
       cc_emails: result.cc,
+      bcc_emails: result.bcc,
       subject: result.subject,
       status: result.status,
       provider_id: result.providerId ?? null,
@@ -66,7 +101,7 @@ export async function POST(request: NextRequest) {
     })
     if (logErr) console.error('[POST /api/observations/notify] email_log insert failed (non-fatal):', logErr)
 
-    return NextResponse.json({ ok: result.status === 'sent', email: result.status })
+    return NextResponse.json({ ok: result.status === 'sent', email: result.status, cc: result.cc.length, bcc: result.bcc.length })
   } catch (err: unknown) {
     console.error('[POST /api/observations/notify] unexpected error:', err)
     return NextResponse.json(

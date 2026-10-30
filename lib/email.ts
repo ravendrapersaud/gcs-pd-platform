@@ -23,6 +23,7 @@ export type EmailResult = {
   status: 'sent' | 'skipped' | 'failed'
   to: string[]
   cc: string[]
+  bcc: string[]
   subject: string
   providerId?: string
   error?: string
@@ -134,12 +135,13 @@ export async function sendSpotlightEmail(
   const to = [recipient.email]
   // CC supervisors
   const cc = supervisors.map((s) => s.email).filter(Boolean)
+  const bcc: string[] = []
   const subject = `📣 Shout-out from ${sender.first_name} ${sender.last_name}`
 
   const resend = getResend()
   if (!resend) {
     console.warn('[sendSpotlightEmail] RESEND_API_KEY not set — skipping email send.')
-    return { status: 'skipped', to, cc, subject }
+    return { status: 'skipped', to, cc, bcc, subject }
   }
 
   const html = buildSpotlightHtml(spotlight, recipient, sender)
@@ -155,14 +157,14 @@ export async function sendSpotlightEmail(
 
     if (error) {
       console.error('[sendSpotlightEmail] Resend error:', error)
-      return { status: 'failed', to, cc, subject, error: error.message }
+      return { status: 'failed', to, cc, bcc, subject, error: error.message }
     }
 
-    return { status: 'sent', to, cc, subject, providerId: data?.id }
+    return { status: 'sent', to, cc, bcc, subject, providerId: data?.id }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown send error'
     console.error('[sendSpotlightEmail] unexpected error:', err)
-    return { status: 'failed', to, cc, subject, error: message }
+    return { status: 'failed', to, cc, bcc, subject, error: message }
   }
 }
 
@@ -213,10 +215,11 @@ export async function sendObservationEmail(
   visit: string,
   dateStr: string,
   overall: string | null,
-  peer = false
+  peer = false,
+  cc: string[] = [],
+  bcc: string[] = []
 ): Promise<EmailResult> {
   const to = [teacher.email].filter(Boolean) as string[]
-  const cc: string[] = []
   const subject = peer
     ? `${observer.first_name} ${observer.last_name} shared some peer feedback with you`
     : `Your Teaching with Grace observation from ${observer.first_name} ${observer.last_name}`
@@ -224,18 +227,26 @@ export async function sendObservationEmail(
   const resend = getResend()
   if (!resend) {
     console.warn('[sendObservationEmail] RESEND_API_KEY not set — skipping email send.')
-    return { status: 'skipped', to, cc, subject }
+    return { status: 'skipped', to, cc, bcc, subject }
   }
   try {
-    const { data, error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html: buildObservationHtml(teacher, observer, visit, dateStr, overall, peer) })
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      // Resend omits cc/bcc when undefined; only set them when non-empty.
+      ...(cc.length ? { cc } : {}),
+      ...(bcc.length ? { bcc } : {}),
+      subject,
+      html: buildObservationHtml(teacher, observer, visit, dateStr, overall, peer),
+    })
     if (error) {
       console.error('[sendObservationEmail] Resend error:', error)
-      return { status: 'failed', to, cc, subject, error: error.message }
+      return { status: 'failed', to, cc, bcc, subject, error: error.message }
     }
-    return { status: 'sent', to, cc, subject, providerId: data?.id }
+    return { status: 'sent', to, cc, bcc, subject, providerId: data?.id }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown send error'
     console.error('[sendObservationEmail] unexpected error:', err)
-    return { status: 'failed', to, cc, subject, error: message }
+    return { status: 'failed', to, cc, bcc, subject, error: message }
   }
 }

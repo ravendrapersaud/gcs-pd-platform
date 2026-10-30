@@ -9,6 +9,7 @@ create table if not exists public.email_log (
   email_type   text not null,                       -- e.g. 'spotlight'
   to_email     text not null,
   cc_emails    text[] not null default '{}',
+  bcc_emails   text[] not null default '{}',
   subject      text,
   status       text not null,                       -- 'sent' | 'skipped' | 'failed'
   provider_id  text,                                -- Resend message id, when sent

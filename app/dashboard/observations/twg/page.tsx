@@ -56,6 +56,9 @@ export default function ObservationCapturePage() {
   const [status, setStatus] = useState<'draft' | 'published'>('draft')
   const [notice, setNotice] = useState<string | null>(null)
   const [person, setPerson] = useState<Profile | null>(null)
+  const [emailCc, setEmailCc] = useState<Profile[]>([])
+  const [emailBcc, setEmailBcc] = useState<Profile[]>([])
+  const [showBcc, setShowBcc] = useState(false)
   const [observedAt, setObservedAt] = useState(() => new Date().toISOString().slice(0, 16))
   const [twg, setTwg] = useState<TwgData>(() => emptyTwgData('full'))
 
@@ -331,18 +334,22 @@ export default function ObservationCapturePage() {
   const publish = useCallback(async () => {
     const id = await saveObservation('published')
     if (!id) return
+    const cc = emailCc.map((p) => p.email).filter(Boolean)
+    const bcc = showBcc ? emailBcc.map((p) => p.email).filter(Boolean) : []
     try {
       const res = await fetch('/api/observations/notify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, cc, bcc }),
       })
       const body = await res.json().catch(() => ({}))
-      if (body.email === 'sent') setNotice('Published — the teacher has been emailed.')
-      else if (body.email === 'skipped') setNotice('Published. Email sending is off (no RESEND_API_KEY), so the teacher was not emailed.')
+      const copies = (body.cc || 0) + (body.bcc || 0)
+      const copyNote = copies > 0 ? ` (${copies} copied)` : ''
+      if (body.email === 'sent') setNotice(`Published — the teacher has been emailed${copyNote}.`)
+      else if (body.email === 'skipped') setNotice('Published. Email sending is off (no RESEND_API_KEY), so no email was sent.')
       else setNotice(`Published, but the email didn’t send${body.error ? `: ${body.error}` : ''}. The teacher can still see it in the app.`)
     } catch {
       setNotice('Published, but the notification request failed. The teacher can still see it in the app.')
     }
-  }, [saveObservation])
+  }, [saveObservation, emailCc, emailBcc, showBcc])
 
   const copySummary = async () => {
     try { await navigator.clipboard.writeText(summaryMarkdown); setSavedAt('copied'); setTimeout(() => setSavedAt(null), 1500) }
@@ -1004,6 +1011,42 @@ export default function ObservationCapturePage() {
               <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={shareFlags} onChange={(e) => setShareFlags(e.target.checked)} /> Include follow-up flags
               </label>
+            </div>
+            <div className="border-t border-gray-100 pt-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-gray-800">Email recipients</p>
+                <p className="text-xs text-gray-400">
+                  {person ? person.first_name : 'The teacher'} is emailed automatically when you publish. Add colleagues to copy below (optional). Only gcschool.org addresses.
+                </p>
+              </div>
+              <div>
+                <label className="label">Cc <span className="text-gray-400 font-normal">(optional)</span></label>
+                <PersonPicker
+                  multiple
+                  profiles={profiles}
+                  value={emailCc}
+                  onChange={setEmailCc}
+                  exclude={[userId, person?.id].filter((x): x is string => !!x)}
+                  placeholder="Add colleagues to copy…"
+                />
+              </div>
+              {showBcc ? (
+                <div>
+                  <label className="label">Bcc <span className="text-gray-400 font-normal">(hidden from other recipients)</span></label>
+                  <PersonPicker
+                    multiple
+                    profiles={profiles}
+                    value={emailBcc}
+                    onChange={setEmailBcc}
+                    exclude={[userId, person?.id].filter((x): x is string => !!x)}
+                    placeholder="Add blind copies…"
+                  />
+                </div>
+              ) : (
+                <button type="button" onClick={() => setShowBcc(true)} className="text-xs font-medium text-navy-700 hover:underline">
+                  + Add blind copy (Bcc)
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => saveObservation('draft')} disabled={saving} className="btn-secondary text-sm">{saving ? 'Saving…' : 'Save draft'}</button>
