@@ -63,12 +63,12 @@ function buildSpotlightHtml(
 
           <!-- Header -->
           <tr>
-            <td style="background:#003882;padding:32px 40px;text-align:center;">
-              <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;">
-                <span style="font-size:22px;font-weight:900;color:#003882;line-height:1;">GCS</span>
+            <td style="background:#003882;padding:28px 40px;text-align:center;">
+              <div style="display:inline-block;background:#ffffff;border-radius:12px;padding:12px 18px;">
+                <img src="${APP_URL}/shoutout-griffin.png" alt="Grace griffin speaking into a megaphone" width="180" style="display:block;width:180px;max-width:60vw;height:auto;" />
               </div>
-              <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
-              <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">📣 You got a Shout-out!</p>
+              <p style="margin:16px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
+              <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">You got a Shout-out!</p>
             </td>
           </tr>
 
