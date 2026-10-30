@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import PersonPicker from '@/components/PersonPicker'
+import ObservedGoals from '@/components/ObservedGoals'
 import type { Profile, Framework, FrameworkDomain } from '@/lib/types'
 import { DIVISION_OPTIONS } from '@/lib/taxonomy'
 import { departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
@@ -612,6 +613,10 @@ export default function ObservationCapturePage() {
               </div>
             </div>
           </div>
+
+          {person && (
+            <ObservedGoals personId={person.id} personName={`${person.first_name} ${person.last_name}`} />
+          )}
 
           <div className="card p-5 space-y-3">
             <label className="label mb-0">Focus — which areas you&apos;ll look at</label>

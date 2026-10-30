@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import PersonPicker from '@/components/PersonPicker'
+import ObservedGoals from '@/components/ObservedGoals'
 import type { Profile, PeerData } from '@/lib/types'
 import { PILLARS, PILLAR_COLORS, type PillarKey } from '@/lib/twg'
 import clsx from 'clsx'
@@ -166,6 +167,10 @@ export default function PeerObservationPage() {
             />
           </div>
         </div>
+
+        {person && (
+          <ObservedGoals personId={person.id} personName={`${person.first_name} ${person.last_name}`} />
+        )}
 
         <div>
           <label className="label">Focus <span className="text-gray-400 font-normal">(optional)</span></label>
