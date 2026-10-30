@@ -27,11 +27,26 @@ export default async function DashboardLayout({
     redirect('/login?error=domain')
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle()
+  // Read the profile, retrying a transient failure. A failed READ (network or
+  // grant hiccup) must be distinguished from a genuine "no row" — if we can't
+  // read the row we must NOT render a downgraded shell, because that looks like
+  // a demotion to an admin whose row is perfectly fine (their role just didn't
+  // load this request). See the throw below.
+  let profile: Profile | null = null
+  let profileError: unknown = null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
+    profile = (res.data as Profile | null) ?? null
+    profileError = res.error
+    if (!res.error) break
+  }
+
+  // Could not read the profile at all (not a "no row" — an actual error).
+  // Fail loudly to the error boundary so the user can reload, rather than
+  // silently presenting an admin/supervisor as a "member".
+  if (profileError) {
+    throw new Error('Could not load your profile — please reload. If this keeps happening, your session may have expired; sign out and back in.')
+  }
 
   // Only provision when the read SUCCEEDED and genuinely returned no row.
   // A read error (RLS/grant hiccup, transient failure) must NOT trigger
