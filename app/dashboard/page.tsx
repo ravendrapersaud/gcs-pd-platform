@@ -191,7 +191,6 @@ const DASH_ACTIONS: DashAction[] = [
   { href: '/dashboard/pd-log?tab=funding&new=1', icon: '💵', label: 'Request funding', desc: 'Submit a PD funding request', roles: ['staff', 'supervisor', 'admin'] },
   { href: '/dashboard/observations/twg', icon: '👁️', label: 'Record an observation', desc: 'Teaching with Grace capture', roles: ['supervisor', 'admin'] },
   { href: '/dashboard/goals?tab=team', icon: '👥', label: 'Team goals', desc: "Your team's growth goals", roles: ['supervisor', 'admin'] },
-  { href: '/dashboard/observations?tab=pending', icon: '✍️', label: 'Sign off observations', desc: 'Review and sign pending observations', roles: ['supervisor', 'admin'] },
 ]
 
 function ProgressBar({ pct }: { pct: number }) {

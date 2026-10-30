@@ -246,10 +246,10 @@ export default function SpotlightsPage() {
         <Image
           src="/shoutout-griffin.png"
           alt="Grace griffin speaking into a megaphone"
-          width={952}
-          height={380}
+          width={1438}
+          height={1041}
           priority
-          className="h-16 w-auto shrink-0"
+          className="h-20 w-auto shrink-0"
         />
         <div className="min-w-0">
           <h1 className="text-xl font-display text-gray-900">Give a Shout-out</h1>
