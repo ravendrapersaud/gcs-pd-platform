@@ -109,6 +109,12 @@ const IconApprovals = () => (
   </svg>
 )
 
+const IconDirectory = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.008v.008H3.75V6.75zm0 5.25h.008v.008H3.75V12zm0 5.25h.008v.008H3.75v-.008z" />
+  </svg>
+)
+
 const navSections: NavSection[] = [
   {
     label: 'Main',
@@ -116,6 +122,7 @@ const navSections: NavSection[] = [
       { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard /> },
       { href: '/dashboard/resources', label: 'Resource Library', icon: <IconLibrary /> },
       { href: '/dashboard/goals', label: 'Goals', icon: <IconGoals /> },
+      { href: '/dashboard/goals-directory', label: 'Goals Directory', icon: <IconDirectory />, minRole: 'admin' },
       { href: '/dashboard/pd-log', label: 'PD Log', icon: <IconPD /> },
       { href: '/dashboard/calendar', label: 'PD Calendar', icon: <IconCalendar /> },
       { href: '/dashboard/workspaces', label: 'Workspaces', icon: <IconWorkspaces /> },

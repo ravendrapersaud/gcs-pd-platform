@@ -8,12 +8,12 @@ import { useTabParam, useQueryParam } from '@/lib/useTabParam'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
-const GOAL_TABS = ['mine', 'collab', 'team', 'all', 'archived'] as const
+const GOAL_TABS = ['mine', 'collab', 'team', 'archived'] as const
 
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
-type TabId = 'mine' | 'collab' | 'team' | 'all' | 'archived'
+type TabId = 'mine' | 'collab' | 'team' | 'archived'
 
 const statusColor: Record<GoalStatus, string> = {
   active: 'badge-green',
@@ -436,7 +436,6 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [collabGoals, setCollabGoals] = useState<Goal[]>([])
   const [teamGoals, setTeamGoals] = useState<Goal[]>([])
-  const [allGoals, setAllGoals] = useState<Goal[]>([])
   const [supervisees, setSupervisees] = useState<Profile[]>([])
   const [selectedOwner, setSelectedOwner] = useQueryParam('person')
   const [archivedGoals, setArchivedGoals] = useState<Goal[]>([])
@@ -489,9 +488,9 @@ export default function GoalsPage() {
 
     const profById = new Map((allProfiles ?? []).map((p) => [p.id, p as Profile]))
 
-    // Oversight. "My Team" = the people assigned to me as supervisor (any
-    // role); admins additionally get "All Goals" across the school. RLS
-    // enforces the same scope. Both views are read-only, roster-first.
+    // "My Team's Goals" = goals of the people assigned to me as supervisor
+    // (any role). RLS enforces the same scope. Read-only, roster-first.
+    // (School-wide goals for admins live on the separate Goals Directory page.)
     const { data: assigns } = await supabase
       .from('supervisor_assignments')
       .select('staff_id')
@@ -505,21 +504,14 @@ export default function GoalsPage() {
       .sort((a, b) => `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`))
     setSupervisees(supervisees)
 
-    const [{ data: teamRows }, { data: allRows }] = await Promise.all([
-      superviseeIds.length > 0
-        ? supabase.from('goals').select('*').in('owner_id', superviseeIds)
-            .in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false })
-        : Promise.resolve({ data: [] as Goal[] }),
-      role === 'admin'
-        ? supabase.from('goals').select('*').neq('owner_id', user.id)
-            .in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false })
-        : Promise.resolve({ data: [] as Goal[] }),
-    ])
+    const { data: teamRows } = superviseeIds.length > 0
+      ? await supabase.from('goals').select('*').in('owner_id', superviseeIds)
+          .in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false })
+      : { data: [] as Goal[] }
     const team = (teamRows ?? []) as Goal[]
-    const all = (allRows ?? []) as Goal[]
 
     // Batched fetch of collaborators for all visible goals.
-    const allIds = Array.from(new Set([...mine, ...collaborative, ...arch, ...team, ...all].map((g) => g.id)))
+    const allIds = Array.from(new Set([...mine, ...collaborative, ...arch, ...team].map((g) => g.id)))
     if (allIds.length > 0) {
       const { data: collabRows } = await supabase
         .from('goal_collaborators')
@@ -542,13 +534,11 @@ export default function GoalsPage() {
       setCollabGoals([...collaborative, ...ownedShared].map(attach))
       setArchivedGoals(arch.map(attach))
       setTeamGoals(team.map(attach))
-      setAllGoals(all.map(attach))
     } else {
       setGoals(mine)
       setCollabGoals(collaborative)
       setArchivedGoals(arch)
       setTeamGoals([])
-      setAllGoals([])
     }
 
     setProfiles((allProfiles ?? []) as Profile[])
@@ -665,14 +655,12 @@ export default function GoalsPage() {
 
   const tabs: TabId[] = ['mine', 'collab']
   if (supervisees.length > 0) tabs.push('team')
-  if (myRole === 'admin') tabs.push('all')
   tabs.push('archived')
   const tabLabel = (t: TabId) =>
     t === 'mine' ? 'My Goals'
-    : t === 'collab' ? 'Collaborative'
-    : t === 'team' ? 'My Team'
-    : t === 'all' ? 'All Goals'
-    : 'Archived'
+    : t === 'collab' ? 'Collaborative Goals'
+    : t === 'team' ? "My Team's Goals"
+    : 'Archived Goals'
   const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null) }
 
   return (
@@ -736,18 +724,16 @@ export default function GoalsPage() {
             <div key={i} className="card h-40 animate-pulse bg-gray-100" />
           ))}
         </div>
-      ) : tab === 'team' || tab === 'all' ? (
+      ) : tab === 'team' ? (
         <OversightPanel
-          roster={tab === 'team' ? supervisees : []}
-          goals={tab === 'team' ? teamGoals : allGoals}
-          self={tab === 'team' && meProfile ? { profile: meProfile, goals } : undefined}
+          roster={supervisees}
+          goals={teamGoals}
+          self={meProfile ? { profile: meProfile, goals } : undefined}
           onSelf={() => selectTab('mine')}
           selected={selectedOwner}
           onSelect={setSelectedOwner}
           onBack={() => setSelectedOwner(null)}
-          emptyRoster={tab === 'team'
-            ? 'No one is assigned to you to supervise yet.'
-            : 'No one else has goals on file yet.'}
+          emptyRoster="No one is assigned to you to supervise yet."
         />
       ) : currentGoals.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
