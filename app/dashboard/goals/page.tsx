@@ -147,13 +147,20 @@ interface GoalCardProps {
   onUpdate: (goalId: string, pct: number, note: string) => Promise<void>
   onEdit: (goal: Goal) => void
   readOnly?: boolean
+  currentUserId?: string | null
+  onArchive?: (id: string) => void
+  onRestore?: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
-function GoalCard({ goal, onUpdate, onEdit, readOnly = false }: GoalCardProps) {
+function GoalCard({ goal, onUpdate, onEdit, readOnly = false, currentUserId, onArchive, onRestore, onDelete }: GoalCardProps) {
   const [showUpdate, setShowUpdate] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [note, setNote] = useState('')
   const [pct, setPct] = useState(goal.progress_pct)
   const [saving, setSaving] = useState(false)
+  // Only the owner manages (archive/delete) their own goal.
+  const canManage = !readOnly && !!currentUserId && goal.owner_id === currentUserId
 
   const handleUpdate = async () => {
     setSaving(true)
@@ -167,9 +174,43 @@ function GoalCard({ goal, onUpdate, onEdit, readOnly = false }: GoalCardProps) {
     <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-gray-900 leading-snug">{goal.title}</h3>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className={`badge ${statusColor[goal.status]}`}>{goal.status}</span>
-          {goal.goal_type === 'faculty_inquiry' && <span className="badge badge-navy">Inquiry</span>}
+        <div className="flex items-start gap-1 shrink-0">
+          <div className="flex flex-col items-end gap-1">
+            <span className={`badge ${statusColor[goal.status]}`}>{goal.status}</span>
+            {goal.goal_type === 'faculty_inquiry' && <span className="badge badge-navy">Inquiry</span>}
+          </div>
+          {canManage && (
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu((s) => !s)}
+                className="text-gray-400 hover:text-gray-700 p-1 -mr-1 rounded"
+                aria-label="Goal actions"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>
+              </button>
+              {showMenu && (
+                <>
+                  <button className="fixed inset-0 z-10 cursor-default" aria-hidden tabIndex={-1} onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 top-8 z-20 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1 text-sm">
+                    {goal.status === 'archived' ? (
+                      <button onClick={() => { setShowMenu(false); onRestore?.(goal.id) }} className="w-full text-left px-3 py-2 hover:bg-gray-50">Restore</button>
+                    ) : (
+                      <button onClick={() => { setShowMenu(false); onArchive?.(goal.id) }} className="w-full text-left px-3 py-2 hover:bg-gray-50">Archive</button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowMenu(false)
+                        if (window.confirm('Delete this goal permanently? This cannot be undone.')) onDelete?.(goal.id)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -593,6 +634,30 @@ export default function GoalsPage() {
     loadGoals()
   }
 
+  // Archive / restore / delete (owner only; RLS enforces it). .select()
+  // surfaces a zero-row result (e.g. blocked by RLS) as an error.
+  const handleArchive = async (id: string) => {
+    setSaveError(null)
+    const { data, error } = await supabase.from('goals').update({ status: 'archived' }).eq('id', id).select()
+    if (error) { setSaveError(error.message); return }
+    if (!data || data.length === 0) { setSaveError('Could not archive this goal (you may not have permission).'); return }
+    loadGoals()
+  }
+  const handleRestore = async (id: string) => {
+    setSaveError(null)
+    const { data, error } = await supabase.from('goals').update({ status: 'active' }).eq('id', id).select()
+    if (error) { setSaveError(error.message); return }
+    if (!data || data.length === 0) { setSaveError('Could not restore this goal (you may not have permission).'); return }
+    loadGoals()
+  }
+  const handleDelete = async (id: string) => {
+    setSaveError(null)
+    const { data, error } = await supabase.from('goals').delete().eq('id', id).select()
+    if (error) { setSaveError(error.message); return }
+    if (!data || data.length === 0) { setSaveError('Could not delete this goal (you may not have permission).'); return }
+    loadGoals()
+  }
+
   const currentGoals =
     tab === 'mine' ? goals : tab === 'collab' ? collabGoals : archivedGoals
 
@@ -696,6 +761,10 @@ export default function GoalsPage() {
               goal={goal}
               onUpdate={handleUpdate}
               onEdit={setEditGoal}
+              currentUserId={userId}
+              onArchive={handleArchive}
+              onRestore={handleRestore}
+              onDelete={handleDelete}
             />
           ))}
         </div>
