@@ -182,7 +182,7 @@ export default function PdLogPage() {
     !allowOverBalance && Number.isFinite(requestAmount) && requestAmount > remainingFunds
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Tabs */}
       <div className="flex gap-2">
         {(['log', 'funding'] as const).map((t) => (

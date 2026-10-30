@@ -111,7 +111,7 @@ export default function ReportsPage() {
   const maxHours = Math.max(...deptStats.map((d) => d.hours), 1)
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Division selector */}
       <div className="flex items-center gap-4">
         <label className="label mb-0 shrink-0">Filter by Division:</label>

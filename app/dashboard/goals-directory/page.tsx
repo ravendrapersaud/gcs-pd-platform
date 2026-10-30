@@ -74,14 +74,14 @@ export default function GoalsDirectoryPage() {
   const allowed = role === 'admin' || (myDepartment ?? '').toLowerCase() === 'academic administration'
   if (role && !allowed) {
     return (
-      <div className="max-w-[1180px] mx-auto">
+      <div className="">
         <div className="card p-8 text-center text-gray-600">School Goals is available to administrators and the academic administration team.</div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-5">
+    <div className="space-y-5">
       <p className="text-sm text-gray-500">Every goal across the school. Filter by division, department, status, or search by name.</p>
 
       {/* Filters */}

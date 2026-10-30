@@ -328,7 +328,7 @@ export default function StaffRosterPage() {
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Selected staff drawer */}
       {selected && (
         <div className="fixed inset-0 z-50 flex">

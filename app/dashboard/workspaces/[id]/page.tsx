@@ -369,7 +369,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
   // ── Render ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="max-w-[1180px] mx-auto space-y-4">
+      <div className="space-y-4">
         <div className="card h-28 animate-pulse bg-gray-100" />
         <div className="card h-64 animate-pulse bg-gray-100" />
       </div>
@@ -378,7 +378,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
 
   if (!workspace) {
     return (
-      <div className="max-w-[1180px] mx-auto">
+      <div className="">
         <div className="card p-8 text-center space-y-3">
           <p className="text-gray-500">Workspace not found.</p>
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -405,7 +405,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
     : []
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-6">
+    <div className="space-y-6">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {error}

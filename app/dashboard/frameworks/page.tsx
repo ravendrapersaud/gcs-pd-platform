@@ -267,7 +267,7 @@ export default function FrameworksPage() {
 
   if (selected) {
     return (
-      <div className="max-w-[1180px] mx-auto space-y-6">
+      <div className="space-y-6">
         <button
           onClick={() => setSelected(null)}
           className="btn-ghost text-sm"
@@ -341,7 +341,7 @@ export default function FrameworksPage() {
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-6">
+    <div className="space-y-6">
       {isSupervisorOrAdmin && (
         <div className="flex justify-end">
           <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">

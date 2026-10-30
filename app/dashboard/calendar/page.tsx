@@ -216,7 +216,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header + add button */}
       <div className="flex items-center justify-between gap-3">
         <div>

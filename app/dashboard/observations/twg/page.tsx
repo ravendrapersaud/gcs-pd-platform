@@ -499,10 +499,10 @@ export default function ObservationCapturePage() {
     if (writerWinRef.current && !writerWinRef.current.closed) writerWinRef.current.close()
   }, [])
 
-  if (!ready) return <div className="card h-64 animate-pulse bg-gray-100 max-w-[1180px] mx-auto" />
+  if (!ready) return <div className="card h-64 animate-pulse bg-gray-100 " />
   if (!allowed) {
     return (
-      <div className="max-w-[1180px] mx-auto card p-8 text-center">
+      <div className="card p-8 text-center">
         <p className="text-gray-700 font-medium">Observations are recorded by supervisors and admins.</p>
         <Link href="/dashboard/observations" className="btn-secondary text-sm mt-4 inline-block">Back to observations</Link>
       </div>
@@ -510,7 +510,7 @@ export default function ObservationCapturePage() {
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-5">
+    <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-gray-900">{twg.frameworkTitle ?? 'Observation'}</h1>

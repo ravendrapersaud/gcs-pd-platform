@@ -290,7 +290,7 @@ export default async function DashboardPage() {
   const pendingFundingCount = fundingRequests?.length ?? 0
 
   return (
-    <div className="max-w-[1180px] mx-auto space-y-8">
+    <div className="space-y-8">
       {/* Quick actions — role-tailored; each tile links straight to the task */}
       <section className="space-y-3">
         <h2 className="font-semibold text-gray-900 text-lg">Quick actions</h2>
