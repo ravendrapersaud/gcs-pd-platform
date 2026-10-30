@@ -208,11 +208,11 @@ function ProgressBar({ pct }: { pct: number }) {
 export default async function DashboardPage() {
   const supabase = createClient()
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  const userId = session.user.id
+  const userId = user.id
 
   // Current profile role (for supervisor/admin team section) and
   // employee_type (faculty/staff decides which fund year applies).

@@ -10,8 +10,8 @@ import type { Profile } from '@/lib/types'
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json().catch(() => null)
     const id: string | undefined = body?.id
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!obs) return NextResponse.json({ error: 'Observation not found' }, { status: 404 })
-    if (obs.observer_id !== session.user.id) {
+    if (obs.observer_id !== user.id) {
       return NextResponse.json({ error: 'Only the observer can notify the teacher.' }, { status: 403 })
     }
     if (obs.status !== 'published') {
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       status: result.status,
       provider_id: result.providerId ?? null,
       error: result.error ?? null,
-      created_by: session.user.id,
+      created_by: user.id,
     })
     if (logErr) console.error('[POST /api/observations/notify] email_log insert failed (non-fatal):', logErr)
 

@@ -12,17 +12,17 @@ export default async function DashboardLayout({
   const supabase = createClient()
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     redirect('/login')
   }
 
   // Enforce the school domain server-side: even if a non-gcschool
   // Google account somehow authenticates, it never gets a profile.
   const ALLOWED_DOMAIN = '@gcschool.org'
-  if (!session.user.email?.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+  if (!user.email?.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
     await supabase.auth.signOut()
     redirect('/login?error=domain')
   }
@@ -30,7 +30,7 @@ export default async function DashboardLayout({
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .maybeSingle()
 
   // Only provision when the read SUCCEEDED and genuinely returned no row.
@@ -43,15 +43,15 @@ export default async function DashboardLayout({
     // so admins can complete title/division/dept. ignoreDuplicates makes this
     // an INSERT ... ON CONFLICT DO NOTHING, so it can never modify an existing
     // profile's role or setup flag.
-    const meta = session.user.user_metadata
+    const meta = user.user_metadata
     const nameParts = (meta?.full_name || meta?.name || '').split(' ')
     const firstName = nameParts[0] || ''
     const lastName = nameParts.slice(1).join(' ') || ''
 
     await supabase.from('profiles').upsert(
       {
-        id: session.user.id,
-        email: session.user.email!,
+        id: user.id,
+        email: user.email!,
         first_name: firstName,
         last_name: lastName,
         avatar_url: meta?.avatar_url || meta?.picture || null,
@@ -66,16 +66,16 @@ export default async function DashboardLayout({
     const { data: created } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .maybeSingle()
     provisioned = (created as Profile | null) ?? null
   }
 
   const currentProfile = (profile as Profile | null) ?? provisioned ?? {
-    id: session.user.id,
-    email: session.user.email!,
-    first_name: session.user.user_metadata?.full_name?.split(' ')[0] || 'User',
-    last_name: session.user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
+    id: user.id,
+    email: user.email!,
+    first_name: user.user_metadata?.full_name?.split(' ')[0] || 'User',
+    last_name: user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
     role: 'staff' as const,
     title: null,
     division: null,

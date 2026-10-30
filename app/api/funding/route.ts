@@ -9,10 +9,10 @@ export async function PATCH(request: NextRequest) {
     const supabase = createClient()
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -20,7 +20,7 @@ export async function PATCH(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile || !['supervisor', 'admin'].includes(profile.role)) {
@@ -64,7 +64,7 @@ export async function PATCH(request: NextRequest) {
       const { data: assignment } = await supabase
         .from('supervisor_assignments')
         .select('id')
-        .eq('supervisor_id', session.user.id)
+        .eq('supervisor_id', user.id)
         .eq('staff_id', existing.user_id)
         .maybeSingle()
 
@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest) {
       .from('funding_requests')
       .update({
         status: status as FundingStatus,
-        reviewed_by: session.user.id,
+        reviewed_by: user.id,
         reviewed_at: new Date().toISOString(),
         decision_note: decisionNote,
       })
@@ -115,17 +115,17 @@ export async function GET(request: NextRequest) {
     const supabase = createClient()
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     const { searchParams } = new URL(request.url)
@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
 
     // If not supervisor/admin, restrict to own requests
     if (!profile || !['supervisor', 'admin'].includes(profile.role)) {
-      query = query.eq('user_id', session.user.id)
+      query = query.eq('user_id', user.id)
     } else if (userId) {
       query = query.eq('user_id', userId)
     }

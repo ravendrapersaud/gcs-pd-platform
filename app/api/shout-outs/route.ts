@@ -7,12 +7,12 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = createClient()
 
-    // Get current session
+    // Authenticated user (validated with the auth server)
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     if (!message || typeof message !== 'string' || message.trim().length < 10) {
       return NextResponse.json({ error: 'message must be at least 10 characters' }, { status: 400 })
     }
-    if (to_user_id === session.user.id) {
+    if (to_user_id === user.id) {
       return NextResponse.json({ error: 'You cannot spotlight yourself' }, { status: 400 })
     }
 
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const { data: spotlight, error: insertErr } = await supabase
       .from('spotlights')
       .insert({
-        from_user_id: session.user.id,
+        from_user_id: user.id,
         to_user_id,
         message: message.trim(),
         tags: validTags,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertErr) {
-      console.error('[POST /api/spotlights] insert error:', insertErr)
+      console.error('[POST /api/shout-outs] insert error:', insertErr)
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const { data: senderProfile } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     // Fetch recipient profile
@@ -111,15 +111,15 @@ export async function POST(request: NextRequest) {
       provider_id: emailResult.providerId ?? null,
       error: emailResult.error ?? null,
       spotlight_id: spotlight.id,
-      created_by: session.user.id,
+      created_by: user.id,
     })
     if (logErr) {
-      console.error('[POST /api/spotlights] email_log insert failed (non-fatal):', logErr)
+      console.error('[POST /api/shout-outs] email_log insert failed (non-fatal):', logErr)
     }
 
     return NextResponse.json({ ...spotlight, email_sent: emailSent }, { status: 201 })
   } catch (err: unknown) {
-    console.error('[POST /api/spotlights] unexpected error:', err)
+    console.error('[POST /api/shout-outs] unexpected error:', err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal server error' },
       { status: 500 }
@@ -131,10 +131,10 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createClient()
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

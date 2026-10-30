@@ -25,21 +25,23 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // getUser() refreshes the token and validates it with the auth server,
+  // avoiding the "getSession() is insecure on the server" warning.
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
 
   // Protect /dashboard/* routes
-  if (pathname.startsWith('/dashboard') && !session) {
+  if (pathname.startsWith('/dashboard') && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   // Redirect /login to /dashboard if already logged in
-  if (pathname === '/login' && session) {
+  if (pathname === '/login' && user) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -48,7 +50,7 @@ export async function middleware(request: NextRequest) {
   // Redirect root to dashboard or login
   if (pathname === '/') {
     const url = request.nextUrl.clone()
-    url.pathname = session ? '/dashboard' : '/login'
+    url.pathname = user ? '/dashboard' : '/login'
     return NextResponse.redirect(url)
   }
 
