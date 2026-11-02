@@ -21,8 +21,10 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const userId = request.nextUrl.searchParams.get('userId') ?? ''
-  if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400 })
+  // 'me' (or empty) resolves to the signed-in user, so /dashboard/portfolio/me
+  // is a universal self-link.
+  const userIdParam = request.nextUrl.searchParams.get('userId') ?? ''
+  const userId = (userIdParam === '' || userIdParam === 'me') ? user.id : userIdParam
   const yearParam = Number(request.nextUrl.searchParams.get('year'))
   const year = Number.isFinite(yearParam) && yearParam > 2000 ? yearParam : currentSchoolYear()
   const { start, end, label } = schoolYearRange(year)

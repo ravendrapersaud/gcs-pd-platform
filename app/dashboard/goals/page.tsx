@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Goal, Profile, GoalStatus, GoalType } from '@/lib/types'
 import { facultyGoalQuestionDue, DEFAULT_FACULTY_GOAL_QUESTION_DUE } from '@/lib/appSettings'
@@ -78,11 +79,16 @@ function OversightPanel({
     return (
       <div className="space-y-4">
         <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">← Back to list</button>
-        <div className="flex items-baseline gap-2">
-          <h2 className="font-display text-xl text-gray-900">
-            {person ? `${person.first_name} ${person.last_name}` : 'Goals'}
-          </h2>
-          {person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
+        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+          <div className="flex items-baseline gap-2">
+            <h2 className="font-display text-xl text-gray-900">
+              {person ? `${person.first_name} ${person.last_name}` : 'Goals'}
+            </h2>
+            {person?.title && <span className="text-sm text-gray-400">{person.title}</span>}
+          </div>
+          <Link href={`/dashboard/portfolio/${selected}`} className="text-sm text-navy-700 hover:underline font-medium">
+            View portfolio →
+          </Link>
         </div>
         {items.length === 0 ? (
           <div className="text-center py-12 text-gray-400">No goals on file yet.</div>
