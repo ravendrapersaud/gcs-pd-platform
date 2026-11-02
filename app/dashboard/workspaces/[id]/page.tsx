@@ -11,8 +11,17 @@ import { useTabParam } from '@/lib/useTabParam'
 import { IconUpload, IconDoc, IconSheet, IconSlide, IconForm } from '@/components/icons'
 import clsx from 'clsx'
 
-type Tab = 'feed' | 'files' | 'members'
-const WORKSPACE_TABS = ['feed', 'files', 'members'] as const
+type Tab = 'feed' | 'files' | 'folder' | 'members'
+const WORKSPACE_TABS = ['feed', 'files', 'folder', 'members'] as const
+
+// Pull the folder id out of a Google Drive folder link and build the read-only
+// embedded-folder-view URL. Returns null if the link isn't a recognizable folder.
+function driveFolderEmbed(url: string | null | undefined): { id: string; embed: string } | null {
+  if (!url) return null
+  const m = url.match(/\/folders\/([-\w]+)/) || url.match(/[?&]id=([-\w]+)/)
+  if (!m) return null
+  return { id: m[1], embed: `https://drive.google.com/embeddedfolderview?id=${m[1]}#grid` }
+}
 
 const FILE_TYPES: Record<string, { Icon: (p: { className?: string }) => React.ReactElement; color: string }> = {
   doc: { Icon: IconDoc, color: 'text-navy-700' },
@@ -82,6 +91,11 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  // Shared Drive folder
+  const [folderInput, setFolderInput] = useState('')
+  const [folderEditing, setFolderEditing] = useState(false)
+  const [folderSaving, setFolderSaving] = useState(false)
 
   // Composer
   const [postTitle, setPostTitle] = useState('')
@@ -164,6 +178,21 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
   const isMember = !!myMembership
   const isAdmin = me?.role === 'admin'
   const isManager = !!myMembership?.is_manager || isAdmin || me?.role === 'supervisor'
+
+  const saveFolder = async (url: string) => {
+    const value = url.trim() || null
+    if (value && !driveFolderEmbed(value)) {
+      setError('That doesn’t look like a Google Drive folder link (it should contain /folders/…).')
+      return
+    }
+    setFolderSaving(true); setError(null)
+    const { data, error: err } = await supabase.from('workspaces').update({ drive_folder_url: value }).eq('id', wsId).select('id')
+    setFolderSaving(false)
+    if (err) { setError(err.message); return }
+    if (!data || data.length === 0) { setError('You don’t have permission to change this workspace’s folder.'); return }
+    setWorkspace((w) => (w ? { ...w, drive_folder_url: value } : w))
+    setFolderEditing(false)
+  }
   const managerCount = members.filter((m) => m.is_manager).length
   const canViewContent = isMember || isAdmin
 
@@ -456,7 +485,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
         <>
           {/* Tabs */}
           <div className="flex gap-2">
-            {(['feed', 'files', 'members'] as Tab[]).map((t) => (
+            {(['feed', 'files', 'folder', 'members'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -660,6 +689,55 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
               )}
             </div>
           )}
+
+          {/* ── Folder tab (embedded Google Drive folder) ────── */}
+          {tab === 'folder' && (() => {
+            const embed = driveFolderEmbed(workspace?.drive_folder_url)
+            return (
+              <div className="space-y-4">
+                {isManager && (folderEditing || !workspace?.drive_folder_url) && (
+                  <div className="card p-4 space-y-2">
+                    <label className="label">Google Drive folder link</label>
+                    <input
+                      className="input"
+                      placeholder="https://drive.google.com/drive/folders/…"
+                      value={folderInput}
+                      onChange={(e) => setFolderInput(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-400">
+                      Paste a shared folder link. Share the folder with the team (e.g. “anyone at gcschool.org with the link”) so members can see its contents.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => saveFolder(folderInput)} disabled={folderSaving || !folderInput.trim()} className="btn-primary text-sm">
+                        {folderSaving ? 'Saving…' : 'Save folder'}
+                      </button>
+                      {workspace?.drive_folder_url && (
+                        <button onClick={() => { setFolderEditing(false); setFolderInput('') }} className="btn-ghost text-sm">Cancel</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {embed ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <a href={workspace!.drive_folder_url!} target="_blank" rel="noopener noreferrer" className="text-sm text-navy-700 hover:underline font-medium">Open in Google Drive →</a>
+                      {isManager && !folderEditing && (
+                        <div className="flex gap-3">
+                          <button onClick={() => { setFolderEditing(true); setFolderInput(workspace?.drive_folder_url || '') }} className="text-xs font-medium text-navy-800 hover:underline">Change</button>
+                          <button onClick={() => saveFolder('')} className="text-xs font-medium text-red-600 hover:underline">Remove</button>
+                        </div>
+                      )}
+                    </div>
+                    <iframe src={embed.embed} title="Shared Drive folder" className="w-full rounded-xl border border-gray-200 bg-white" style={{ height: 520 }} />
+                    <p className="text-xs text-gray-400">Read-only preview. If it shows a sign-in prompt, the folder isn’t shared widely enough — open its sharing settings in Drive.</p>
+                  </div>
+                ) : !isManager ? (
+                  <div className="card p-10 text-center text-gray-400">No shared folder for this workspace yet.</div>
+                ) : null}
+              </div>
+            )
+          })()}
 
           {/* ── Members tab ──────────────────────────────────── */}
           {tab === 'members' && (

@@ -311,6 +311,7 @@ export interface Workspace {
   rule_division: string | null
   rule_department: string | null
   rule_employee_type: string | null
+  drive_folder_url: string | null
   created_by: string | null
   created_at: string
   // joined
