@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 import { DIVISION_OPTIONS } from '@/lib/taxonomy'
@@ -335,9 +336,14 @@ export default function StaffRosterPage() {
           <div className="flex-1 bg-black/30" onClick={() => setSelected(null)} />
           <div className="w-full max-w-md bg-white h-full shadow-xl overflow-y-auto p-6 space-y-5">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-lg text-gray-900">
-                {selected.first_name} {selected.last_name}
-              </h2>
+              <div>
+                <h2 className="font-bold text-lg text-gray-900">
+                  {selected.first_name} {selected.last_name}
+                </h2>
+                <Link href={`/dashboard/portfolio/${selected.id}`} className="text-sm text-navy-700 hover:underline font-medium">
+                  View portfolio →
+                </Link>
+              </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-700 text-2xl">&times;</button>
             </div>
 
