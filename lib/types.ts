@@ -98,8 +98,30 @@ export interface PdEvent {
   audience: string[]
   created_by: string | null
   created_at: string
+  // scraping / review queue
+  status?: 'published' | 'pending' | 'rejected'
+  source_id?: string | null
+  external_key?: string | null
+  is_auto?: boolean
+  last_seen_at?: string | null
   // joined
   creator?: Profile
+}
+
+export interface EventSource {
+  id: string
+  name: string
+  url: string
+  kind: 'auto' | 'ics' | 'html'
+  is_active: boolean
+  default_event_type: string | null
+  default_audience: string[]
+  last_run_at: string | null
+  last_status: 'ok' | 'error' | 'skipped' | null
+  last_count: number | null
+  last_error: string | null
+  added_by: string | null
+  created_at: string
 }
 
 export interface ResourceFavorite {

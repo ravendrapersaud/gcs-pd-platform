@@ -101,8 +101,19 @@ export default function CalendarPage() {
   const canManage = role === 'supervisor' || role === 'admin'
   const audienceOptions = termsFor(taxTerms, 'audience')
 
+  // Scraped events arrive as 'pending' and only show on the public calendar once
+  // an admin approves them. Everyone sees published; admins also get the queue.
+  const publishedEvents = events.filter((e) => (e.status ?? 'published') === 'published')
+  const pendingEvents = events.filter((e) => e.status === 'pending')
+
+  const reviewEvent = async (id: string, status: 'published' | 'rejected') => {
+    const { error } = await supabase.from('pd_events').update({ status }).eq('id', id).select('id')
+    if (error) { setFormError(error.message); return }
+    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, status } : e)))
+  }
+
   // ── Search & filter (applies to grid AND upcoming list) ─────
-  const filteredEvents = events.filter((e) => {
+  const filteredEvents = publishedEvents.filter((e) => {
     const q = search.trim().toLowerCase()
     const haystack = [
       e.title, e.description, e.location, e.event_type,
@@ -373,6 +384,42 @@ export default function CalendarPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Review queue (admins/supervisors) — scraped events awaiting approval */}
+      {canManage && pendingEvents.length > 0 && (
+        <div className="card p-5 border-yellow-200 bg-yellow-50/40">
+          <div className="mb-3">
+            <h3 className="font-semibold text-gray-900">
+              Imported events to review <span className="badge badge-yellow ml-1">{pendingEvents.length}</span>
+            </h3>
+            <p className="text-sm text-gray-500">Pulled from your sources. Approve to publish to the calendar, or dismiss.</p>
+          </div>
+          <div className="space-y-2">
+            {pendingEvents.map((e) => (
+              <div key={e.id} className="flex items-start gap-3 bg-white rounded-lg border border-gray-100 p-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-sm text-gray-900 truncate">{e.title}</h4>
+                    {e.event_type && (
+                      <span className={clsx('badge shrink-0', eventTypeColor[e.event_type] ?? 'badge-gray')}>{e.event_type}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-gray-500">
+                    <span>{fmtRange(e.start_date, e.end_date)}</span>
+                    <span>·</span>
+                    <span>{e.is_virtual ? 'Virtual' : (e.location ?? '—')}</span>
+                    {e.url && (<><span>·</span><a href={e.url} target="_blank" rel="noopener noreferrer" className="text-navy-700 hover:underline">link</a></>)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => reviewEvent(e.id, 'published')} className="btn-primary text-xs py-1.5 px-3">Approve</button>
+                  <button onClick={() => reviewEvent(e.id, 'rejected')} className="btn-ghost text-xs py-1.5 px-3">Dismiss</button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

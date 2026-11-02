@@ -15,10 +15,11 @@ import {
 } from '@/lib/appSettings'
 import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from '@/lib/taxonomy'
 import type { TaxonomyTerm, TaxonomyCategory } from '@/lib/taxonomyDb'
+import type { EventSource } from '@/lib/types'
 import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
 
-const SETTINGS_TABS = ['funding', 'library', 'taxonomy'] as const
+const SETTINGS_TABS = ['funding', 'library', 'taxonomy', 'calendar'] as const
 type SettingsTab = (typeof SETTINGS_TABS)[number]
 
 const MONTHS = [
@@ -498,6 +499,154 @@ function DepartmentsSection() {
   )
 }
 
+// Manages the list of sites the weekly scraper pulls PD events from, and lets
+// an admin run the import on demand. Mutations save immediately.
+function EventSourcesSection() {
+  const supabase = createClient()
+  const [sources, setSources] = useState<EventSource[]>([])
+  const [userId, setUserId] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [kind, setKind] = useState<'auto' | 'ics' | 'html'>('auto')
+
+  const [running, setRunning] = useState(false)
+  const [runSummary, setRunSummary] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setUserId(user?.id ?? null)
+    const { data, error: err } = await supabase.from('event_sources').select('*').order('created_at', { ascending: true })
+    if (err) setError(err.message)
+    else setSources((data ?? []) as EventSource[])
+    setLoaded(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const run = async (fn: () => PromiseLike<{ error: { message: string } | null }>) => {
+    setBusy(true); setError(null)
+    const { error: err } = await fn()
+    if (err) setError(err.message)
+    await load()
+    setBusy(false)
+  }
+
+  const addSource = async () => {
+    const n = name.trim(); const u = url.trim()
+    if (!n || !u) return
+    if (!/^https?:\/\//i.test(u)) { setError('Enter a full URL starting with http:// or https://'); return }
+    await run(() => supabase.from('event_sources').insert({ name: n, url: u, kind, added_by: userId }).select('id').single())
+    setName(''); setUrl(''); setKind('auto')
+  }
+
+  const toggleActive = (s: EventSource) =>
+    run(() => supabase.from('event_sources').update({ is_active: !s.is_active }).eq('id', s.id).select('id').single())
+
+  const removeSource = async (s: EventSource) => {
+    if (!window.confirm(`Remove “${s.name}” from the scrape list? Events it already imported stay on the calendar.`)) return
+    await run(() => supabase.from('event_sources').delete().eq('id', s.id).select('id'))
+  }
+
+  const runNow = async () => {
+    setRunning(true); setRunSummary(null); setError(null)
+    try {
+      const res = await fetch('/api/cron/scrape-events', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(body.error || 'Import failed.'); return }
+      const added = (body.sources ?? []).reduce((n: number, s: { added: number }) => n + (s.added || 0), 0)
+      const updated = (body.sources ?? []).reduce((n: number, s: { updated: number }) => n + (s.updated || 0), 0)
+      setRunSummary(`Done — ${added} new event${added === 1 ? '' : 's'} added to the review queue, ${updated} updated.`)
+      await load()
+    } catch {
+      setError('Import request failed.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const statusColor: Record<string, string> = { ok: 'badge-green', error: 'badge-red', skipped: 'badge-yellow' }
+
+  return (
+    <div className="card p-6 space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-gray-900 text-lg">Calendar event sources</h2>
+          <p className="text-sm text-gray-500 mt-0.5 max-w-prose">
+            Sites the calendar imports PD events from. The importer runs automatically every Monday at 2 AM; new events land in the review queue on the Calendar page for an admin to approve.
+          </p>
+        </div>
+        <button onClick={runNow} disabled={running || busy} className="btn-secondary text-sm shrink-0">
+          {running ? 'Importing…' : 'Run import now'}
+        </button>
+      </div>
+
+      {runSummary && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{runSummary}</div>}
+      {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+
+      {!loaded ? (
+        <div className="h-24 animate-pulse bg-gray-100 rounded-lg" />
+      ) : sources.length === 0 ? (
+        <p className="text-sm text-gray-400 py-2">No sources yet — add one below.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+          {sources.map((s) => (
+            <li key={s.id} className={clsx('px-3 py-2.5', !s.is_active && 'opacity-50 bg-gray-50')}>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-900 truncate">{s.name}</span>
+                    <span className="badge badge-gray text-[10px] shrink-0 uppercase">{s.kind}</span>
+                    {s.last_status && <span className={clsx('badge text-[10px] shrink-0', statusColor[s.last_status] ?? 'badge-gray')}>{s.last_status}</span>}
+                  </div>
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-xs text-navy-700 hover:underline truncate block">{s.url}</a>
+                  {(s.last_run_at || s.last_error) && (
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {s.last_run_at ? `Last run ${new Date(s.last_run_at).toLocaleString()} · ${s.last_count ?? 0} found` : ''}
+                      {s.last_error ? ` · ${s.last_error}` : ''}
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => toggleActive(s)} disabled={busy} className="text-xs font-medium text-navy-800 hover:underline shrink-0">
+                  {s.is_active ? 'Pause' : 'Resume'}
+                </button>
+                <button onClick={() => removeSource(s)} disabled={busy} className="text-xs font-medium text-red-600 hover:underline shrink-0">Remove</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Add source */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <p className="text-sm font-medium text-gray-800">Add a source</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">Name</label>
+            <input className="input" placeholder="e.g. NYSAIS events" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Type</label>
+            <select className="input" value={kind} onChange={(e) => setKind(e.target.value as 'auto' | 'ics' | 'html')}>
+              <option value="auto">Auto-detect</option>
+              <option value="ics">Calendar feed (.ics)</option>
+              <option value="html">Web page (AI extraction)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="label">URL</label>
+          <input className="input" placeholder="https://… (an .ics feed is most reliable)" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addSource() }} />
+        </div>
+        <button onClick={addSource} disabled={busy || !name.trim() || !url.trim()} className="btn-secondary">+ Add source</button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminSettingsPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -658,7 +807,7 @@ export default function AdminSettingsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {([['funding', 'PD & Funding'], ['library', 'Library & Workspaces'], ['taxonomy', 'Departments & Tags']] as [SettingsTab, string][]).map(([k, label]) => (
+        {([['funding', 'PD & Funding'], ['library', 'Library & Workspaces'], ['taxonomy', 'Departments & Tags'], ['calendar', 'Calendar']] as [SettingsTab, string][]).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={clsx('tab', tab === k ? 'tab-active' : 'tab-inactive')}>{label}</button>
         ))}
       </div>
@@ -850,6 +999,13 @@ export default function AdminSettingsPage() {
       {/* ── Tags & taxonomy (mutations apply immediately) ─────── */}
       <TaxonomySection />
       </div>
+      )}
+
+      {/* ══ Calendar ═══════════════════════════════════════════ */}
+      {tab === 'calendar' && (
+        <div className="space-y-6">
+          <EventSourcesSection />
+        </div>
       )}
 
       {/* Sticky unsaved-changes bar — governs the form settings above
