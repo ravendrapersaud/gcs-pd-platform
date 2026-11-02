@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget } from '@/lib/appSettings'
+import { campusForDivision } from '@/lib/taxonomy'
 import ReportBuilder from '@/components/ReportBuilder'
 
 interface DeptStats {
@@ -18,6 +19,17 @@ interface StaffStats {
   obsCount: number
 }
 
+interface DivRow {
+  division: string
+  campus: string
+  count: number
+  avg: number
+  obsPct: number
+  goalsTotal: number
+  goalsDone: number
+  goalPct: number
+}
+
 export default function ReportsPage() {
   const supabase = createClient()
   const [divFilter, setDivFilter] = useState('')
@@ -28,6 +40,8 @@ export default function ReportsPage() {
   const [avgHours, setAvgHours] = useState(0)
   const [obsCompletion, setObsCompletion] = useState(0)
   const [totalFunding, setTotalFunding] = useState(0)
+  const [goalCompletion, setGoalCompletion] = useState(0)
+  const [divRows, setDivRows] = useState<DivRow[]>([])
   const [loading, setLoading] = useState(true)
   const [pdGoal, setPdGoal] = useState(DEFAULT_PD_HOURS_TARGET)
 
@@ -35,7 +49,7 @@ export default function ReportsPage() {
     setLoading(true)
     const year = new Date().getFullYear()
 
-    const [{ data: profiles }, { data: pdActs }, { data: observations }, { data: funding }, { data: settings }] =
+    const [{ data: profiles }, { data: pdActs }, { data: observations }, { data: funding }, { data: settings }, { data: goals }] =
       await Promise.all([
         supabase.from('profiles').select('*'),
         supabase
@@ -45,6 +59,7 @@ export default function ReportsPage() {
         supabase.from('observations').select('observed_id'),
         supabase.from('funding_requests').select('amount').eq('status', 'approved'),
         supabase.from('app_settings').select('key, value'),
+        supabase.from('goals').select('owner_id, status'),
       ])
 
     setPdGoal(pdHoursTarget(settings))
@@ -95,6 +110,31 @@ export default function ReportsPage() {
       .sort((a, b) => b.hours - a.hours)
     setDeptStats(deptArr)
 
+    // Goal completion for the filtered set (non-archived goals that are done).
+    const filteredIds = new Set(filteredProfiles.map((p) => p.id))
+    const relevantGoals = (goals ?? []).filter((g) => filteredIds.has(g.owner_id) && g.status !== 'archived')
+    const goalsDoneCount = relevantGoals.filter((g) => g.status === 'completed').length
+    setGoalCompletion(relevantGoals.length > 0 ? Math.round((goalsDoneCount / relevantGoals.length) * 100) : 0)
+
+    // Whole-school comparison by division (ignores the division filter).
+    const byDiv: Record<string, Profile[]> = {}
+    for (const p of allProfiles) { const d = p.division || 'Unassigned'; (byDiv[d] ||= []).push(p) }
+    const divisionRows: DivRow[] = Object.entries(byDiv).map(([division, people]) => {
+      const ids = new Set(people.map((p) => p.id))
+      const hrs = people.reduce((s, p) => s + (hoursMap[p.id] ?? 0), 0)
+      const withObs = people.filter((p) => obsSet.has(p.id)).length
+      const gls = (goals ?? []).filter((g) => ids.has(g.owner_id) && g.status !== 'archived')
+      const done = gls.filter((g) => g.status === 'completed').length
+      return {
+        division, campus: campusForDivision(division) ?? '—', count: people.length,
+        avg: people.length ? hrs / people.length : 0,
+        obsPct: people.length ? Math.round((withObs / people.length) * 100) : 0,
+        goalsTotal: gls.length, goalsDone: done,
+        goalPct: gls.length ? Math.round((done / gls.length) * 100) : 0,
+      }
+    }).sort((a, b) => (a.campus === b.campus ? a.division.localeCompare(b.division) : a.campus.localeCompare(b.campus)))
+    setDivRows(divisionRows)
+
     // Staff rows
     const rows: StaffStats[] = filteredProfiles.map((p) => ({
       profile: p,
@@ -126,11 +166,12 @@ export default function ReportsPage() {
       </div>
 
       {/* Summary metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           { label: 'Staff Count', value: totalStaff, sub: divFilter || 'All School' },
           { label: 'Avg PD Hours', value: avgHours.toFixed(1), sub: `Goal: ${pdGoal}h` },
           { label: 'Obs Coverage', value: `${obsCompletion}%`, sub: 'with ≥1 observation' },
+          { label: 'Goal Completion', value: `${goalCompletion}%`, sub: 'of active goals done' },
           { label: 'Approved Funding', value: `$${totalFunding.toFixed(0)}`, sub: 'this year' },
         ].map((m) => (
           <div key={m.label} className="card p-5">
@@ -139,6 +180,43 @@ export default function ReportsPage() {
             <p className="text-xs text-gray-400 mt-0.5">{m.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* Whole-school comparison by division */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200">
+          <h2 className="font-semibold text-gray-900">By division</h2>
+          <p className="text-xs text-gray-400">Whole-school comparison (ignores the division filter above).</p>
+        </div>
+        {loading ? (
+          <div className="h-32 animate-pulse bg-gray-50" />
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500">Division</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500">Campus</th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-500">Staff</th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-500">Avg hrs</th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-500">Obs coverage</th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-500">Goal completion</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {divRows.map((r) => (
+                <tr key={r.division} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.division}</td>
+                  <td className="px-4 py-3 text-gray-500">{r.campus}</td>
+                  <td className="px-4 py-3 text-right text-gray-700 tabular-nums">{r.count}</td>
+                  <td className="px-4 py-3 text-right tabular-nums"><span className={r.avg >= pdGoal ? 'text-green-700 font-semibold' : 'text-navy-800'}>{r.avg.toFixed(1)}</span></td>
+                  <td className="px-4 py-3 text-right tabular-nums"><span className={r.obsPct >= 80 ? 'text-green-700' : r.obsPct >= 40 ? 'text-navy-800' : 'text-gray-400'}>{r.obsPct}%</span></td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-700">{r.goalsTotal === 0 ? '—' : `${r.goalsDone}/${r.goalsTotal} (${r.goalPct}%)`}</td>
+                </tr>
+              ))}
+              {divRows.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No data.</td></tr>}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Bar chart: PD hours by department */}
