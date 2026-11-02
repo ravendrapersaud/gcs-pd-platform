@@ -1,16 +1,18 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatUSD } from '@/lib/funds'
 import { buildPortfolioHtml } from '@/lib/portfolioPrint'
+import type { FormField } from '@/lib/types'
 import clsx from 'clsx'
 
 type Named = { first_name: string; last_name: string } | null
 export interface PortfolioData {
   profile: {
+    id: string
     first_name: string; last_name: string; title: string | null
     division: string | null; department: string | null; role: string
     campus: string | null; employee_type: string | null; avatar_url: string | null; email: string
@@ -21,6 +23,8 @@ export interface PortfolioData {
   shoutouts: { id: string; message: string; tags: string[]; created_at: string; sender: Named }[]
   pd: { activities: { id: string; title: string; type: string | null; activity_date: string; hours: number; verified: boolean }[]; hoursTotal: number; target: number }
   funding: { id: string; title: string; amount: number; status: string; is_overseas_travel: boolean; created_at: string }[]
+  forms: { id: string; submitted_at: string | null; created_at: string; answers: Record<string, unknown>; template: { id: string; title: string; fields: FormField[]; visible_to_employee: boolean } | null; filler: Named }[]
+  fillable: { id: string; title: string; fill_by: string }[]
 }
 
 const statusColor: Record<string, string> = {
@@ -43,8 +47,43 @@ function Section({ title, count, children }: { title: string; count: number; chi
   )
 }
 
+function FormResponseCard({ r }: { r: PortfolioData['forms'][number] }) {
+  const [open, setOpen] = useState(false)
+  const fields = (r.template?.fields ?? []).filter((f) => f.type !== 'section')
+  return (
+    <li className="rounded-lg border border-gray-100 p-3">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between gap-2 text-left">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">{r.template?.title ?? 'Form'}</p>
+          <p className="text-xs text-gray-400">by {r.filler ? `${r.filler.first_name} ${r.filler.last_name}` : '—'} · {fmtDate(r.submitted_at ?? r.created_at)}</p>
+        </div>
+        <span className="text-xs text-navy-700 shrink-0">{open ? 'Hide' : 'View'}</span>
+      </button>
+      {open && (
+        <dl className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+          {fields.map((f) => {
+            const v = r.answers[f.id]
+            const text = Array.isArray(v) ? (v as string[]).join(', ') : (v == null || v === '' ? '—' : String(v))
+            return (
+              <div key={f.id} className="text-sm">
+                <dt className="text-xs uppercase tracking-wide text-gray-400">{f.label}</dt>
+                <dd className="text-gray-700 whitespace-pre-wrap">
+                  {f.type === 'link' && text !== '—'
+                    ? <a href={text} target="_blank" rel="noopener noreferrer" className="text-navy-700 hover:underline break-all">{text}</a>
+                    : text}
+                </dd>
+              </div>
+            )
+          })}
+        </dl>
+      )}
+    </li>
+  )
+}
+
 export default function PortfolioPage() {
   const params = useParams()
+  const router = useRouter()
   const id = Array.isArray(params.id) ? params.id[0] : (params.id as string)
   const supabase = createClient()
 
@@ -216,6 +255,30 @@ export default function PortfolioPage() {
           </div>
         )}
       </Section>
+
+      {/* Forms */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h3 className="font-semibold text-gray-900">Forms <span className="text-gray-400 font-normal">({data.forms.length})</span></h3>
+          {data.fillable.length > 0 && (
+            <select
+              className="input text-sm py-1.5 w-auto"
+              value=""
+              onChange={(e) => { if (e.target.value) router.push(`/dashboard/forms/fill/${e.target.value}/${p.id}`) }}
+            >
+              <option value="">+ Fill a form…</option>
+              {data.fillable.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
+            </select>
+          )}
+        </div>
+        {data.forms.length === 0 ? (
+          <p className="text-sm text-gray-400">No forms on file{data.fillable.length > 0 ? ' yet — use “Fill a form” above.' : '.'}</p>
+        ) : (
+          <ul className="space-y-2">
+            {data.forms.map((r) => <FormResponseCard key={r.id} r={r} />)}
+          </ul>
+        )}
+      </div>
 
       <div className="pt-1">
         <Link href="/dashboard/admin/staff" className="text-sm text-navy-700 hover:underline">← Back to Roster</Link>

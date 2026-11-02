@@ -112,6 +112,42 @@ export interface PdEvent {
   creator?: Profile
 }
 
+// ── Forms engine ─────────────────────────────────────────────
+export type FormFieldType = 'short_text' | 'long_text' | 'select' | 'checkboxes' | 'date' | 'number' | 'link' | 'section'
+export type FillBy = 'employee' | 'manager' | 'both'
+
+export interface FormField {
+  id: string
+  type: FormFieldType
+  label: string
+  required?: boolean
+  options?: string[] // for select / checkboxes
+  help?: string
+}
+
+export interface FormTemplate {
+  id: string
+  title: string
+  description: string | null
+  fields: FormField[]
+  fill_by: FillBy
+  visible_to_employee: boolean
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+}
+
+export interface FormResponse {
+  id: string
+  template_id: string
+  subject_id: string
+  filled_by: string | null
+  answers: Record<string, unknown>
+  status: 'draft' | 'submitted'
+  submitted_at: string | null
+  created_at: string
+}
+
 export interface EventSource {
   id: string
   name: string

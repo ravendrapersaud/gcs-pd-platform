@@ -17,9 +17,10 @@ import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from '@
 import type { TaxonomyTerm, TaxonomyCategory } from '@/lib/taxonomyDb'
 import type { EventSource } from '@/lib/types'
 import { useTabParam } from '@/lib/useTabParam'
+import FormsSection from '@/components/FormsSettings'
 import clsx from 'clsx'
 
-const SETTINGS_TABS = ['funding', 'library', 'taxonomy', 'calendar'] as const
+const SETTINGS_TABS = ['funding', 'library', 'taxonomy', 'calendar', 'forms'] as const
 type SettingsTab = (typeof SETTINGS_TABS)[number]
 
 const MONTHS = [
@@ -807,7 +808,7 @@ export default function AdminSettingsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {([['funding', 'PD & Funding'], ['library', 'Library & Workspaces'], ['taxonomy', 'Departments & Tags'], ['calendar', 'Calendar']] as [SettingsTab, string][]).map(([k, label]) => (
+        {([['funding', 'PD & Funding'], ['library', 'Library & Workspaces'], ['taxonomy', 'Departments & Tags'], ['calendar', 'Calendar'], ['forms', 'Forms']] as [SettingsTab, string][]).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={clsx('tab', tab === k ? 'tab-active' : 'tab-inactive')}>{label}</button>
         ))}
       </div>
@@ -1005,6 +1006,13 @@ export default function AdminSettingsPage() {
       {tab === 'calendar' && (
         <div className="space-y-6">
           <EventSourcesSection />
+        </div>
+      )}
+
+      {/* ══ Forms ══════════════════════════════════════════════ */}
+      {tab === 'forms' && (
+        <div className="space-y-6">
+          <FormsSection />
         </div>
       )}
 

@@ -39,13 +39,15 @@ export async function GET(request: NextRequest) {
   // ── Authorize: admin (any), supervisor (their report), or self ──
   const { data: me } = await admin.from('profiles').select('role').eq('id', user.id).single()
   const role = me?.role
-  let allowed = role === 'admin' || user.id === userId
-  if (!allowed && role === 'supervisor') {
+  const isSelf = user.id === userId
+  let isSupervisorOfSubject = false
+  if (role === 'supervisor') {
     const { data: a } = await admin.from('supervisor_assignments')
       .select('id').eq('supervisor_id', user.id).eq('staff_id', userId).maybeSingle()
-    allowed = !!a
+    isSupervisorOfSubject = !!a
   }
-  if (!allowed) return NextResponse.json({ error: 'Not authorized to view this portfolio.' }, { status: 403 })
+  const privileged = role === 'admin' || isSupervisorOfSubject
+  if (!privileged && !isSelf) return NextResponse.json({ error: 'Not authorized to view this portfolio.' }, { status: 403 })
 
   const [
     { data: profile },
@@ -55,6 +57,8 @@ export async function GET(request: NextRequest) {
     { data: pd },
     { data: funding },
     { data: settings },
+    { data: responses },
+    { data: activeForms },
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
     admin.from('goals').select('id, title, goal_type, status, progress_pct, due_date, created_at').eq('owner_id', userId),
@@ -70,6 +74,11 @@ export async function GET(request: NextRequest) {
     admin.from('funding_requests').select('id, title, amount, status, is_overseas_travel, created_at')
       .eq('user_id', userId).gte('created_at', start).lte('created_at', endTs).order('created_at', { ascending: false }),
     admin.from('app_settings').select('key, value'),
+    admin.from('form_responses')
+      .select('id, answers, submitted_at, created_at, template:form_templates(id, title, fields, visible_to_employee), filler:profiles!form_responses_filled_by_fkey(first_name, last_name)')
+      .eq('subject_id', userId).eq('status', 'submitted')
+      .gte('created_at', start).lte('created_at', endTs).order('submitted_at', { ascending: false }),
+    admin.from('form_templates').select('id, title, fill_by').eq('is_active', true).order('title'),
   ])
 
   if (!profile) return NextResponse.json({ error: 'Employee not found.' }, { status: 404 })
@@ -84,6 +93,21 @@ export async function GET(request: NextRequest) {
   const settingsMap = Object.fromEntries((settings ?? []).map((r) => [r.key, r.value]))
   const target = Number(settingsMap['pd_hours_target']) || 40
 
+  // A non-privileged viewer (the subject themselves) only sees completed forms
+  // whose template is marked visible_to_employee.
+  const forms = (responses ?? []).filter((r) => {
+    const tmpl = r.template as { visible_to_employee?: boolean } | null
+    return privileged || tmpl?.visible_to_employee === true
+  })
+
+  // Which active templates this viewer may fill for this subject.
+  const fillable = (activeForms ?? []).filter((t) => {
+    const fb = t.fill_by as string
+    if (privileged && (fb === 'manager' || fb === 'both')) return true
+    if (isSelf && (fb === 'employee' || fb === 'both')) return true
+    return false
+  })
+
   return NextResponse.json({
     profile,
     year: { start, end, label, value: year },
@@ -92,5 +116,7 @@ export async function GET(request: NextRequest) {
     shoutouts: shoutouts ?? [],
     pd: { activities: pd ?? [], hoursTotal, target },
     funding: funding ?? [],
+    forms,
+    fillable,
   })
 }

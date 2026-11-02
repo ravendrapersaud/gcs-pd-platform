@@ -36,6 +36,17 @@ export function buildPortfolioHtml(d: PortfolioData): string {
     `<tr><td class="num">${esc(fmtDate(f.created_at))}</td><td>${esc(f.title)}${f.is_overseas_travel ? ' (overseas)' : ''}</td><td class="cap">${esc(f.status)}</td><td class="num">${esc(formatUSD(Number(f.amount)))}</td></tr>`
   ).join('')
 
+  const formsHtml = d.forms.map((r) => {
+    const fields = (r.template?.fields ?? []).filter((f) => f.type !== 'section')
+    const rows = fields.map((f) => {
+      const v = r.answers[f.id]
+      const text = Array.isArray(v) ? (v as string[]).join(', ') : (v == null || v === '' ? '—' : String(v))
+      return `<tr><td class="fl">${esc(f.label)}</td><td>${esc(text)}</td></tr>`
+    }).join('')
+    const who = r.filler ? esc(`${r.filler.first_name} ${r.filler.last_name}`) : '—'
+    return `<div class="form"><div class="form-h">${esc(r.template?.title ?? 'Form')} <span class="form-meta">— ${who}, ${esc(fmtDate(r.submitted_at ?? r.created_at))}</span></div><table class="kv">${rows}</table></div>`
+  }).join('')
+
   const section = (title: string, count: number, body: string) =>
     `<section><h2>${esc(title)} <span class="count">(${count})</span></h2>${count === 0 ? '<p class="empty">Nothing recorded this year.</p>' : body}</section>`
 
@@ -68,6 +79,11 @@ td.cap{text-transform:capitalize}
 .shout-msg{font-style:italic;margin-top:2px}
 .tags{margin-top:4px}.tag{display:inline-block;background:#e8ecf3;color:var(--navy);border-radius:10px;padding:1px 8px;font-size:.72rem;margin-right:4px}
 section{break-inside:avoid}
+.form{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:6px 0;break-inside:avoid}
+.form-h{font-weight:600}.form-meta{color:var(--muted);font-weight:400;font-size:.85em}
+table.kv{width:100%;border-collapse:collapse;margin-top:4px}
+table.kv td{border-bottom:1px solid var(--line);padding:3px 6px;vertical-align:top}
+table.kv td.fl{color:var(--muted);width:34%;font-size:.92em}
 @page{size:letter;margin:.6in}
 @media print{.bar{display:none}body{margin:0;max-width:none}}
 </style></head><body>
@@ -88,5 +104,6 @@ ${section('Formal observations', d.observations.length, `<table><thead><tr><th>F
 ${section('Shout-outs received', d.shoutouts.length, shoutHtml)}
 ${section('PD activities', d.pd.activities.length, `<table><thead><tr><th class="num">Date</th><th>Activity</th><th class="num">Hours</th></tr></thead><tbody>${pdRows}</tbody></table>`)}
 ${section('Funding requests', d.funding.length, `<table><thead><tr><th class="num">Date</th><th>Request</th><th>Status</th><th class="num">Amount</th></tr></thead><tbody>${fundRows}</tbody></table>`)}
+${section('Forms', d.forms.length, formsHtml)}
 </body></html>`
 }
