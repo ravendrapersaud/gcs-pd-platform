@@ -41,6 +41,49 @@ async function fetchText(url: string): Promise<{ text: string; contentType: stri
   }
 }
 
+// ── robots.txt (best-effort) ─────────────────────────────────
+// Fails OPEN (allows) on any error — a missing or unreadable robots.txt
+// conventionally means "no restrictions". Honors the '*' group and our own
+// user-agent token; longest matching path rule wins.
+async function isAllowedByRobots(target: string): Promise<boolean> {
+  let origin: string, path: string
+  try { const u = new URL(target); origin = u.origin; path = u.pathname || '/' } catch { return true }
+  let txt = ''
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 8000)
+    const res = await fetch(`${origin}/robots.txt`, { headers: { 'User-Agent': UA }, signal: ctrl.signal })
+    clearTimeout(t)
+    if (!res.ok) return true
+    txt = await res.text()
+  } catch { return true }
+
+  const token = 'gcs-pd-platform'
+  const lines = txt.split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim())
+  let applies = false
+  const rules: { allow: boolean; path: string }[] = []
+  for (const line of lines) {
+    const m = line.match(/^(user-agent|allow|disallow)\s*:\s*(.*)$/i)
+    if (!m) continue
+    const field = m[1].toLowerCase(); const val = m[2].trim()
+    if (field === 'user-agent') {
+      const ua = val.toLowerCase()
+      applies = ua === '*' || ua.includes(token) || token.includes(ua)
+    } else if (applies) {
+      rules.push({ allow: field === 'allow', path: val })
+    }
+  }
+  // Compare the most specific (longest) matching Allow vs Disallow prefix.
+  // An empty Disallow value means "allow everything", so it never blocks.
+  let bestLen = -1, bestAllow = true
+  for (const r of rules) {
+    if (!r.path) continue
+    const prefix = r.path.replace(/\*.*$/, '') // treat first '*' as a prefix cut
+    if (path.startsWith(prefix) && prefix.length > bestLen) { bestLen = prefix.length; bestAllow = r.allow }
+  }
+  return bestLen === -1 ? true : bestAllow
+}
+
 // ── dates ────────────────────────────────────────────────────
 // Accepts an ICS date (YYYYMMDD or YYYYMMDDTHHMMSSZ) → YYYY-MM-DD, or passes
 // through an already-ISO date. Returns null if it can't be made sense of.
@@ -192,6 +235,10 @@ ${pageText}`
 
 // ── orchestration ────────────────────────────────────────────
 export async function scrapeSource(url: string, kind: 'auto' | 'ics' | 'html'): Promise<ScrapeResult> {
+  if (!(await isAllowedByRobots(url))) {
+    return { events: [], status: 'skipped', error: 'Blocked by the site’s robots.txt' }
+  }
+
   let text = ''
   let contentType = ''
   try {
