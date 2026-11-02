@@ -21,7 +21,7 @@ export function buildPortfolioHtml(d: PortfolioData): string {
   ).join('')
 
   const obsRows = d.observations.map((o) =>
-    `<tr><td>${esc(o.twg_data?.frameworkTitle ?? 'Observation')}</td><td>${o.observer ? esc(`${o.observer.first_name} ${o.observer.last_name}`) : '—'}</td><td class="num">${esc(fmtDate(o.observed_at))}</td></tr>`
+    `<tr><td>${esc(o.twg_data?.frameworkTitle ?? 'Observation')}${o.goal ? ` <span class="form-meta">— toward “${esc(o.goal.title)}”</span>` : ''}</td><td>${o.observer ? esc(`${o.observer.first_name} ${o.observer.last_name}`) : '—'}</td><td class="num">${esc(fmtDate(o.observed_at))}</td></tr>`
   ).join('')
 
   const shoutHtml = d.shoutouts.map((s) =>

@@ -59,6 +59,23 @@ export default function ObservationCapturePage() {
   const [emailCc, setEmailCc] = useState<Profile[]>([])
   const [emailBcc, setEmailBcc] = useState<Profile[]>([])
   const [showBcc, setShowBcc] = useState(false)
+  const [goalId, setGoalId] = useState('')
+  const [activeGoals, setActiveGoals] = useState<{ id: string; title: string }[]>([])
+
+  // The observed teacher's active goals, so an observation can be tagged as
+  // evidence toward one of them.
+  useEffect(() => {
+    if (!person) { setActiveGoals([]); return }
+    let cancelled = false
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/user-goals?userId=${person.id}`, { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` } })
+      const body = await res.json().catch(() => ({}))
+      if (!cancelled) setActiveGoals(((body.goals ?? []) as { id: string; title: string }[]).map((g) => ({ id: g.id, title: g.title })))
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [person])
   const [observedAt, setObservedAt] = useState(() => new Date().toISOString().slice(0, 16))
   const [twg, setTwg] = useState<TwgData>(() => emptyTwgData('full'))
 
@@ -123,6 +140,7 @@ export default function ObservationCapturePage() {
           const fwForObs = fwList.find((f) => f.id === (obs.framework_id as string))
           const doms = (fwForObs?.domains ?? []).map((d) => ({ id: d.id, title: d.title }))
           if (obs.twg_data) setTwg(normalizeCapture(obs.twg_data, doms))
+          setGoalId((obs.goal_id as string) ?? '')
         }
       } else {
         // New observation: default to Teaching with Grace, else the first framework.
@@ -308,6 +326,7 @@ export default function ObservationCapturePage() {
       notes: twg.wrap.overall || null,
       status: nextStatus,
       twg_data: payload,
+      goal_id: goalId || null,
     }
     try {
       let id = obsId
@@ -604,6 +623,7 @@ export default function ObservationCapturePage() {
                 <PersonPicker profiles={profiles} exclude={userId ? [userId] : []} value={person} placeholder="Search staff by name or title…"
                   onChange={(p) => {
                     setPerson(p)
+                    setGoalId('')
                     const upd: Partial<TwgData> = {}
                     if (p?.division && !twg.division) upd.division = p.division
                     if (p?.department && !twg.department) upd.department = p.department
@@ -645,6 +665,17 @@ export default function ObservationCapturePage() {
 
           {person && (
             <ObservedGoals personId={person.id} personName={`${person.first_name} ${person.last_name}`} />
+          )}
+
+          {person && activeGoals.length > 0 && (
+            <div className="card p-4">
+              <label className="label">Evidence toward a goal <span className="text-gray-400 font-normal">(optional)</span></label>
+              <select className="input" value={goalId} onChange={(e) => setGoalId(e.target.value)}>
+                <option value="">Not linked to a goal</option>
+                {activeGoals.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Link this observation to one of {person.first_name}’s goals so it counts as evidence there and in their portfolio.</p>
+            </div>
           )}
 
           <div className="card p-5 space-y-3">

@@ -19,7 +19,7 @@ export interface PortfolioData {
   }
   year: { start: string; end: string; label: string; value: number }
   goals: { id: string; title: string; goal_type: string; status: string; progress_pct: number; due_date: string | null; created_at: string }[]
-  observations: { id: string; obs_type: string | null; observed_at: string; notes: string | null; twg_data: { frameworkTitle?: string } | null; observer: Named }[]
+  observations: { id: string; obs_type: string | null; observed_at: string; notes: string | null; twg_data: { frameworkTitle?: string } | null; goal: { title: string } | null; observer: Named }[]
   shoutouts: { id: string; message: string; tags: string[]; created_at: string; sender: Named }[]
   pd: { activities: { id: string; title: string; type: string | null; activity_date: string; hours: number; verified: boolean }[]; hoursTotal: number; target: number }
   funding: { id: string; title: string; amount: number; status: string; is_overseas_travel: boolean; created_at: string }[]
@@ -199,7 +199,7 @@ export default function PortfolioPage() {
                 <span className="text-sm font-medium text-gray-900">{o.twg_data?.frameworkTitle ?? 'Observation'}</span>
                 <span className="text-xs text-gray-400 shrink-0">{fmtDate(o.observed_at)}</span>
               </div>
-              <p className="text-xs text-gray-500">by {o.observer ? `${o.observer.first_name} ${o.observer.last_name}` : '—'}</p>
+              <p className="text-xs text-gray-500">by {o.observer ? `${o.observer.first_name} ${o.observer.last_name}` : '—'}{o.goal ? <> · <span className="text-navy-700">evidence toward “{o.goal.title}”</span></> : null}</p>
               {o.notes && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{o.notes}</p>}
             </li>
           ))}

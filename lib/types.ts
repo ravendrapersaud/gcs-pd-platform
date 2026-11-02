@@ -193,6 +193,7 @@ export interface Goal {
   // joined
   owner?: Profile
   collaborators?: Profile[]
+  evidence_count?: number // observations tagged as evidence toward this goal
 }
 
 export interface GoalCollaborator {

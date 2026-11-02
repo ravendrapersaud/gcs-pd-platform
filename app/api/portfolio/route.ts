@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     admin.from('profiles').select('*').eq('id', userId).single(),
     admin.from('goals').select('id, title, goal_type, status, progress_pct, due_date, created_at').eq('owner_id', userId),
     admin.from('observations')
-      .select('id, obs_type, observed_at, notes, twg_data, observer:profiles!observations_observer_id_fkey(first_name, last_name)')
+      .select('id, obs_type, observed_at, notes, twg_data, goal:goals(title), observer:profiles!observations_observer_id_fkey(first_name, last_name)')
       .eq('observed_id', userId).eq('is_peer', false).eq('status', 'published')
       .gte('observed_at', start).lte('observed_at', endTs).order('observed_at', { ascending: false }),
     admin.from('spotlights')

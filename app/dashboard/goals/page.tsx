@@ -184,6 +184,9 @@ function GoalCard({ goal, onUpdate, onEdit, readOnly = false, currentUserId, onA
           <div className="flex flex-col items-end gap-1">
             <span className={`badge ${statusColor[goal.status]}`}>{goal.status}</span>
             {goal.goal_type === 'faculty_inquiry' && <span className="badge badge-navy">Inquiry</span>}
+            {(goal.evidence_count ?? 0) > 0 && (
+              <span className="badge badge-green" title="Observations tagged as evidence toward this goal">{goal.evidence_count} evidence</span>
+            )}
           </div>
           {canManage && (
             <div className="relative">
@@ -530,7 +533,14 @@ export default function GoalsPage() {
         if (!p) continue
         collabMap[row.goal_id] = [...(collabMap[row.goal_id] ?? []), p]
       }
-      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id) })
+
+      // Count observations tagged as evidence toward each goal (only those the
+      // viewer may read; RLS scopes it).
+      const { data: evRows } = await supabase.from('observations').select('goal_id').in('goal_id', allIds).eq('status', 'published').eq('is_peer', false)
+      const evCount: Record<string, number> = {}
+      for (const r of evRows ?? []) { const gid = r.goal_id as string; evCount[gid] = (evCount[gid] ?? 0) + 1 }
+
+      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id), evidence_count: evCount[g.id] ?? 0 })
       setGoals(mine.map(attach))
       // Collaborative = any goal you share with someone: goals others added you
       // to, PLUS goals you own that have co-owners (so a goal you shared out,
