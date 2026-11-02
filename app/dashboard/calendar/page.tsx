@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { PdEvent } from '@/lib/types'
 import { EVENT_TYPES } from '@/lib/taxonomy'
@@ -607,16 +608,19 @@ export default function CalendarPage() {
                         ))}
                       </div>
                     )}
-                    {e.url && (
-                      <a
-                        href={e.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block text-navy-800 text-xs font-semibold hover:text-navy-900 mt-2"
+                    <div className="flex items-center gap-4 mt-2">
+                      {e.url && (
+                        <a href={e.url} target="_blank" rel="noopener noreferrer" className="text-navy-800 text-xs font-semibold hover:text-navy-900">
+                          Details →
+                        </a>
+                      )}
+                      <Link
+                        href={`/dashboard/pd-log?new=1&title=${encodeURIComponent(e.title)}&date=${encodeURIComponent(e.start_date)}&etype=${encodeURIComponent(e.event_type ?? '')}`}
+                        className="text-navy-800 text-xs font-semibold hover:text-navy-900"
                       >
-                        Details →
-                      </a>
-                    )}
+                        + Log as PD
+                      </Link>
+                    </div>
                   </div>
                 </div>
               )

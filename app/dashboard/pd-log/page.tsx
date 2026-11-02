@@ -98,12 +98,27 @@ export default function PdLogPage() {
     load()
   }, [load])
 
-  // Deep-link from the dashboard quick actions: ?new=1 opens the matching form.
+  // Deep-link from the dashboard quick actions (?new=1) and the PD Calendar's
+  // "Log as PD" (prefills title/date/type from the event).
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
-    if (p.get('new') === '1') {
-      if (p.get('tab') === 'funding') setShowFundingForm(true)
-      else setShowActivityForm(true)
+    if (p.get('new') !== '1') return
+    if (p.get('tab') === 'funding') { setShowFundingForm(true); return }
+    setShowActivityForm(true)
+    const title = p.get('title')
+    const date = p.get('date')
+    const etype = (p.get('etype') ?? '').toLowerCase()
+    const typeMap: Record<string, PdType> = {
+      conference: 'conference', workshop: 'workshop', webinar: 'webinar',
+      'certificate program': 'course', 'local event': 'other',
+    }
+    if (title || date || etype) {
+      setActForm((f) => ({
+        ...f,
+        ...(title ? { title } : {}),
+        ...(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? { activity_date: date } : {}),
+        ...(etype && typeMap[etype] ? { type: typeMap[etype] } : {}),
+      }))
     }
   }, [])
 
