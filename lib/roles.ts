@@ -11,6 +11,22 @@
 
 import type { RoleType } from './types'
 
+// ── Revised role model (seven scoped roles) ──────────────────────
+// A person holds one OR MORE of these; two roles grant the union of their
+// capabilities. Each has a scope of "reach" (whole school → campus → division
+// → department → self). Phase 1 stores these as data; permissions still use
+// the legacy `role` access level above until later phases wire them up.
+export const PD_ROLES = [
+  'Full Access',
+  'Campus Head',
+  'Division Leader',
+  'Senior Administrator',
+  'Team Lead',
+  'Faculty',
+  'Staff',
+] as const
+export type PdRole = (typeof PD_ROLES)[number]
+
 export const ROLE_ACCESS_LABELS: Record<RoleType, string> = {
   staff: 'Member',
   supervisor: 'Supervisor',

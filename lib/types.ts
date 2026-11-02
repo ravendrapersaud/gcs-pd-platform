@@ -50,6 +50,10 @@ export interface Profile {
   can_create_workspaces: boolean
   avatar_url: string | null
   favorites_public?: boolean // opt-in: colleagues may view my Resource Library favorites
+  // Revised profile (Phase 1 — data only; not yet wired to permissions)
+  campus?: string | null            // '86' | '46'
+  teaches_classes?: boolean | null
+  roles?: string[]                  // one or more of PD_ROLES
   created_at: string
 }
 

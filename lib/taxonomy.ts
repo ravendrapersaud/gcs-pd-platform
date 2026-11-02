@@ -46,6 +46,19 @@ export const DIVISIONS = [
   { code: 'HS', name: 'High School' },
 ] as const
 
+// Campuses group divisions: 86 = EC/LS/MS, 46 = HS.
+export const CAMPUSES = ['86', '46'] as const
+export type Campus = (typeof CAMPUSES)[number]
+
+// The campus a division belongs to, or null when it can't be inferred
+// (no division / All School) — those are set by hand in the Roster.
+export function campusForDivision(division: string | null | undefined): Campus | null {
+  const d = (division ?? '').toLowerCase()
+  if (d.includes('high')) return '46'
+  if (/early|lower|middle/.test(d)) return '86'
+  return null
+}
+
 // Division options for people-pickers: the four teaching divisions plus
 // "All School" for cross-division roles (administration, operations, tech).
 export const DIVISION_OPTIONS: string[] = [

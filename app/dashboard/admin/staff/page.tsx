@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
-import { DIVISION_OPTIONS } from '@/lib/taxonomy'
+import { DIVISION_OPTIONS, CAMPUSES, campusForDivision } from '@/lib/taxonomy'
 import { departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
 import { parseFundSettings, isInFundYear } from '@/lib/funds'
-import { roleAccessLabel } from '@/lib/roles'
+import { roleAccessLabel, PD_ROLES } from '@/lib/roles'
 import clsx from 'clsx'
 
 interface StaffRow extends Profile {
@@ -208,6 +208,9 @@ export default function StaffRosterPage() {
       employee_type: row.employee_type ?? '',
       role: row.role,
       can_create_workspaces: row.can_create_workspaces ?? false,
+      campus: row.campus ?? '',
+      teaches_classes: row.teaches_classes ?? false,
+      roles: row.roles ?? [],
     })
     setAllotmentInput(row.pd_allotment === null || row.pd_allotment === undefined ? '' : String(row.pd_allotment))
     setSupervisorId('')
@@ -292,6 +295,9 @@ export default function StaffRosterPage() {
       pd_allotment: allotmentInput.trim() === '' ? null : Number(allotmentInput),
       role: editForm.role,
       can_create_workspaces: editForm.can_create_workspaces ?? false,
+      campus: editForm.campus || null,
+      teaches_classes: editForm.teaches_classes ?? null,
+      roles: editForm.roles ?? [],
       needs_setup: false, // saving the profile completes setup
     }).eq('id', selected.id).select()
 
@@ -376,10 +382,22 @@ export default function StaffRosterPage() {
               </div>
               <div>
                 <label className="label">Division</label>
-                <select className="input" value={editForm.division ?? ''} onChange={(e) => setEditForm({ ...editForm, division: e.target.value })}>
+                <select className="input" value={editForm.division ?? ''} onChange={(e) => {
+                  const division = e.target.value
+                  const c = campusForDivision(division)
+                  setEditForm({ ...editForm, division, ...(c ? { campus: c } : {}) })
+                }}>
                   <option value="">Unspecified</option>
                   {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="label">Campus</label>
+                <select className="input" value={editForm.campus ?? ''} onChange={(e) => setEditForm({ ...editForm, campus: e.target.value })}>
+                  <option value="">Unspecified</option>
+                  {CAMPUSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Auto-set from division (86 = EC/LS/MS, 46 = HS); override for staff without a division.</p>
               </div>
               <div>
                 <label className="label">Department</label>
@@ -421,6 +439,16 @@ export default function StaffRosterPage() {
                   Drives which fund-year reset applies (staff &amp; admin July 1, faculty late Aug).
                 </p>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="teaches-classes"
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500"
+                  checked={editForm.teaches_classes ?? false}
+                  onChange={(e) => setEditForm({ ...editForm, teaches_classes: e.target.checked })}
+                />
+                <label htmlFor="teaches-classes" className="text-sm text-gray-700">Teaches classes</label>
+              </div>
               <div>
                 <label className="label">PD allotment override ($)</label>
                 <input
@@ -438,12 +466,39 @@ export default function StaffRosterPage() {
               </div>
               {isAdmin && (
                 <div>
-                  <label className="label">Access</label>
+                  <label className="label">Access <span className="text-gray-400 font-normal">(current permissions)</span></label>
                   <select className="input" value={editForm.role ?? 'staff'} onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Profile['role'] })}>
                     <option value="staff">Member</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="admin">Platform Admin</option>
                   </select>
+                </div>
+              )}
+              {isAdmin && (
+                <div>
+                  <label className="label">Roles <span className="text-gray-400 font-normal">(new model)</span></label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PD_ROLES.map((r) => {
+                      const on = (editForm.roles ?? []).includes(r)
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setEditForm((f) => {
+                            const cur = f.roles ?? []
+                            return { ...f, roles: on ? cur.filter((x) => x !== r) : [...cur, r] }
+                          })}
+                          className={clsx(
+                            'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                            on ? 'bg-navy-900 text-white border-navy-900' : 'border-gray-300 text-gray-600 hover:border-navy-400'
+                          )}
+                        >
+                          {r}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Scoped-reach roles. Not yet wired to permissions — the Access level above still governs for now.</p>
                 </div>
               )}
               <div className="flex items-center gap-2">

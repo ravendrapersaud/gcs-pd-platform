@@ -13,7 +13,7 @@ export interface PortfolioData {
   profile: {
     first_name: string; last_name: string; title: string | null
     division: string | null; department: string | null; role: string
-    employee_type: string | null; avatar_url: string | null; email: string
+    campus: string | null; employee_type: string | null; avatar_url: string | null; email: string
   }
   year: { start: string; end: string; label: string; value: number }
   goals: { id: string; title: string; goal_type: string; status: string; progress_pct: number; due_date: string | null; created_at: string }[]
@@ -103,7 +103,7 @@ export default function PortfolioPage() {
             <div className="min-w-0">
               <h1 className="text-2xl font-display text-gray-900 truncate">{name}</h1>
               <p className="text-gray-500 text-sm">
-                {[p.title, p.division, p.department].filter(Boolean).join(' · ') || '—'}
+                {[p.title, p.division, p.department, p.campus ? `Campus ${p.campus}` : null].filter(Boolean).join(' · ') || '—'}
               </p>
               <p className="text-xs text-gray-400 mt-0.5 capitalize">{p.employee_type ?? ''} · {p.role}</p>
             </div>

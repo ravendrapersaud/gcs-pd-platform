@@ -13,7 +13,7 @@ const fmtDate = (d: string) => new Date(d.length <= 10 ? `${d}T12:00:00` : d).to
 export function buildPortfolioHtml(d: PortfolioData): string {
   const p = d.profile
   const name = `${p.first_name} ${p.last_name}`
-  const meta = [p.title, p.division, p.department].filter(Boolean).map(esc).join(' &middot; ')
+  const meta = [p.title, p.division, p.department, p.campus ? `Campus ${p.campus}` : null].filter(Boolean).map(esc).join(' &middot; ')
   const generated = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   const goalRows = d.goals.map((g) =>
