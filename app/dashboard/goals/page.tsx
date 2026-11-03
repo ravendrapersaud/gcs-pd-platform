@@ -6,15 +6,16 @@ import { createClient } from '@/lib/supabase/client'
 import type { Goal, Profile, GoalStatus, GoalType } from '@/lib/types'
 import { facultyGoalQuestionDue, DEFAULT_FACULTY_GOAL_QUESTION_DUE } from '@/lib/appSettings'
 import { useTabParam, useQueryParam } from '@/lib/useTabParam'
+import SchoolGoalsDirectory from '@/components/SchoolGoalsDirectory'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
-const GOAL_TABS = ['mine', 'collab', 'team', 'archived'] as const
+const GOAL_TABS = ['mine', 'collab', 'team', 'archived', 'school'] as const
 
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
-type TabId = 'mine' | 'collab' | 'team' | 'archived'
+type TabId = 'mine' | 'collab' | 'team' | 'archived' | 'school'
 
 const statusColor: Record<GoalStatus, string> = {
   active: 'badge-green',
@@ -451,6 +452,7 @@ export default function GoalsPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [myRole, setMyRole] = useState<string | null>(null)
+  const [myDepartment, setMyDepartment] = useState<string | null>(null)
   const [myEmployeeType, setMyEmployeeType] = useState<string | null>(null)
   const [questionDue, setQuestionDue] = useState<string>(DEFAULT_FACULTY_GOAL_QUESTION_DUE)
   const [showForm, setShowForm] = useState(false)
@@ -489,6 +491,7 @@ export default function GoalsPage() {
     setMyEmployeeType(me?.employee_type ?? null)
     const role = me?.role ?? null
     setMyRole(role)
+    setMyDepartment(me?.department ?? null)
     setQuestionDue(facultyGoalQuestionDue(settings))
 
     const mine = (myGoals ?? []) as Goal[]
@@ -669,13 +672,16 @@ export default function GoalsPage() {
 
   const meProfile = profiles.find((p) => p.id === userId)
 
+  const canSchoolGoals = myRole === 'admin' || (myDepartment ?? '').toLowerCase() === 'academic administration'
   const tabs: TabId[] = ['mine', 'collab']
   if (supervisees.length > 0) tabs.push('team')
   tabs.push('archived')
+  if (canSchoolGoals) tabs.push('school')
   const tabLabel = (t: TabId) =>
     t === 'mine' ? 'My Goals'
     : t === 'collab' ? 'Collaborative Goals'
     : t === 'team' ? "My Team's Goals"
+    : t === 'school' ? 'School Goals'
     : 'Archived Goals'
   const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null) }
 
@@ -740,6 +746,8 @@ export default function GoalsPage() {
             <div key={i} className="card h-40 animate-pulse bg-gray-100" />
           ))}
         </div>
+      ) : tab === 'school' ? (
+        <SchoolGoalsDirectory />
       ) : tab === 'team' ? (
         <OversightPanel
           roster={supervisees}
