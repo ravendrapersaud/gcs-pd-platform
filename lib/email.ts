@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import type { Spotlight, Profile } from '@/lib/types'
+import { buildInviteIcs, type IcsEvent } from '@/lib/ics'
 
 // Lazily construct the client: the Resend constructor throws if the
 // key is missing, which would crash the BUILD if done at module level.
@@ -207,6 +208,45 @@ function buildObservationHtml(teacher: Profile, observer: Profile, visit: string
 }
 
 // Never throws; returns a structured result (like sendSpotlightEmail).
+// Sends one email with a calendar invite (.ics) attachment per event — used to
+// put a scheduled observation (and its post-observation meeting) on the
+// teacher's calendar. Degrades to 'skipped' with no RESEND_API_KEY.
+export async function sendObservationInvite(params: {
+  to: string
+  cc?: string[]
+  subject: string
+  html: string
+  events: IcsEvent[]
+}): Promise<EmailResult> {
+  const to = [params.to].filter(Boolean)
+  const cc = (params.cc ?? []).filter(Boolean)
+  const bcc: string[] = []
+  const resend = getResend()
+  if (!resend) {
+    console.warn('[sendObservationInvite] RESEND_API_KEY not set — skipping invite.')
+    return { status: 'skipped', to, cc, bcc, subject: params.subject }
+  }
+  try {
+    const attachments = params.events.map((ev, i) => ({
+      filename: i === 0 ? 'observation.ics' : `event-${i + 1}.ics`,
+      content: Buffer.from(buildInviteIcs(ev)).toString('base64'),
+      contentType: 'text/calendar; method=REQUEST',
+    }))
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      ...(cc.length ? { cc } : {}),
+      subject: params.subject,
+      html: params.html,
+      attachments,
+    })
+    if (error) return { status: 'failed', to, cc, bcc, subject: params.subject, error: error.message }
+    return { status: 'sent', to, cc, bcc, subject: params.subject, providerId: data?.id }
+  } catch (err: unknown) {
+    return { status: 'failed', to, cc, bcc, subject: params.subject, error: err instanceof Error ? err.message : 'Unknown send error' }
+  }
+}
+
 export async function sendObservationEmail(
   teacher: Profile,
   observer: Profile,

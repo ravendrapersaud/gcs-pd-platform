@@ -77,6 +77,7 @@ export default function ObservationCapturePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [person])
   const [observedAt, setObservedAt] = useState(() => new Date().toISOString().slice(0, 16))
+  const [postMeetingAt, setPostMeetingAt] = useState('')
   const [twg, setTwg] = useState<TwgData>(() => emptyTwgData('full'))
 
   const [startedAt, setStartedAt] = useState<number | null>(null)
@@ -141,6 +142,7 @@ export default function ObservationCapturePage() {
           const doms = (fwForObs?.domains ?? []).map((d) => ({ id: d.id, title: d.title }))
           if (obs.twg_data) setTwg(normalizeCapture(obs.twg_data, doms))
           setGoalId((obs.goal_id as string) ?? '')
+          setPostMeetingAt(obs.post_obs_meeting_date ? new Date(obs.post_obs_meeting_date as string).toISOString().slice(0, 16) : '')
         }
       } else {
         // New observation: default to Teaching with Grace, else the first framework.
@@ -327,6 +329,7 @@ export default function ObservationCapturePage() {
       status: nextStatus,
       twg_data: payload,
       goal_id: goalId || null,
+      post_obs_meeting_date: postMeetingAt ? new Date(postMeetingAt).toISOString() : null,
     }
     try {
       let id = obsId
@@ -348,7 +351,7 @@ export default function ObservationCapturePage() {
     } finally {
       setSaving(false)
     }
-  }, [person, twg, elapsed, userId, frameworkId, observedAt, obsId])
+  }, [person, twg, elapsed, userId, frameworkId, observedAt, obsId, goalId, postMeetingAt])
 
   const publish = useCallback(async () => {
     const id = await saveObservation('published')
@@ -369,6 +372,26 @@ export default function ObservationCapturePage() {
       setNotice('Published, but the notification request failed. The teacher can still see it in the app.')
     }
   }, [saveObservation, emailCc, emailBcc, showBcc])
+
+  // Save the prework as a draft, then email the teacher a calendar invite for
+  // the observation (and the post-meeting, if dated), copying the observer.
+  const scheduleInvite = async () => {
+    const id = await saveObservation('draft')
+    if (!id) return
+    setNotice(null)
+    try {
+      const res = await fetch('/api/observations/invite', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+      })
+      const b = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(b.error || 'Could not send the invite.'); return }
+      if (b.email === 'sent') setNotice(`Calendar invite sent to ${person?.first_name ?? 'the teacher'}${b.events > 1 ? ' (observation + post-meeting)' : ''}.`)
+      else if (b.email === 'skipped') setNotice('Saved as a draft, but email is off, so no invite was sent.')
+      else setNotice(`Saved, but the invite didn’t send${b.error ? `: ${b.error}` : ''}.`)
+    } catch {
+      setError('The invite request failed.')
+    }
+  }
 
   const copySummary = async () => {
     try { await navigator.clipboard.writeText(summaryMarkdown); setSavedAt('copied'); setTimeout(() => setSavedAt(null), 1500) }
@@ -750,6 +773,24 @@ export default function ObservationCapturePage() {
                   <textarea rows={2} className="input resize-none" value={twg.pre[k]} onChange={(e) => patch({ pre: { ...twg.pre, [k]: e.target.value } })} />
                 </div>
               ))}
+              <div>
+                <label className="label">Post-observation meeting <span className="text-gray-400 font-normal">(optional)</span></label>
+                <input type="datetime-local" className="input" value={postMeetingAt} onChange={(e) => setPostMeetingAt(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {/* Schedule & send a calendar invite to the teacher */}
+          {person && (
+            <div className="card p-5 bg-gray-50/60 space-y-2">
+              <h3 className="font-semibold text-gray-900">Schedule &amp; invite</h3>
+              <p className="text-sm text-gray-500 max-w-prose">
+                Email {person.first_name} a calendar invite for this observation{postMeetingAt ? ' and the post-observation meeting' : ''} — with your pre-observation notes attached. Accepting adds {postMeetingAt ? 'them' : 'it'} to their Google Calendar. You&apos;re copied too.
+              </p>
+              <button onClick={scheduleInvite} disabled={saving || !observedAt} className="btn-secondary text-sm w-fit">
+                {saving ? 'Working…' : 'Schedule & send calendar invite'}
+              </button>
+              {notice && <p className="text-sm text-navy-800 bg-navy-50 border border-navy-200 rounded-lg p-3">{notice}</p>}
             </div>
           )}
 
