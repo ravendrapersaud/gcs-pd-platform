@@ -48,6 +48,7 @@ export interface Profile {
   pd_allotment: number | null // per-person override; null = school default
   needs_setup: boolean
   can_create_workspaces: boolean
+  can_approve_events?: boolean // may approve/publish & manage PD calendar events
   avatar_url: string | null
   favorites_public?: boolean // opt-in: colleagues may view my Resource Library favorites
   // Revised profile (Phase 1 — data only; not yet wired to permissions)
@@ -152,7 +153,7 @@ export interface EventSource {
   id: string
   name: string
   url: string
-  kind: 'auto' | 'ics' | 'html'
+  kind: 'auto' | 'ics' | 'html' | 'pdguide'
   is_active: boolean
   default_event_type: string | null
   default_audience: string[]

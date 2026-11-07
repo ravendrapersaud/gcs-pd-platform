@@ -512,7 +512,7 @@ function EventSourcesSection() {
 
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
-  const [kind, setKind] = useState<'auto' | 'ics' | 'html'>('auto')
+  const [kind, setKind] = useState<'auto' | 'ics' | 'html' | 'pdguide'>('auto')
 
   const [running, setRunning] = useState(false)
   const [runSummary, setRunSummary] = useState<string | null>(null)
@@ -631,10 +631,11 @@ function EventSourcesSection() {
           </div>
           <div>
             <label className="label">Type</label>
-            <select className="input" value={kind} onChange={(e) => setKind(e.target.value as 'auto' | 'ics' | 'html')}>
+            <select className="input" value={kind} onChange={(e) => setKind(e.target.value as 'auto' | 'ics' | 'html' | 'pdguide')}>
               <option value="auto">Auto-detect</option>
               <option value="ics">Calendar feed (.ics)</option>
               <option value="html">Web page (AI extraction)</option>
+              <option value="pdguide">PD Guide directory (links to host sites)</option>
             </select>
           </div>
         </div>

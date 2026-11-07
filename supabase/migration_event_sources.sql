@@ -8,7 +8,7 @@ create table if not exists public.event_sources (
   id            uuid primary key default gen_random_uuid(),
   name          text not null,
   url           text not null,
-  kind          text not null default 'auto',  -- 'auto' | 'ics' | 'html'
+  kind          text not null default 'auto',  -- 'auto' | 'ics' | 'html' | 'pdguide'
   is_active     boolean not null default true,
   default_event_type text,                      -- tag imported events, optional
   default_audience   text[] not null default '{}',

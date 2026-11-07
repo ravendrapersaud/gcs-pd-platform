@@ -48,7 +48,7 @@ export default function CalendarPage() {
   const supabase = createClient()
   const [events, setEvents] = useState<PdEvent[]>([])
   const [loading, setLoading] = useState(true)
-  const [role, setRole] = useState<string>('staff')
+  const [canApprove, setCanApprove] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [taxTerms, setTaxTerms] = useState<TaxonomyTerm[]>([])
 
@@ -65,6 +65,7 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: '',
     event_type: 'Conference',
@@ -85,12 +86,12 @@ export default function CalendarPage() {
 
     const [{ data: evs }, { data: prof }, { data: tax }] = await Promise.all([
       supabase.from('pd_events').select('*').order('start_date', { ascending: true }),
-      supabase.from('profiles').select('role').eq('id', user.id).single(),
+      supabase.from('profiles').select('role, can_approve_events').eq('id', user.id).single(),
       supabase.from('taxonomy_terms').select('*').order('sort_order', { ascending: true }),
     ])
 
     setEvents((evs ?? []) as PdEvent[])
-    if (prof?.role) setRole(prof.role)
+    setCanApprove(prof?.role === 'admin' || prof?.can_approve_events === true)
     setTaxTerms((tax ?? []) as TaxonomyTerm[])
     setLoading(false)
   }, [])
@@ -99,7 +100,8 @@ export default function CalendarPage() {
     load()
   }, [load])
 
-  const canManage = role === 'supervisor' || role === 'admin'
+  // Anyone may submit an event (it enters the review queue as 'pending'); approvers
+  // publish directly and can review/dismiss the queue.
   const audienceOptions = termsFor(taxTerms, 'audience')
 
   // Scraped events arrive as 'pending' and only show on the public calendar once
@@ -205,8 +207,15 @@ export default function CalendarPage() {
         cost: form.cost === '' ? null : Number(form.cost),
         audience: formAudience,
         created_by: userId,
+        // Approvers publish straight away; everyone else submits to the queue.
+        status: canApprove ? 'published' : 'pending',
       })
       if (insertErr) throw insertErr
+      setSubmitNotice(
+        canApprove
+          ? 'Event added to the calendar.'
+          : 'Thanks — your event was submitted for review. An approver will publish it to the calendar.'
+      )
       setShowForm(false)
       setForm({
         title: '',
@@ -235,19 +244,27 @@ export default function CalendarPage() {
           <h2 className="text-lg font-semibold text-gray-900">Professional Development Calendar</h2>
           <p className="text-sm text-gray-500">Upcoming conferences, workshops, and learning opportunities.</p>
         </div>
-        {canManage && (
-          <button onClick={() => setShowForm((s) => !s)} className="btn-primary shrink-0">
-            {showForm ? 'Close' : '+ Add Event'}
-          </button>
-        )}
+        <button onClick={() => { setShowForm((s) => !s); setSubmitNotice(null) }} className="btn-primary shrink-0">
+          {showForm ? 'Close' : canApprove ? '+ Add Event' : '+ Submit Event'}
+        </button>
       </div>
 
-      {/* Add event form */}
-      {canManage && showForm && (
+      {/* Confirmation after a submit/add */}
+      {submitNotice && !showForm && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{submitNotice}</div>
+      )}
+
+      {/* Add / submit event form */}
+      {showForm && (
         <div className="card p-6">
           {formError && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {formError}
+            </div>
+          )}
+          {!canApprove && (
+            <div className="mb-4 p-3 bg-navy-50 border border-navy-100 rounded-lg text-navy-800 text-sm">
+              Your event will be sent to the PD team for review before it appears on the calendar.
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -381,15 +398,15 @@ export default function CalendarPage() {
                 Cancel
               </button>
               <button type="submit" disabled={saving} className="btn-primary flex-1">
-                {saving ? 'Saving…' : 'Add Event'}
+                {saving ? 'Saving…' : canApprove ? 'Add Event' : 'Submit for Review'}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Review queue (admins/supervisors) — scraped events awaiting approval */}
-      {canManage && pendingEvents.length > 0 && (
+      {/* Review queue (approvers) — submitted & imported events awaiting approval */}
+      {canApprove && pendingEvents.length > 0 && (
         <div className="card p-5 border-yellow-200 bg-yellow-50/40">
           <div className="mb-3">
             <h3 className="font-semibold text-gray-900">

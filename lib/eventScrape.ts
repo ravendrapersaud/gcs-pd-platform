@@ -233,11 +233,139 @@ ${pageText}`
   }
 }
 
+// ── PD Guide (pdguide.org) ───────────────────────────────────
+// A curated directory of PD events for independent schools. We use it ONLY as a
+// discovery tool. PD Guide's /events page is a Next.js app whose full event list
+// ships in the server payload as structured JSON — each event already carries the
+// HOST organization's own URL. We decode that payload, take the facts, and link
+// each event to the HOST (never PD Guide, and never its affiliate link). PD Guide
+// itself never appears on our calendar: their terms bar presenting their listings
+// as part of another site, and the host org is the authoritative source anyway.
+// Deterministic — one request, no LLM / API key.
+
+const PDGUIDE_MAX_EVENTS = 100 // soonest-first cap — keeps the review queue sane
+
+function isPdGuide(url: string): boolean {
+  try { return /(^|\.)pdguide\.org$/i.test(new URL(url).host) } catch { return false }
+}
+
+// "From $6,500 (members)", "$$99–$149", "Free", null → a best-effort USD number.
+function parsePdCost(raw: string | undefined | null): number | null {
+  if (!raw) return null
+  if (/\bfree\b/i.test(raw)) return 0
+  const m = raw.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/)
+  return m ? parseFloat(m[1].replace(/,/g, '')) : null
+}
+
+// Next.js streams its RSC data as self.__next_f.push([n,"<chunk>"]) calls, each a
+// JSON string literal. Concatenating the decoded chunks reconstructs the payload.
+function decodeNextPayload(html: string): string {
+  let out = ''
+  const re = /self\.__next_f\.push\(\[\d+,/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html))) {
+    const open = html.indexOf('"', m.index + m[0].length)
+    if (open === -1) continue
+    let j = open + 1
+    for (; j < html.length; j++) { if (html[j] === '\\') { j++; continue } if (html[j] === '"') break }
+    try { out += JSON.parse(html.slice(open, j + 1)) as string } catch { /* skip a malformed chunk */ }
+  }
+  return out
+}
+
+// Return the balanced {...} starting at s[start], ignoring braces inside strings.
+function sliceJsonObject(s: string, start: number): string | null {
+  let depth = 0
+  let inStr = false
+  for (let i = start; i < s.length; i++) {
+    const c = s[i]
+    if (inStr) { if (c === '\\') { i++; continue } if (c === '"') inStr = false; continue }
+    if (c === '"') inStr = true
+    else if (c === '{') depth++
+    else if (c === '}') { depth--; if (depth === 0) return s.slice(start, i + 1) }
+  }
+  return null
+}
+
+const asStr = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+// Parse the PD Guide listing payload into host-sourced ScrapedEvents. Exported so
+// it can be unit-tested against a saved payload without a network call.
+export function parsePdGuideListing(html: string): ScrapedEvent[] {
+  const decoded = decodeNextPayload(html)
+  const today = new Date().toISOString().slice(0, 10)
+  const seen = new Set<string>()
+  const out: ScrapedEvent[] = []
+
+  let idx = 0
+  while ((idx = decoded.indexOf('{"id":"', idx)) !== -1) {
+    const slice = sliceJsonObject(decoded, idx)
+    idx += 7
+    if (!slice) continue
+    let o: Record<string, unknown>
+    try { o = JSON.parse(slice) } catch { continue }
+
+    const id = asStr(o.id)
+    const title = asStr(o.title).trim()
+    const start = asStr(o.start_date).slice(0, 10)
+    const url = asStr(o.url) // the HOST's own URL — never affiliate_url
+    // Keep real events; skip the many React nodes that also start {"id":...}.
+    if (!id || !title || !/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^https?:\/\//i.test(url)) continue
+    if (o.status && o.status !== 'published') continue
+    if (seen.has(id)) continue
+    seen.add(id)
+
+    const rawEnd = asStr(o.end_date).slice(0, 10)
+    const end = /^\d{4}-\d{2}-\d{2}$/.test(rawEnd) ? rawEnd : null
+    if ((end ?? start) < today) continue // upcoming only
+
+    const format = asStr(o.format)
+    const location = asStr(o.location) || null
+    const blurb = (asStr(o.blurb) || asStr(o.description)).replace(/\s+/g, ' ').trim()
+    let host = ''
+    try { host = new URL(url).hostname.replace(/^www\./, '') } catch { /* leave blank */ }
+    const description = [host && `From ${host}.`, blurb].filter(Boolean).join(' ').slice(0, 1400) || null
+
+    out.push({
+      title: title.slice(0, 300),
+      description,
+      event_type: asStr(o.event_type) || null,
+      location,
+      is_virtual: /online/i.test(format) && !/in_person/i.test(format),
+      start_date: start,
+      end_date: end && end !== start ? end : null,
+      url,
+      cost: parsePdCost(asStr(o.cost)),
+      external_key: `pdguide:${id}`,
+    })
+  }
+
+  out.sort((a, b) => a.start_date.localeCompare(b.start_date))
+  return out.slice(0, PDGUIDE_MAX_EVENTS)
+}
+
+async function scrapePdGuide(listingUrl: string): Promise<ScrapeResult> {
+  let html: string
+  try {
+    html = (await fetchText(listingUrl)).text
+  } catch (err: unknown) {
+    return { events: [], status: 'error', error: `Fetch failed: ${err instanceof Error ? err.message : 'unknown'}` }
+  }
+  const events = parsePdGuideListing(html)
+  if (events.length === 0) {
+    return { events: [], status: 'error', error: 'No events parsed from the PD Guide payload (page structure may have changed).' }
+  }
+  return { events, status: 'ok' }
+}
+
 // ── orchestration ────────────────────────────────────────────
-export async function scrapeSource(url: string, kind: 'auto' | 'ics' | 'html'): Promise<ScrapeResult> {
+export async function scrapeSource(url: string, kind: 'auto' | 'ics' | 'html' | 'pdguide'): Promise<ScrapeResult> {
   if (!(await isAllowedByRobots(url))) {
     return { events: [], status: 'skipped', error: 'Blocked by the site’s robots.txt' }
   }
+
+  // PD Guide gets a dedicated, host-sourced adapter (by explicit kind or host).
+  if (kind === 'pdguide' || isPdGuide(url)) return scrapePdGuide(url)
 
   let text = ''
   let contentType = ''

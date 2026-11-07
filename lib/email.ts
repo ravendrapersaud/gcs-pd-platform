@@ -247,6 +247,96 @@ export async function sendObservationInvite(params: {
   }
 }
 
+// ── PD event review digest ───────────────────────────────────────
+// Sent to approvers after an import adds new events to the review queue, so the
+// queue actually gets noticed instead of waiting for someone to wander onto the
+// Calendar page. One email, approvers in BCC (they don't need each other's
+// addresses). Degrades to 'skipped' with no RESEND_API_KEY.
+export type DigestEvent = { title: string; start_date: string; url: string | null }
+
+function fromAddress(): string {
+  const m = EMAIL_FROM.match(/<([^>]+)>/)
+  return m ? m[1] : EMAIL_FROM
+}
+
+function buildReviewDigestHtml(newEvents: DigestEvent[], totalPending: number): string {
+  const shown = newEvents.slice(0, 12)
+  const rows = shown.map((e) => {
+    let host = ''
+    try { host = e.url ? new URL(e.url).hostname.replace(/^www\./, '') : '' } catch { /* ignore */ }
+    const [y, m, d] = e.start_date.split('-').map(Number)
+    const date = new Date(y, (m || 1) - 1, d || 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return `<tr><td style="padding:12px 0;border-bottom:1px solid #eef0f4;">
+      <p style="margin:0;color:#111827;font-size:14px;font-weight:600;line-height:1.4;">${escHtml(e.title)}</p>
+      <p style="margin:4px 0 0;color:#6b7280;font-size:12px;">${escHtml(date)}${host ? ' · ' + escHtml(host) : ''}</p>
+    </td></tr>`
+  }).join('')
+  const more = newEvents.length > shown.length
+    ? `<p style="margin:14px 0 0;color:#9ca3af;font-size:12px;">+${newEvents.length - shown.length} more</p>` : ''
+  const n = newEvents.length
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>PD events awaiting review</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <tr><td style="background:#003882;padding:32px 40px;text-align:center;">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;"><span style="font-size:20px;font-weight:900;color:#003882;line-height:1;">GCS</span></div>
+          <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
+          <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">PD events awaiting review</p>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <p style="color:#374151;font-size:15px;margin:0 0 20px;">
+            <strong>${n} new event${n === 1 ? '' : 's'}</strong> ${n === 1 ? 'was' : 'were'} just imported and ${n === 1 ? 'is' : 'are'} waiting for approval before ${n === 1 ? 'it appears' : 'they appear'} on the PD calendar.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+          ${more}
+          <div style="text-align:center;margin-top:28px;"><a href="${APP_URL}/dashboard/calendar" style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">Review the queue</a></div>
+          ${totalPending > n ? `<p style="color:#9ca3af;font-size:12px;text-align:center;margin:16px 0 0;">${totalPending} events are awaiting review in total.</p>` : ''}
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;"><p style="color:#9ca3af;font-size:12px;margin:0;">Grace Church School · Professional Development Platform<br/>You received this because you can approve PD events.</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+export async function sendReviewDigest(
+  recipients: { email: string | null }[],
+  newEvents: DigestEvent[],
+  totalPending: number
+): Promise<EmailResult> {
+  const bcc = recipients.map((r) => r.email).filter((e): e is string => Boolean(e))
+  const to = [fromAddress()]
+  const cc: string[] = []
+  const subject = `${newEvents.length} new PD event${newEvents.length === 1 ? '' : 's'} to review`
+
+  const resend = getResend()
+  if (!resend) {
+    console.warn('[sendReviewDigest] RESEND_API_KEY not set — skipping digest.')
+    return { status: 'skipped', to, cc, bcc, subject }
+  }
+  if (bcc.length === 0) {
+    return { status: 'skipped', to, cc, bcc, subject, error: 'No approver recipients with an email address' }
+  }
+  try {
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      bcc,
+      subject,
+      html: buildReviewDigestHtml(newEvents, totalPending),
+    })
+    if (error) return { status: 'failed', to, cc, bcc, subject, error: error.message }
+    return { status: 'sent', to, cc, bcc, subject, providerId: data?.id }
+  } catch (err: unknown) {
+    return { status: 'failed', to, cc, bcc, subject, error: err instanceof Error ? err.message : 'Unknown send error' }
+  }
+}
+
 export async function sendObservationEmail(
   teacher: Profile,
   observer: Profile,

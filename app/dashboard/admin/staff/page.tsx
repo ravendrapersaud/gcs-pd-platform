@@ -208,6 +208,7 @@ export default function StaffRosterPage() {
       employee_type: row.employee_type ?? '',
       role: row.role,
       can_create_workspaces: row.can_create_workspaces ?? false,
+      can_approve_events: row.can_approve_events ?? false,
       campus: row.campus ?? '',
       teaches_classes: row.teaches_classes ?? false,
       roles: row.roles ?? [],
@@ -295,6 +296,7 @@ export default function StaffRosterPage() {
       pd_allotment: allotmentInput.trim() === '' ? null : Number(allotmentInput),
       role: editForm.role,
       can_create_workspaces: editForm.can_create_workspaces ?? false,
+      can_approve_events: editForm.can_approve_events ?? false,
       campus: editForm.campus || null,
       teaches_classes: editForm.teaches_classes ?? null,
       roles: editForm.roles ?? [],
@@ -514,6 +516,21 @@ export default function StaffRosterPage() {
                   <span className="text-gray-400"> (e.g. department heads)</span>
                 </label>
               </div>
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <input
+                    id="can-approve-events"
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500"
+                    checked={editForm.can_approve_events ?? false}
+                    onChange={(e) => setEditForm({ ...editForm, can_approve_events: e.target.checked })}
+                  />
+                  <label htmlFor="can-approve-events" className="text-sm text-gray-700">
+                    Can approve PD events
+                    <span className="text-gray-400"> (reviews &amp; publishes submitted/imported events)</span>
+                  </label>
+                </div>
+              )}
               <div>
                 <label className="label">Set Primary Supervisor</label>
                 <select className="input" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>

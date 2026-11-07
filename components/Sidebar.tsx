@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -166,6 +167,24 @@ export default function Sidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const supabase = createClient()
 
+  // Pending-review count for the PD Calendar badge. Only approvers can read
+  // pending rows (RLS), so the count is naturally 0 for everyone else — but we
+  // also skip the query unless the viewer is an approver. Refreshes on navigation
+  // so the badge clears after the queue is worked.
+  const canApprove = profile.role === 'admin' || profile.can_approve_events === true
+  const [pendingReview, setPendingReview] = useState(0)
+  useEffect(() => {
+    if (!canApprove) return
+    let active = true
+    supabase
+      .from('pd_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .then(({ count }) => { if (active) setPendingReview(count ?? 0) })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canApprove, pathname])
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -228,6 +247,14 @@ export default function Sidebar({ profile }: SidebarProps) {
                         {item.icon}
                       </span>
                       {item.label}
+                      {item.href === '/dashboard/calendar' && pendingReview > 0 && (
+                        <span
+                          title={`${pendingReview} event${pendingReview === 1 ? '' : 's'} awaiting review`}
+                          className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-yellow-400 text-navy-900 text-[11px] font-bold leading-none"
+                        >
+                          {pendingReview > 99 ? '99+' : pendingReview}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 ))}
