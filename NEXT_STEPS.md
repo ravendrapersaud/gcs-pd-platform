@@ -117,6 +117,18 @@ test supervisor-scoped behaviour — admins bypass those checks entirely.
 - **`getSession()` vs `getUser()`** — Supabase warns that `getSession()`
   reads cookies without authenticating them, and several API routes use
   it for auth decisions. Legitimate hardening item.
+- **Email-sending hardening (pre-launch)** — the `notify.gcschool.org`
+  sender is a reputation asset to protect. SPF/DKIM/DMARC are aligned
+  (DMARC is `p=none` — tighten to `quarantine` after watching reports).
+  To do before launch: (1) swap the Resend key for a **send-only key
+  scoped to `notify.gcschool.org`**, + 2FA on a shared Resend account;
+  (2) enforce the `@gcschool.org` **recipient allowlist on every send
+  route**, not just peer feedback (so it can't be used as an open relay);
+  (3) add a **per-user daily send cap / rate limit**; (4) run
+  `review-app-security` over the four send routes (`observations/notify`,
+  `shout-outs`, `observations/invite`, `cron/scrape-events` digest).
+  Google Workspace admin allowlist for `notify.gcschool.org` fixes inbox
+  placement. Budget **Resend Pro ~$20/mo** (free tier caps at 100/day).
 - **Blackbaud API integration** (auto-sync instead of CSV) — stubbed.
 - **Paid tiers (~$45/mo)** before real production: Supabase Pro (daily
   backups, no pausing) + Vercel Pro (commercial use). The free tier has
