@@ -189,7 +189,7 @@ function buildObservationHtml(teacher: Profile, observer: Profile, visit: string
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
         <tr><td style="background:#003882;padding:32px 40px;text-align:center;">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;"><span style="font-size:20px;font-weight:900;color:#003882;line-height:1;">GCS</span></div>
+          <table align="center" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto 12px;"><tr><td align="center" valign="middle" width="60" height="60" style="width:60px;height:60px;background:#ffffff;border-radius:50%;font-size:19px;font-weight:800;color:#003882;line-height:60px;font-family:'Segoe UI',Arial,sans-serif;">GCS</td></tr></table>
           <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
           <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">${heading}</p>
         </td></tr>
@@ -283,7 +283,7 @@ function buildReviewDigestHtml(newEvents: DigestEvent[], totalPending: number): 
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
         <tr><td style="background:#003882;padding:32px 40px;text-align:center;">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:#ffffff;border-radius:50%;margin-bottom:12px;"><span style="font-size:20px;font-weight:900;color:#003882;line-height:1;">GCS</span></div>
+          <table align="center" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto 12px;"><tr><td align="center" valign="middle" width="60" height="60" style="width:60px;height:60px;background:#ffffff;border-radius:50%;font-size:19px;font-weight:800;color:#003882;line-height:60px;font-family:'Segoe UI',Arial,sans-serif;">GCS</td></tr></table>
           <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
           <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">PD events awaiting review</p>
         </td></tr>
