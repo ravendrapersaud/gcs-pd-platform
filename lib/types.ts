@@ -140,6 +140,31 @@ export interface FormTemplate {
   created_at: string
 }
 
+// ── Check-in cadence: an employee's chosen check-in frequency + note slots.
+// See supabase/migration_checkin_schedule.sql.
+export type CheckInFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'twice_yearly' | 'none'
+
+export interface CheckInSchedule {
+  id: string
+  employee_id: string
+  frequency: CheckInFrequency
+  template_id: string | null
+  start_date: string
+  active: boolean
+  created_at: string
+  updated_at?: string
+}
+
+export interface CheckInNote {
+  id: string
+  employee_id: string
+  author_id: string | null
+  content: string
+  shared: boolean
+  created_at: string
+  author?: Profile
+}
+
 export interface FormResponse {
   id: string
   template_id: string

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatUSD } from '@/lib/funds'
 import { buildPortfolioHtml } from '@/lib/portfolioPrint'
 import PortfolioPromptBlock from '@/components/PortfolioPromptBlock'
+import CheckInCadence from '@/components/CheckInCadence'
 import type { FormField } from '@/lib/types'
 import clsx from 'clsx'
 
@@ -306,6 +307,9 @@ export default function PortfolioPage() {
           </div>
         )}
       </Section>
+
+      {/* Check-in cadence (frequency + note slots) */}
+      <CheckInCadence employeeId={p.id} employeeFirstName={p.first_name} />
 
       {/* Check-ins */}
       <div className="card p-5">
