@@ -332,7 +332,7 @@ export default function ProjectsPage() {
         <div className="flex gap-2 flex-wrap">
           {tabs.map((t) => (
             <button key={t} onClick={() => setTab(t)} className={clsx('tab', tab === t ? 'tab-active' : 'tab-inactive')}>
-              {tabLabel(t)}{t === 'team' && supervisees.length > 0 ? ` (${supervisees.length})` : ''}
+              {tabLabel(t)}{t === 'team' && team.length > 0 ? ` (${team.length})` : ''}
             </button>
           ))}
         </div>
