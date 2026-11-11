@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 import { DIVISION_OPTIONS, CAMPUSES, campusForDivision } from '@/lib/taxonomy'
-import { departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
+import { departmentGroups, settingsMap, type DepartmentGroup } from '@/lib/appSettings'
 import { parseFundSettings, isInFundYear } from '@/lib/funds'
 import { roleAccessLabel, PD_ROLES } from '@/lib/roles'
+import { trackForProfile, studentSupportDepartments, TRACK_LABELS, isTrack } from '@/lib/tracks'
 import clsx from 'clsx'
 
 interface StaffRow extends Profile {
@@ -39,6 +40,7 @@ export default function StaffRosterPage() {
   // (role) dropdowns, which only admins may change.
   const [isAdmin, setIsAdmin] = useState(false)
   const [deptGroups, setDeptGroups] = useState<DepartmentGroup[]>(() => departmentGroups(null))
+  const [ssDepts, setSsDepts] = useState<string[]>(() => studentSupportDepartments(null))
   const [selected, setSelected] = useState<StaffRow | null>(null)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
   const [allotmentInput, setAllotmentInput] = useState('')
@@ -78,6 +80,7 @@ export default function StaffRosterPage() {
 
     const fundCfg = parseFundSettings(settingsRows)
     setDeptGroups(departmentGroups(settingsRows))
+    setSsDepts(studentSupportDepartments(settingsMap(settingsRows)))
     const typeById: Record<string, string | null> = {}
     for (const p of profiles ?? []) typeById[p.id] = (p as Profile).employee_type
 
@@ -212,6 +215,7 @@ export default function StaffRosterPage() {
       campus: row.campus ?? '',
       teaches_classes: row.teaches_classes ?? false,
       roles: row.roles ?? [],
+      track: row.track ?? '',
     })
     setAllotmentInput(row.pd_allotment === null || row.pd_allotment === undefined ? '' : String(row.pd_allotment))
     setSupervisorId('')
@@ -300,6 +304,7 @@ export default function StaffRosterPage() {
       campus: editForm.campus || null,
       teaches_classes: editForm.teaches_classes ?? null,
       roles: editForm.roles ?? [],
+      track: isTrack(editForm.track) ? editForm.track : null,
       needs_setup: false, // saving the profile completes setup
     }).eq('id', selected.id).select()
 
@@ -450,6 +455,35 @@ export default function StaffRosterPage() {
                   onChange={(e) => setEditForm({ ...editForm, teaches_classes: e.target.checked })}
                 />
                 <label htmlFor="teaches-classes" className="text-sm text-gray-700">Teaches classes</label>
+              </div>
+              <div>
+                <label className="label">
+                  Development track
+                  {!isTrack(editForm.track) && (
+                    <span className="text-gray-400 font-normal">
+                      {' '}— auto: {TRACK_LABELS[trackForProfile({
+                        employee_type: editForm.employee_type,
+                        teaches_classes: editForm.teaches_classes,
+                        department: editForm.department,
+                      }, ssDepts)]}
+                    </span>
+                  )}
+                </label>
+                <select
+                  className="input"
+                  value={isTrack(editForm.track) ? editForm.track : ''}
+                  onChange={(e) => setEditForm({ ...editForm, track: e.target.value })}
+                >
+                  <option value="">Auto (from department)</option>
+                  <option value="faculty">{TRACK_LABELS.faculty}</option>
+                  <option value="student_support">{TRACK_LABELS.student_support}</option>
+                  <option value="institutional">{TRACK_LABELS.institutional}</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Frames the portfolio (observations vs. projects/check-ins) &amp; sets confidentiality
+                  defaults for Student Support. Separate from access &amp; seniority — override only when
+                  the department mapping is wrong.
+                </p>
               </div>
               <div>
                 <label className="label">PD allotment override ($)</label>

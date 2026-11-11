@@ -55,6 +55,10 @@ export interface Profile {
   campus?: string | null            // '86' | '46'
   teaches_classes?: boolean | null
   roles?: string[]                  // one or more of PD_ROLES
+  // Development-track override (faculty | student_support | institutional).
+  // null = derive from department. See lib/tracks.ts. Distinct from seniority
+  // (roles[]) and access (role).
+  track?: string | null
   created_at: string
 }
 

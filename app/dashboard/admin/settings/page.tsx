@@ -14,6 +14,7 @@ import {
   settingsMap,
 } from '@/lib/appSettings'
 import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from '@/lib/taxonomy'
+import { studentSupportDepartments, DEFAULT_STUDENT_SUPPORT_DEPARTMENTS } from '@/lib/tracks'
 import type { TaxonomyTerm, TaxonomyCategory } from '@/lib/taxonomyDb'
 import type { EventSource } from '@/lib/types'
 import { useTabParam } from '@/lib/useTabParam'
@@ -303,6 +304,83 @@ function TaxonomySection() {
           + Add term
         </button>
       </div>
+    </div>
+  )
+}
+
+// Editor for which departments count as student-facing *support* (counselors,
+// nurses, learning specialists). Members of these departments derive the
+// Student Support track — projects confidential by default, clinical/student
+// note guidance. Saves immediately. One department name per line; blank
+// restores the built-in defaults (lib/tracks.ts).
+function StudentSupportSection() {
+  const supabase = createClient()
+  const [userId, setUserId] = useState<string | null>(null)
+  const [text, setText] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setUserId(user?.id ?? null)
+    const { data: settings } = await supabase.from('app_settings').select('key, value')
+    setText(studentSupportDepartments(settingsMap(settings)).join('\n'))
+    setLoaded(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const save = async () => {
+    setBusy(true); setError(null); setSaved(false)
+    const normalized = normalizeList(text)
+    const { error: err } = await supabase.from('app_settings').upsert(
+      { key: 'student_support_departments', value: normalized, updated_by: userId, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    setText(normalized ? normalized : DEFAULT_STUDENT_SUPPORT_DEPARTMENTS.join('\n'))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  return (
+    <div className="card p-6 space-y-4">
+      <div>
+        <h2 className="font-semibold text-gray-900 text-lg">Student Support departments</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          People in these departments are student-facing support (counseling, health, learning
+          support). They derive the <span className="font-medium text-gray-700">Student Support</span> track —
+          projects are private by default and check-ins carry confidentiality guidance. Everyone
+          non-teaching outside this list is <span className="font-medium text-gray-700">Institutional</span>.
+          One department per line; the names must match the Roster departments above. A single
+          person can be overridden on their Roster card.
+        </p>
+      </div>
+
+      {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+
+      {!loaded ? (
+        <div className="h-28 animate-pulse bg-gray-100 rounded-lg" />
+      ) : (
+        <>
+          <textarea
+            className="input font-mono text-sm min-h-[7rem]"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={DEFAULT_STUDENT_SUPPORT_DEPARTMENTS.join('\n')}
+          />
+          <div className="flex items-center gap-3">
+            <button onClick={save} disabled={busy} className="btn-primary text-sm">
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            {saved && <span className="text-sm text-green-700">Saved.</span>}
+            <span className="text-xs text-gray-400">Clear the box and save to restore defaults.</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -998,6 +1076,8 @@ export default function AdminSettingsPage() {
       <p className="text-xs text-gray-400">Changes on this tab save automatically as you make them.</p>
       {/* ── Departments (row editor, rename-with-reassign) ─────── */}
       <DepartmentsSection />
+      {/* ── Student Support track mapping (saves immediately) ──── */}
+      <StudentSupportSection />
       {/* ── Tags & taxonomy (mutations apply immediately) ─────── */}
       <TaxonomySection />
       </div>

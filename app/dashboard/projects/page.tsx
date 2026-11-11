@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Project, ProjectStatus, Profile } from '@/lib/types'
 import { useTabParam } from '@/lib/useTabParam'
 import PersonPicker from '@/components/PersonPicker'
+import { settingsMap } from '@/lib/appSettings'
+import { trackForProfile, studentSupportDepartments, trackIsConfidential } from '@/lib/tracks'
 import clsx from 'clsx'
 
 const PROJECT_TABS = ['mine', 'collab', 'team', 'archived'] as const
@@ -122,21 +124,33 @@ function ProjectCard({
 }
 
 function ProjectForm({
-  onSave, onCancel, profiles, currentUserId, defaultYear,
+  onSave, onCancel, profiles, currentUserId, defaultYear, defaultPrivate = false,
 }: {
   onSave: (data: Partial<Project>, collaborators: Profile[]) => Promise<void>
   onCancel: () => void
   profiles: Profile[]
   currentUserId: string | null
   defaultYear: number
+  defaultPrivate?: boolean
 }) {
   const [form, setForm] = useState({
     title: '', description: '', status: 'planning' as ProjectStatus,
-    school_year_start: defaultYear, start_date: '', target_date: '', visibility: 'normal' as 'normal' | 'private',
+    school_year_start: defaultYear, start_date: '', target_date: '',
+    visibility: (defaultPrivate ? 'private' : 'normal') as 'normal' | 'private',
   })
   const [collaborators, setCollaborators] = useState<Profile[]>([])
   const [saving, setSaving] = useState(false)
   const years = Array.from({ length: 3 }, (_, i) => currentSchoolYear() + 1 - i)
+
+  // defaultPrivate can resolve after this form has mounted (e.g. the ?new=1
+  // deep-link races the profile/track load), so sync the checkbox when it
+  // arrives — but stop once the user has set it themselves.
+  const vizTouched = useRef(false)
+  useEffect(() => {
+    if (!vizTouched.current) {
+      setForm((f) => ({ ...f, visibility: defaultPrivate ? 'private' : 'normal' }))
+    }
+  }, [defaultPrivate])
 
   const save = async () => {
     setSaving(true)
@@ -191,11 +205,16 @@ function ProjectForm({
       </div>
       <div className="flex items-center gap-2">
         <input id="proj-private" type="checkbox" className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500"
-          checked={form.visibility === 'private'} onChange={(e) => setForm({ ...form, visibility: e.target.checked ? 'private' : 'normal' })} />
+          checked={form.visibility === 'private'} onChange={(e) => { vizTouched.current = true; setForm({ ...form, visibility: e.target.checked ? 'private' : 'normal' }) }} />
         <label htmlFor="proj-private" className="text-sm text-gray-700">
           Private <span className="text-gray-400">— visible only to me, my supervisor, and admins (for confidential/student-facing work)</span>
         </label>
       </div>
+      {defaultPrivate && (
+        <p className="text-xs text-navy-700 -mt-2">
+          Defaulted to private because you&apos;re on the Student Support track. Uncheck if this project isn&apos;t confidential.
+        </p>
+      )}
       <div className="flex gap-3">
         <button onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
         <button onClick={save} disabled={saving || !form.title.trim()} className="btn-primary flex-1">{saving ? 'Saving…' : 'Create Project'}</button>
@@ -214,6 +233,7 @@ export default function ProjectsPage() {
   const [supervisees, setSupervisees] = useState<Profile[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [userId, setUserId] = useState<string | null>(null)
+  const [defaultPrivate, setDefaultPrivate] = useState(false)
   const [newYear, setNewYear] = useState(currentSchoolYear())
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -225,15 +245,23 @@ export default function ProjectsPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: myRows }, { data: collabRows }, { data: archRows }, { data: allProfiles }, { data: assigns }] = await Promise.all([
+    const [{ data: myRows }, { data: collabRows }, { data: archRows }, { data: allProfiles }, { data: assigns }, { data: settingsRows }] = await Promise.all([
       supabase.from('projects').select('*').eq('owner_id', user.id).in('status', EDITABLE_STATUSES).order('created_at', { ascending: false }),
       supabase.from('project_collaborators').select('projects(*)').eq('user_id', user.id),
       supabase.from('projects').select('*').eq('owner_id', user.id).eq('status', 'archived').order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').order('first_name'),
       supabase.from('supervisor_assignments').select('staff_id').eq('supervisor_id', user.id),
+      supabase.from('app_settings').select('key, value'),
     ])
 
     const profById = new Map((allProfiles ?? []).map((p) => [p.id, p as Profile]))
+
+    // Student Support staff get confidential-by-default projects.
+    const me = profById.get(user.id)
+    if (me) {
+      const track = trackForProfile(me, studentSupportDepartments(settingsMap(settingsRows)))
+      setDefaultPrivate(trackIsConfidential(track))
+    }
     const mineRows = (myRows ?? []) as Project[]
     const collaborative = (collabRows ?? []).flatMap((c) => (c.projects ? [c.projects as unknown as Project] : []))
     const arch = (archRows ?? []) as Project[]
@@ -342,7 +370,7 @@ export default function ProjectsPage() {
       {saveError && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{saveError}</div>}
 
       {showForm && (
-        <ProjectForm onSave={handleCreate} onCancel={() => { setShowForm(false); setSaveError(null) }} profiles={profiles} currentUserId={userId} defaultYear={newYear} />
+        <ProjectForm onSave={handleCreate} onCancel={() => { setShowForm(false); setSaveError(null) }} profiles={profiles} currentUserId={userId} defaultYear={newYear} defaultPrivate={defaultPrivate} />
       )}
 
       {loading ? (
