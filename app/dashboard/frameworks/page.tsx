@@ -126,6 +126,13 @@ interface DomainInput {
   indicators: { title: string; description: string }[]
 }
 
+// Edit-mode domain/indicator rows carry the existing row id (when present) so a
+// save can update it in place, insert new ones, and delete removed ones —
+// instead of wiping and re-creating (which would cascade-delete observation
+// ratings tied to those domains).
+interface EditIndicator { id?: string; title: string; description: string }
+interface EditDomain { id?: string; title: string; description: string; indicators: EditIndicator[] }
+
 export default function FrameworksPage() {
   const supabase = createClient()
   const [frameworks, setFrameworks] = useState<Framework[]>([])
@@ -142,6 +149,7 @@ export default function FrameworksPage() {
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<{ title: string; division: string; department: string; description: string; target_tracks: string[]; target_roles: string[] }>({ title: '', division: '', department: '', description: '', target_tracks: [], target_roles: [] })
   const [usageCount, setUsageCount] = useState<number | null>(null)
+  const [editDomains, setEditDomains] = useState<EditDomain[]>([])
   const [managing, setManaging] = useState(false)
   const [manageError, setManageError] = useState<string | null>(null)
 
@@ -189,6 +197,12 @@ export default function FrameworksPage() {
       target_tracks: selected.target_tracks ?? [],
       target_roles: selected.target_roles ?? [],
     })
+    setEditDomains((selected.domains ?? []).map((d) => ({
+      id: d.id,
+      title: d.title,
+      description: d.description ?? '',
+      indicators: (d.indicators ?? []).map((ind) => ({ id: ind.id, title: ind.title, description: ind.description ?? '' })),
+    })))
     supabase
       .from('observations')
       .select('id', { count: 'exact', head: true })
@@ -198,9 +212,20 @@ export default function FrameworksPage() {
 
   const handleSaveHeader = async () => {
     if (!selected) return
+
+    // Domains being removed cascade-delete any observation ratings against them.
+    const keptDomainIds = new Set(editDomains.filter((d) => d.id).map((d) => d.id as string))
+    const removedDomains = (selected.domains ?? []).filter((d) => !keptDomainIds.has(d.id))
+    if (removedDomains.length > 0 && !window.confirm(
+      `You're removing ${removedDomains.length} domain${removedDomains.length === 1 ? '' : 's'}. Any observation ratings recorded against ${removedDomains.length === 1 ? 'it' : 'them'} will also be deleted. Continue?`
+    )) return
+
     setManaging(true)
     setManageError(null)
-    const { data, error } = await supabase
+    const fail = (msg: string) => { setManageError(msg); setManaging(false) }
+
+    // 1. Header + targeting.
+    const { error: hErr } = await supabase
       .from('frameworks')
       .update({
         title: editForm.title.trim() || selected.title,
@@ -211,14 +236,80 @@ export default function FrameworksPage() {
         target_roles: editForm.target_roles,
       })
       .eq('id', selected.id)
+      .select('id')
+    if (hErr) return fail(`Save failed: ${hErr.message}`)
+
+    // 2. Delete removed domains (cascade removes their indicators + ratings).
+    for (const d of removedDomains) {
+      const { error } = await supabase.from('framework_domains').delete().eq('id', d.id).select('id')
+      if (error) return fail(`Removing “${d.title}” failed: ${error.message}`)
+    }
+
+    // 3. Upsert each kept/new domain and reconcile its indicators.
+    for (let i = 0; i < editDomains.length; i++) {
+      const d = editDomains[i]
+      if (!d.title.trim()) continue
+      let domainId = d.id
+      if (domainId) {
+        const { error } = await supabase.from('framework_domains')
+          .update({ title: d.title.trim(), description: d.description.trim() || null, order_index: i })
+          .eq('id', domainId).select('id')
+        if (error) return fail(`Saving “${d.title}” failed: ${error.message}`)
+      } else {
+        const { data, error } = await supabase.from('framework_domains')
+          .insert({ framework_id: selected.id, title: d.title.trim(), description: d.description.trim() || null, order_index: i })
+          .select('id').single()
+        if (error || !data) return fail(`Adding “${d.title}” failed: ${error?.message ?? 'no row returned'}`)
+        domainId = data.id
+      }
+
+      const origIndicators = (selected.domains ?? []).find((x) => x.id === domainId)?.indicators ?? []
+      const keptIndIds = new Set(d.indicators.filter((ind) => ind.id).map((ind) => ind.id as string))
+      for (const ind of origIndicators.filter((ind) => !keptIndIds.has(ind.id))) {
+        const { error } = await supabase.from('framework_indicators').delete().eq('id', ind.id).select('id')
+        if (error) return fail(`Removing an indicator failed: ${error.message}`)
+      }
+      for (let j = 0; j < d.indicators.length; j++) {
+        const ind = d.indicators[j]
+        if (!ind.title.trim()) continue
+        if (ind.id) {
+          const { error } = await supabase.from('framework_indicators')
+            .update({ title: ind.title.trim(), description: ind.description.trim() || null, order_index: j })
+            .eq('id', ind.id).select('id')
+          if (error) return fail(`Saving an indicator failed: ${error.message}`)
+        } else {
+          const { error } = await supabase.from('framework_indicators')
+            .insert({ domain_id: domainId, title: ind.title.trim(), description: ind.description.trim() || null, order_index: j }).select('id')
+          if (error) return fail(`Adding an indicator failed: ${error.message}`)
+        }
+      }
+    }
+
+    // 4. Refetch the framework with its reconciled domains/indicators.
+    const { data: fresh, error: reErr } = await supabase
+      .from('frameworks')
       .select('*, domains:framework_domains(*, indicators:framework_indicators(*))')
-      .single()
+      .eq('id', selected.id).single()
     setManaging(false)
-    if (error) { setManageError(`Save failed: ${error.message}`); return }
-    setSelected(data as unknown as Framework)
+    if (reErr) { setManageError(`Saved, but reloading failed: ${reErr.message}`); return }
+    setSelected(fresh as unknown as Framework)
     setEditing(false)
     load()
   }
+
+  // ── Edit-mode domain/indicator manipulation ──────────────────────────
+  const edAddDomain = () => setEditDomains((ds) => [...ds, { title: '', description: '', indicators: [] }])
+  const edRemoveDomain = (i: number) => setEditDomains((ds) => ds.filter((_, idx) => idx !== i))
+  const edUpdateDomain = (i: number, key: 'title' | 'description', val: string) =>
+    setEditDomains((ds) => ds.map((d, idx) => (idx === i ? { ...d, [key]: val } : d)))
+  const edAddIndicator = (di: number) =>
+    setEditDomains((ds) => ds.map((d, idx) => (idx === di ? { ...d, indicators: [...d.indicators, { title: '', description: '' }] } : d)))
+  const edRemoveIndicator = (di: number, ii: number) =>
+    setEditDomains((ds) => ds.map((d, idx) => (idx === di ? { ...d, indicators: d.indicators.filter((_, j) => j !== ii) } : d)))
+  const edUpdateIndicator = (di: number, ii: number, key: 'title' | 'description', val: string) =>
+    setEditDomains((ds) => ds.map((d, idx) => (idx === di
+      ? { ...d, indicators: d.indicators.map((ind, j) => (j === ii ? { ...ind, [key]: val } : ind)) }
+      : d)))
 
   const handleDelete = async () => {
     if (!selected) return
@@ -389,7 +480,37 @@ export default function FrameworksPage() {
                 onTracks={(t) => setEditForm({ ...editForm, target_tracks: t })}
                 onRoles={(r) => setEditForm({ ...editForm, target_roles: r })}
               />
-              <p className="text-xs text-gray-400">Domain &amp; indicator editing isn’t inline here yet — tell me if you want that.</p>
+              {/* Inline domain & indicator editor */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-gray-800">Domains</h4>
+                  <button type="button" onClick={edAddDomain} className="btn-ghost text-sm">+ Add Domain</button>
+                </div>
+                {editDomains.length === 0 && <p className="text-sm text-gray-400">No domains yet — add one.</p>}
+                {editDomains.map((dom, di) => (
+                  <div key={dom.id ?? `new-${di}`} className="bg-gray-50 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-400">DOMAIN {di + 1}</span>
+                      <button type="button" onClick={() => edRemoveDomain(di)} className="ml-auto text-xs text-red-500 hover:text-red-700">Remove</button>
+                    </div>
+                    <input className="input text-sm" placeholder="Domain title (required)" value={dom.title} onChange={(e) => edUpdateDomain(di, 'title', e.target.value)} />
+                    <input className="input text-sm" placeholder="Domain description (optional)" value={dom.description} onChange={(e) => edUpdateDomain(di, 'description', e.target.value)} />
+                    <div className="pl-3 border-l-2 border-gray-200 space-y-2">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Indicators</p>
+                      {dom.indicators.map((ind, ii) => (
+                        <div key={ind.id ?? `new-${ii}`} className="flex gap-2 items-start">
+                          <div className="flex-1 space-y-1">
+                            <input className="input text-sm" placeholder="Indicator title" value={ind.title} onChange={(e) => edUpdateIndicator(di, ii, 'title', e.target.value)} />
+                            <input className="input text-sm" placeholder="Indicator description (optional)" value={ind.description} onChange={(e) => edUpdateIndicator(di, ii, 'description', e.target.value)} />
+                          </div>
+                          <button type="button" onClick={() => edRemoveIndicator(di, ii)} className="text-gray-400 hover:text-red-500 mt-1 text-lg leading-none">×</button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => edAddIndicator(di)} className="text-xs text-navy-700 hover:underline">+ Add Indicator</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
               {manageError && <p className="text-red-600 text-sm">{manageError}</p>}
               <div className="flex gap-3">
                 <button onClick={() => setEditing(false)} className="btn-secondary flex-1">Cancel</button>

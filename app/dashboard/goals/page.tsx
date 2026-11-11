@@ -17,8 +17,9 @@ const fmtDate = (d: string) =>
 
 type TabId = 'mine' | 'collab' | 'team' | 'archived' | 'org' | 'school'
 
+// NB: the DB scope value stays 'office'; 'Department' is just the display label.
 const SCOPE_LABEL: Record<GoalScope, string> = {
-  individual: 'Individual', office: 'Office', school: 'School',
+  individual: 'Individual', office: 'Department', school: 'School',
 }
 
 const statusColor: Record<GoalStatus, string> = {
@@ -451,8 +452,8 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
           </div>
           <p className="text-xs text-gray-400 mt-1">
             {scope === 'school' ? 'A school-wide strategic goal others can align under.'
-              : scope === 'office' ? 'An office/department goal that rolls up to a school goal and is aligned to by individuals.'
-              : 'Your own goal. Optionally align it to an office or school goal below.'}
+              : scope === 'office' ? 'A goal for your department or office that rolls up to a school goal and that your team aligns under.'
+              : 'Your own goal. Optionally align it to a department or school goal below.'}
           </p>
         </div>
       )}
@@ -506,7 +507,7 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
         <div>
           <label className="label">Aligns to <span className="text-gray-400 font-normal">(optional)</span></label>
           {parentOptions.length === 0 ? (
-            <p className="text-sm text-gray-400">No {scope === 'office' ? 'school' : 'office or school'} goals to align to yet.</p>
+            <p className="text-sm text-gray-400">No {scope === 'office' ? 'school' : 'department or school'} goals to align to yet.</p>
           ) : (
             <select className="input" value={parentId} onChange={(e) => setParentId(e.target.value)}>
               <option value="">Not aligned</option>
@@ -811,7 +812,7 @@ export default function GoalsPage() {
     : t === 'org' ? 'Organization'
     : t === 'school' ? 'Goals Directory'
     : 'Archived Goals'
-  const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null) }
+  const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null); setShowForm(false); setEditGoal(null); setSaveError(null) }
 
   return (
     <div className="space-y-6">
@@ -889,7 +890,7 @@ export default function GoalsPage() {
       ) : tab === 'org' ? (
         orgGoals.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
-            <p>No school or office goals yet.</p>
+            <p>No school or department goals yet.</p>
             {canCreateOrg && <p className="text-sm mt-1">Create one so your team can align their goals under it.</p>}
           </div>
         ) : (
