@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { trackForProfile, studentSupportDepartments, targetMatchesPerson } from '@/lib/tracks'
 
 // Assembles an employee portfolio (profile + goals + formal observations +
 // shout-outs received + PD hours/funding) for a school year. Service-role so a
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
       .select('id, answers, submitted_at, created_at, template:form_templates(id, title, fields, visible_to_employee, category), filler:profiles!form_responses_filled_by_fkey(first_name, last_name)')
       .eq('subject_id', userId).eq('status', 'submitted')
       .gte('created_at', start).lte('created_at', endTs).order('submitted_at', { ascending: false }),
-    admin.from('form_templates').select('id, title, fill_by, category').eq('is_active', true).order('title'),
+    admin.from('form_templates').select('id, title, fill_by, category, target_tracks, target_roles').eq('is_active', true).order('title'),
     admin.from('projects').select('id, title, status, progress_pct, target_date, visibility, school_year_start')
       .eq('owner_id', userId).eq('school_year_start', year).order('created_at', { ascending: false }),
   ])
@@ -103,8 +104,20 @@ export async function GET(request: NextRequest) {
     return privileged || tmpl?.visible_to_employee === true
   })
 
-  // Which active templates this viewer may fill for this subject.
+  // The subject's development track routes which templates apply to them.
+  const subjectTrack = trackForProfile(
+    profile as { track?: string | null; employee_type?: string | null; teaches_classes?: boolean | null; department?: string | null },
+    studentSupportDepartments(settingsMap)
+  )
+  const subjectRoles = ((profile as { roles?: string[] }).roles) ?? []
+
+  // Which active templates this viewer may fill for this subject: by who-fills
+  // AND by the template's track/role targeting.
   const fillable = (activeForms ?? []).filter((t) => {
+    if (!targetMatchesPerson(
+      (t as { target_tracks?: string[] }).target_tracks,
+      (t as { target_roles?: string[] }).target_roles,
+      subjectTrack, subjectRoles)) return false
     const fb = t.fill_by as string
     if (privileged && (fb === 'manager' || fb === 'both')) return true
     if (isSelf && (fb === 'employee' || fb === 'both')) return true
@@ -113,6 +126,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     profile,
+    track: subjectTrack,
     year: { start, end, label, value: year },
     viewer: { isSelf, privileged },
     goals: yearGoals,

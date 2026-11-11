@@ -3,7 +3,73 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Framework, FrameworkDomain, FrameworkIndicator } from '@/lib/types'
+import { PD_ROLES, LEADERSHIP_ROLES } from '@/lib/roles'
+import {
+  TRACKS, TRACK_LABELS, targetSummary, targetMatchesPerson, trackForProfile,
+  studentSupportDepartments, type Track,
+} from '@/lib/tracks'
+import { settingsMap } from '@/lib/appSettings'
 import clsx from 'clsx'
+
+// Chip-toggle for the track / role targeting pickers.
+function TargetChip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+        on ? 'bg-navy-900 text-white border-navy-900' : 'border-gray-300 text-gray-600 hover:border-navy-400'
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
+// The two targeting pickers (tracks + roles) shared by the create & edit forms.
+function TargetingFields({
+  tracks, roles, onTracks, onRoles,
+}: {
+  tracks: string[]; roles: string[]
+  onTracks: (next: string[]) => void; onRoles: (next: string[]) => void
+}) {
+  const leadersOn = LEADERSHIP_ROLES.every((r) => roles.includes(r))
+  return (
+    <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+      <div>
+        <p className="text-sm font-medium text-gray-800">Applies to</p>
+        <p className="text-xs text-gray-400">
+          Who this framework is shown to. Leave both blank for <strong>everyone</strong>.
+          Current: <span className="text-gray-600">{targetSummary(tracks, roles, LEADERSHIP_ROLES)}</span>
+        </p>
+      </div>
+      <div>
+        <p className="label">Tracks</p>
+        <div className="flex flex-wrap gap-1.5">
+          {TRACKS.map((t) => {
+            const on = tracks.includes(t)
+            return <TargetChip key={t} on={on} label={TRACK_LABELS[t]} onClick={() => onTracks(on ? tracks.filter((x) => x !== t) : [...tracks, t])} />
+          })}
+        </div>
+      </div>
+      <div>
+        <div className="flex items-center justify-between">
+          <p className="label mb-0">Roles</p>
+          <button type="button" onClick={() => onRoles(leadersOn ? [] : [...LEADERSHIP_ROLES])} className="text-xs text-navy-700 hover:underline">
+            {leadersOn ? 'Clear leaders' : 'Leaders only'}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {PD_ROLES.map((r) => {
+            const on = roles.includes(r)
+            return <TargetChip key={r} on={on} label={r} onClick={() => onRoles(on ? roles.filter((x) => x !== r) : [...roles, r])} />
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function FrameworkDetail({ fw }: { fw: Framework }) {
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -65,6 +131,8 @@ export default function FrameworksPage() {
   const [frameworks, setFrameworks] = useState<Framework[]>([])
   const [selected, setSelected] = useState<Framework | null>(null)
   const [userRole, setUserRole] = useState<string>('staff')
+  const [viewerTrack, setViewerTrack] = useState<Track>('institutional')
+  const [viewerRoles, setViewerRoles] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -72,13 +140,13 @@ export default function FrameworksPage() {
 
   // Detail-view management (edit header fields / delete)
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState({ title: '', division: '', department: '', description: '' })
+  const [editForm, setEditForm] = useState<{ title: string; division: string; department: string; description: string; target_tracks: string[]; target_roles: string[] }>({ title: '', division: '', department: '', description: '', target_tracks: [], target_roles: [] })
   const [usageCount, setUsageCount] = useState<number | null>(null)
   const [managing, setManaging] = useState(false)
   const [manageError, setManageError] = useState<string | null>(null)
 
   // Form state
-  const [fwForm, setFwForm] = useState({ title: '', division: '', department: '', description: '' })
+  const [fwForm, setFwForm] = useState<{ title: string; division: string; department: string; description: string; target_tracks: string[]; target_roles: string[] }>({ title: '', division: '', department: '', description: '', target_tracks: [], target_roles: [] })
   const [domains, setDomains] = useState<DomainInput[]>([
     { title: '', description: '', indicators: [{ title: '', description: '' }] },
   ])
@@ -87,8 +155,16 @@ export default function FrameworksPage() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const [{ data: p }, { data: settingsRows }] = await Promise.all([
+        supabase.from('profiles').select('role, department, employee_type, teaches_classes, track, roles').eq('id', user.id).single(),
+        supabase.from('app_settings').select('key, value'),
+      ])
       setUserRole(p?.role ?? 'staff')
+      setViewerRoles(((p as { roles?: string[] } | null)?.roles) ?? [])
+      setViewerTrack(trackForProfile(
+        (p ?? {}) as { track?: string | null; employee_type?: string | null; teaches_classes?: boolean | null; department?: string | null },
+        studentSupportDepartments(settingsMap(settingsRows))
+      ))
     }
     const { data: fws } = await supabase
       .from('frameworks')
@@ -110,6 +186,8 @@ export default function FrameworksPage() {
       division: selected.division ?? '',
       department: selected.department ?? '',
       description: selected.description ?? '',
+      target_tracks: selected.target_tracks ?? [],
+      target_roles: selected.target_roles ?? [],
     })
     supabase
       .from('observations')
@@ -129,6 +207,8 @@ export default function FrameworksPage() {
         division: editForm.division.trim() || null,
         department: editForm.department.trim() || null,
         description: editForm.description.trim() || null,
+        target_tracks: editForm.target_tracks,
+        target_roles: editForm.target_roles,
       })
       .eq('id', selected.id)
       .select('*, domains:framework_domains(*, indicators:framework_indicators(*))')
@@ -218,6 +298,8 @@ export default function FrameworksPage() {
           division: fwForm.division || null,
           department: fwForm.department || null,
           description: fwForm.description || null,
+          target_tracks: fwForm.target_tracks,
+          target_roles: fwForm.target_roles,
           created_by: user.id,
         })
         .select()
@@ -253,7 +335,7 @@ export default function FrameworksPage() {
       }
 
       setShowCreate(false)
-      setFwForm({ title: '', division: '', department: '', description: '' })
+      setFwForm({ title: '', division: '', department: '', description: '', target_tracks: [], target_roles: [] })
       setDomains([{ title: '', description: '', indicators: [{ title: '', description: '' }] }])
       load()
     } catch (err: unknown) {
@@ -264,6 +346,12 @@ export default function FrameworksPage() {
   }
 
   const isSupervisorOrAdmin = userRole === 'supervisor' || userRole === 'admin'
+
+  // Members see only frameworks that apply to their track + role; supervisors
+  // and admins see all (they observe others and manage the rubrics).
+  const visibleFrameworks = isSupervisorOrAdmin
+    ? frameworks
+    : frameworks.filter((fw) => targetMatchesPerson(fw.target_tracks, fw.target_roles, viewerTrack, viewerRoles))
 
   if (selected) {
     return (
@@ -296,6 +384,11 @@ export default function FrameworksPage() {
                   <textarea rows={2} className="input resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
                 </div>
               </div>
+              <TargetingFields
+                tracks={editForm.target_tracks} roles={editForm.target_roles}
+                onTracks={(t) => setEditForm({ ...editForm, target_tracks: t })}
+                onRoles={(r) => setEditForm({ ...editForm, target_roles: r })}
+              />
               <p className="text-xs text-gray-400">Domain &amp; indicator editing isn’t inline here yet — tell me if you want that.</p>
               {manageError && <p className="text-red-600 text-sm">{manageError}</p>}
               <div className="flex gap-3">
@@ -314,7 +407,12 @@ export default function FrameworksPage() {
                     </p>
                   )}
                 </div>
-                <span className="badge badge-navy">{(selected.domains ?? []).length} domains</span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="badge badge-navy">{(selected.domains ?? []).length} domains</span>
+                  {((selected.target_tracks ?? []).length > 0 || (selected.target_roles ?? []).length > 0) && (
+                    <span className="badge badge-yellow text-[10px]">{targetSummary(selected.target_tracks, selected.target_roles, LEADERSHIP_ROLES)}</span>
+                  )}
+                </div>
               </div>
               <FrameworkDetail fw={selected} />
               {isSupervisorOrAdmin && (
@@ -382,6 +480,12 @@ export default function FrameworksPage() {
                   placeholder="Purpose and scope of this framework" />
               </div>
             </div>
+
+            <TargetingFields
+              tracks={fwForm.target_tracks} roles={fwForm.target_roles}
+              onTracks={(t) => setFwForm({ ...fwForm, target_tracks: t })}
+              onRoles={(r) => setFwForm({ ...fwForm, target_roles: r })}
+            />
 
             {/* Domains */}
             <div className="space-y-4">
@@ -474,11 +578,13 @@ export default function FrameworksPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <div key={i} className="card h-32 animate-pulse bg-gray-100" />)}
         </div>
-      ) : frameworks.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">No frameworks yet.</div>
+      ) : visibleFrameworks.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          {frameworks.length === 0 ? 'No frameworks yet.' : 'No frameworks apply to your track yet.'}
+        </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {frameworks.map((fw) => (
+          {visibleFrameworks.map((fw) => (
             <button
               key={fw.id}
               onClick={() => setSelected(fw)}
@@ -495,10 +601,13 @@ export default function FrameworksPage() {
               {fw.description && (
                 <p className="text-sm text-gray-500 mt-2 line-clamp-2">{fw.description}</p>
               )}
-              <div className="flex items-center gap-2 mt-3">
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                 <span className="badge badge-gray">
                   {(fw.domains ?? []).length} domain{(fw.domains ?? []).length !== 1 ? 's' : ''}
                 </span>
+                {((fw.target_tracks ?? []).length > 0 || (fw.target_roles ?? []).length > 0) && (
+                  <span className="badge badge-yellow text-[10px]">{targetSummary(fw.target_tracks, fw.target_roles, LEADERSHIP_ROLES)}</span>
+                )}
               </div>
               <p className="text-xs text-navy-700 mt-2 group-hover:underline">View details →</p>
             </button>

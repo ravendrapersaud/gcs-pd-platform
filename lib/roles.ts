@@ -27,6 +27,19 @@ export const PD_ROLES = [
 ] as const
 export type PdRole = (typeof PD_ROLES)[number]
 
+// People-leadership / management reach — anyone who leads others, regardless
+// of track (a CTO and an HS Division Head both qualify; an IC does not). Used
+// to target leadership review templates and competency frameworks, and as a
+// one-click "Leaders" quick-pick in the targeting editors. Keep in sync with
+// the leadership seeds in migration_template_framework_targeting.sql.
+export const LEADERSHIP_ROLES: PdRole[] = [
+  'Full Access',
+  'Campus Head',
+  'Division Leader',
+  'Senior Administrator',
+  'Team Lead',
+]
+
 export const ROLE_ACCESS_LABELS: Record<RoleType, string> = {
   staff: 'Member',
   supervisor: 'Supervisor',

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { FormTemplate, FormField, FormFieldType, FillBy, FormCategory } from '@/lib/types'
 import { FIELD_TYPES, FIELD_TYPE_LABELS, FILL_BY_LABELS, hasOptions, newFieldId } from '@/lib/forms'
+import { PD_ROLES, LEADERSHIP_ROLES } from '@/lib/roles'
+import { TRACKS, TRACK_LABELS, targetSummary } from '@/lib/tracks'
 import clsx from 'clsx'
 
 type Draft = {
@@ -14,12 +16,31 @@ type Draft = {
   visible_to_employee: boolean
   is_active: boolean
   category: FormCategory
+  target_tracks: string[]
+  target_roles: string[]
   fields: FormField[]
 }
 
 const blankDraft = (): Draft => ({
-  id: null, title: '', description: '', fill_by: 'manager', visible_to_employee: false, is_active: true, category: 'form', fields: [],
+  id: null, title: '', description: '', fill_by: 'manager', visible_to_employee: false, is_active: true, category: 'form',
+  target_tracks: [], target_roles: [], fields: [],
 })
+
+// Shared chip-toggle for the track / role targeting pickers.
+function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+        on ? 'bg-navy-900 text-white border-navy-900' : 'border-gray-300 text-gray-600 hover:border-navy-400'
+      )}
+    >
+      {label}
+    </button>
+  )
+}
 
 export default function FormsSection() {
   const supabase = createClient()
@@ -43,7 +64,8 @@ export default function FormsSection() {
 
   const edit = (t: FormTemplate) => setDraft({
     id: t.id, title: t.title, description: t.description ?? '', fill_by: t.fill_by,
-    visible_to_employee: t.visible_to_employee, is_active: t.is_active, category: t.category ?? 'form', fields: t.fields ?? [],
+    visible_to_employee: t.visible_to_employee, is_active: t.is_active, category: t.category ?? 'form',
+    target_tracks: t.target_tracks ?? [], target_roles: t.target_roles ?? [], fields: t.fields ?? [],
   })
 
   const toggleActive = async (t: FormTemplate) => {
@@ -85,6 +107,8 @@ export default function FormsSection() {
       visible_to_employee: draft.visible_to_employee,
       is_active: draft.is_active,
       category: draft.category,
+      target_tracks: draft.target_tracks,
+      target_roles: draft.target_roles,
     }
     const res = draft.id
       ? await supabase.from('form_templates').update(row).eq('id', draft.id).select('id')
@@ -134,6 +158,52 @@ export default function FormsSection() {
             <span className="text-gray-400"> — it appears in its own “Check-ins” section of the portfolio and prompts annually, rather than under general Forms.</span>
           </span>
         </label>
+
+        {/* Targeting — who this form/check-in applies to */}
+        <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Applies to</p>
+            <p className="text-xs text-gray-400">
+              Who sees this as a check-in/form to fill. Leave both blank for <strong>everyone</strong>.
+              Current: <span className="text-gray-600">{targetSummary(draft.target_tracks, draft.target_roles, LEADERSHIP_ROLES)}</span>
+            </p>
+          </div>
+          <div>
+            <p className="label">Tracks</p>
+            <div className="flex flex-wrap gap-1.5">
+              {TRACKS.map((t) => {
+                const on = draft.target_tracks.includes(t)
+                return (
+                  <Chip key={t} on={on} label={TRACK_LABELS[t]} onClick={() => patch({
+                    target_tracks: on ? draft.target_tracks.filter((x) => x !== t) : [...draft.target_tracks, t],
+                  })} />
+                )
+              })}
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <p className="label mb-0">Roles</p>
+              <button
+                type="button"
+                onClick={() => patch({ target_roles: LEADERSHIP_ROLES.every((r) => draft.target_roles.includes(r)) ? [] : [...LEADERSHIP_ROLES] })}
+                className="text-xs text-navy-700 hover:underline"
+              >
+                {LEADERSHIP_ROLES.every((r) => draft.target_roles.includes(r)) ? 'Clear leaders' : 'Leaders only'}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {PD_ROLES.map((r) => {
+                const on = draft.target_roles.includes(r)
+                return (
+                  <Chip key={r} on={on} label={r} onClick={() => patch({
+                    target_roles: on ? draft.target_roles.filter((x) => x !== r) : [...draft.target_roles, r],
+                  })} />
+                )
+              })}
+            </div>
+          </div>
+        </div>
 
         {/* Fields */}
         <div className="space-y-3">
@@ -199,6 +269,9 @@ export default function FormsSection() {
                   {t.category === 'check_in' && <span className="badge badge-navy text-[10px] shrink-0">check-in</span>}
                   {!t.is_active && <span className="badge badge-gray text-[10px] shrink-0">inactive</span>}
                   {t.visible_to_employee && <span className="badge badge-green text-[10px] shrink-0">employee-visible</span>}
+                  {((t.target_tracks ?? []).length > 0 || (t.target_roles ?? []).length > 0) && (
+                    <span className="badge badge-yellow text-[10px] shrink-0">{targetSummary(t.target_tracks, t.target_roles, LEADERSHIP_ROLES)}</span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400">{(t.fields ?? []).filter((f) => f.type !== 'section').length} fields · filled by {FILL_BY_LABELS[t.fill_by].toLowerCase()}</p>
               </div>

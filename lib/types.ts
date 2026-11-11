@@ -140,6 +140,10 @@ export interface FormTemplate {
   visible_to_employee: boolean
   is_active: boolean
   category: FormCategory // 'check_in' templates surface in the portfolio's Check-ins section
+  // Routing: who this template applies to. Empty = everyone. See lib/tracks.ts
+  // targetMatchesPerson().
+  target_tracks?: string[] // subset of Track
+  target_roles?: string[]  // subset of PD_ROLES
   created_by: string | null
   created_at: string
 }
@@ -335,6 +339,10 @@ export interface Framework {
   division: string | null
   department: string | null
   description: string | null
+  // Routing: who this framework applies to. Empty = everyone. See
+  // lib/tracks.ts targetMatchesPerson().
+  target_tracks?: string[] // subset of Track
+  target_roles?: string[]  // subset of PD_ROLES
   created_by: string | null
   created_at: string
   // joined

@@ -9,6 +9,7 @@ import { buildPortfolioHtml } from '@/lib/portfolioPrint'
 import PortfolioPromptBlock from '@/components/PortfolioPromptBlock'
 import CheckInCadence from '@/components/CheckInCadence'
 import type { FormField } from '@/lib/types'
+import { TRACK_LABELS, TRACK_BLURBS, type Track } from '@/lib/tracks'
 import clsx from 'clsx'
 
 type Named = { first_name: string; last_name: string } | null
@@ -19,6 +20,7 @@ export interface PortfolioData {
     division: string | null; department: string | null; role: string
     campus: string | null; employee_type: string | null; avatar_url: string | null; email: string
   }
+  track: Track
   year: { start: string; end: string; label: string; value: number }
   viewer: { isSelf: boolean; privileged: boolean }
   goals: { id: string; title: string; goal_type: string; status: string; progress_pct: number; due_date: string | null; created_at: string }[]
@@ -162,7 +164,10 @@ export default function PortfolioPage() {
               ? <img src={p.avatar_url} alt={name} className="w-14 h-14 rounded-full object-cover shrink-0" />
               : <div className="w-14 h-14 rounded-full bg-navy-900 text-white grid place-items-center font-semibold shrink-0">{p.first_name[0]}{p.last_name[0]}</div>}
             <div className="min-w-0">
-              <h1 className="text-2xl font-display text-gray-900 truncate">{name}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-display text-gray-900 truncate">{name}</h1>
+                <span className="badge badge-navy text-[11px]" title={TRACK_BLURBS[data.track]}>{TRACK_LABELS[data.track]}</span>
+              </div>
               <p className="text-gray-500 text-sm">
                 {[p.title, p.division, p.department, p.campus ? `Campus ${p.campus}` : null].filter(Boolean).join(' · ') || '—'}
               </p>

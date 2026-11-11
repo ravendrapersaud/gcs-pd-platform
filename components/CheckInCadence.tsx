@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { CheckInSchedule, CheckInNote, CheckInFrequency, Profile } from '@/lib/types'
+import { settingsMap } from '@/lib/appSettings'
+import { trackForProfile, studentSupportDepartments, targetMatchesPerson } from '@/lib/tracks'
 import clsx from 'clsx'
 
 const FREQ_LABEL: Record<CheckInFrequency, string> = {
@@ -52,11 +54,13 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
     if (!user) { setLoading(false); return }
     setUserId(user.id)
 
-    const [{ data: me }, { data: sched }, { data: noteRows }, { data: tmpls }, { data: resp }] = await Promise.all([
+    const [{ data: me }, { data: emp }, { data: settingsRows }, { data: sched }, { data: noteRows }, { data: tmpls }, { data: resp }] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', user.id).single(),
+      supabase.from('profiles').select('department, employee_type, teaches_classes, track, roles').eq('id', employeeId).single(),
+      supabase.from('app_settings').select('key, value'),
       supabase.from('check_in_schedules').select('*').eq('employee_id', employeeId).maybeSingle(),
       supabase.from('check_in_notes').select('*, author:profiles!check_in_notes_author_id_fkey(first_name, last_name)').eq('employee_id', employeeId).order('created_at', { ascending: false }),
-      supabase.from('form_templates').select('id, title').eq('is_active', true).eq('category', 'check_in').order('title'),
+      supabase.from('form_templates').select('id, title, target_tracks, target_roles').eq('is_active', true).eq('category', 'check_in').order('title'),
       supabase.from('form_responses').select('submitted_at, template:form_templates(category)').eq('subject_id', employeeId).eq('status', 'submitted').order('submitted_at', { ascending: false }),
     ])
 
@@ -65,7 +69,15 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
     setSchedule(s)
     if (s) setForm({ frequency: s.frequency, template_id: s.template_id ?? '', active: s.active })
     setNotes((noteRows ?? []).map((n) => ({ ...n, author: (n as { author?: Profile }).author })) as CheckInNote[])
-    setTemplates((tmpls ?? []) as { id: string; title: string }[])
+    // Only offer the check-in forms that apply to this employee's track + role.
+    const empTrack = trackForProfile(
+      (emp ?? {}) as { track?: string | null; employee_type?: string | null; teaches_classes?: boolean | null; department?: string | null },
+      studentSupportDepartments(settingsMap(settingsRows))
+    )
+    const empRoles = ((emp as { roles?: string[] } | null)?.roles) ?? []
+    const matched = ((tmpls ?? []) as { id: string; title: string; target_tracks?: string[]; target_roles?: string[] }[])
+      .filter((t) => targetMatchesPerson(t.target_tracks, t.target_roles, empTrack, empRoles))
+    setTemplates(matched.map((t) => ({ id: t.id, title: t.title })))
     const lastResp = (resp ?? []).find((r) => (r.template as { category?: string } | null)?.category === 'check_in')
     setLastCheckIn((lastResp?.submitted_at as string) ?? null)
     setLoading(false)

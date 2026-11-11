@@ -95,3 +95,43 @@ export function trackForProfile(
 export function trackIsConfidential(t: Track): boolean {
   return t === 'student_support'
 }
+
+// Whether a targeted item (a check-in/review template or a competency
+// framework) applies to a given person. Empty filters mean "everyone":
+// matches when (target tracks empty OR includes the person's track) AND
+// (target roles empty OR intersects the person's roles[]). This is how a
+// leadership review reaches a CTO and a Division Head across different tracks
+// while skipping an individual contributor.
+export function targetMatchesPerson(
+  targetTracks: string[] | null | undefined,
+  targetRoles: string[] | null | undefined,
+  personTrack: Track,
+  personRoles: string[] | null | undefined
+): boolean {
+  const tracks = targetTracks ?? []
+  const roles = targetRoles ?? []
+  const trackOk = tracks.length === 0 || tracks.includes(personTrack)
+  const roleOk = roles.length === 0 || (personRoles ?? []).some((r) => roles.includes(r))
+  return trackOk && roleOk
+}
+
+// A short human label for an item's targeting, e.g. "Student Support · Leaders"
+// or "Everyone". `leadershipRoles` lets callers collapse the leadership set to
+// the word "Leaders" instead of listing five roles.
+export function targetSummary(
+  targetTracks: string[] | null | undefined,
+  targetRoles: string[] | null | undefined,
+  leadershipRoles: readonly string[] = []
+): string {
+  const tracks = targetTracks ?? []
+  const roles = targetRoles ?? []
+  if (tracks.length === 0 && roles.length === 0) return 'Everyone'
+  const parts: string[] = []
+  if (tracks.length > 0) parts.push(tracks.map((t) => TRACK_LABELS[t as Track] ?? t).join(', '))
+  if (roles.length > 0) {
+    const ls = leadershipRoles
+    const isLeadershipSet = ls.length > 0 && roles.length === ls.length && ls.every((r) => roles.includes(r))
+    parts.push(isLeadershipSet ? 'Leaders' : roles.join(', '))
+  }
+  return parts.join(' · ')
+}
