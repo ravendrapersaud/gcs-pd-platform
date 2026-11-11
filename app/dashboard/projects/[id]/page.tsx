@@ -1,0 +1,331 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+import type { Project, ProjectStatus, ProjectMilestone, Profile, Goal } from '@/lib/types'
+import PersonPicker from '@/components/PersonPicker'
+import clsx from 'clsx'
+
+const STATUS_LABEL: Record<ProjectStatus, string> = {
+  planning: 'Planning', active: 'Active', on_hold: 'On hold', complete: 'Complete', archived: 'Archived',
+}
+const EDITABLE_STATUSES: ProjectStatus[] = ['planning', 'active', 'on_hold', 'complete', 'archived']
+const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+function driveFolderEmbed(url: string | null | undefined): { id: string; embed: string } | null {
+  if (!url) return null
+  const m = url.match(/\/folders\/([-\w]+)/) || url.match(/[?&]id=([-\w]+)/)
+  if (!m) return null
+  return { id: m[1], embed: `https://drive.google.com/embeddedfolderview?id=${m[1]}#grid` }
+}
+
+export default function ProjectDetailPage() {
+  const params = useParams()
+  const id = Array.isArray(params.id) ? params.id[0] : (params.id as string)
+  const supabase = createClient()
+
+  const [project, setProject] = useState<Project | null>(null)
+  const [collaborators, setCollaborators] = useState<Profile[]>([])
+  const [milestones, setMilestones] = useState<ProjectMilestone[]>([])
+  const [linkedGoals, setLinkedGoals] = useState<{ id: string; title: string }[]>([])
+  const [myGoals, setMyGoals] = useState<Goal[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [userId, setUserId] = useState<string | null>(null)
+  const [myRole, setMyRole] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Editable detail fields
+  const [form, setForm] = useState({ title: '', description: '', status: 'planning' as ProjectStatus, progress_pct: 0, target_date: '', drive_folder_url: '', visibility: 'normal' as 'normal' | 'private' })
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [savedTick, setSavedTick] = useState(false)
+
+  // Milestone / collaborator inputs
+  const [mTitle, setMTitle] = useState('')
+  const [mDue, setMDue] = useState('')
+  const [addCollab, setAddCollab] = useState<Profile | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    setUserId(user.id)
+
+    const [{ data: proj, error: pErr }, { data: collabRows }, { data: ms }, { data: pg }, { data: allProfiles }, { data: goals }, { data: me }] = await Promise.all([
+      supabase.from('projects').select('*').eq('id', id).maybeSingle(),
+      supabase.from('project_collaborators').select('profile:profiles(id, first_name, last_name, title)').eq('project_id', id),
+      supabase.from('project_milestones').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
+      supabase.from('project_goals').select('goal:goals(id, title)').eq('project_id', id),
+      supabase.from('profiles').select('*').order('first_name'),
+      supabase.from('goals').select('*').eq('owner_id', user.id).in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false }),
+      supabase.from('profiles').select('role').eq('id', user.id).single(),
+    ])
+
+    if (pErr || !proj) { setError('Could not load this project (it may not exist, or you may not have access).'); setLoading(false); return }
+    const p = proj as Project
+    setProject(p)
+    setMyRole((me?.role as string) ?? null)
+    setForm({
+      title: p.title, description: p.description ?? '', status: p.status, progress_pct: p.progress_pct,
+      target_date: p.target_date ?? '', drive_folder_url: p.drive_folder_url ?? '', visibility: p.visibility,
+    })
+    setCollaborators((collabRows ?? []).map((r) => r.profile as unknown as Profile).filter(Boolean))
+    setMilestones((ms ?? []) as ProjectMilestone[])
+    setLinkedGoals((pg ?? []).map((r) => r.goal as unknown as { id: string; title: string }).filter(Boolean))
+    setProfiles((allProfiles ?? []) as Profile[])
+    setMyGoals((goals ?? []) as Goal[])
+    setLoading(false)
+  }, [id])
+  useEffect(() => { load() }, [load])
+
+  const isOwner = !!project && !!userId && project.owner_id === userId
+  const isCollaborator = !!userId && collaborators.some((c) => c.id === userId)
+  const canEdit = isOwner || isCollaborator || myRole === 'admin'
+
+  const saveDetails = async () => {
+    if (!project) return
+    setSavingDetails(true); setError(null)
+    const { data, error: err } = await supabase.from('projects').update({
+      title: form.title.trim() || project.title,
+      description: form.description.trim() || null,
+      status: form.status,
+      progress_pct: Math.max(0, Math.min(100, Number(form.progress_pct) || 0)),
+      target_date: form.target_date || null,
+      drive_folder_url: form.drive_folder_url.trim() || null,
+      visibility: isOwner || myRole === 'admin' ? form.visibility : project.visibility,
+      updated_at: new Date().toISOString(),
+    }).eq('id', project.id).select()
+    setSavingDetails(false)
+    if (err) { setError(err.message); return }
+    if (!data || data.length === 0) { setError('Could not save (you may not have permission).'); return }
+    setSavedTick(true); setTimeout(() => setSavedTick(false), 2000)
+    load()
+  }
+
+  // Milestones
+  const addMilestone = async () => {
+    if (!mTitle.trim() || !project) return
+    const { error: err } = await supabase.from('project_milestones').insert({ project_id: project.id, title: mTitle.trim(), due_date: mDue || null, sort_order: milestones.length })
+    if (err) { setError(err.message); return }
+    setMTitle(''); setMDue(''); load()
+  }
+  const toggleMilestone = async (m: ProjectMilestone) => {
+    const { error: err } = await supabase.from('project_milestones').update({ done: !m.done }).eq('id', m.id)
+    if (err) { setError(err.message); return }
+    load()
+  }
+  const deleteMilestone = async (mId: string) => {
+    const { error: err } = await supabase.from('project_milestones').delete().eq('id', mId)
+    if (err) { setError(err.message); return }
+    load()
+  }
+
+  // Collaborators (owner/admin)
+  const addCollaborator = async () => {
+    if (!addCollab || !project) return
+    const { error: err } = await supabase.from('project_collaborators').insert({ project_id: project.id, user_id: addCollab.id })
+    if (err) { setError(err.message); return }
+    setAddCollab(null); load()
+  }
+  const removeCollaborator = async (uid: string) => {
+    if (!project) return
+    const { error: err } = await supabase.from('project_collaborators').delete().eq('project_id', project.id).eq('user_id', uid)
+    if (err) { setError(err.message); return }
+    load()
+  }
+
+  // Goal links
+  const linkGoal = async (goalId: string) => {
+    if (!goalId || !project) return
+    const { error: err } = await supabase.from('project_goals').insert({ project_id: project.id, goal_id: goalId })
+    if (err) { setError(err.message); return }
+    load()
+  }
+  const unlinkGoal = async (goalId: string) => {
+    if (!project) return
+    const { error: err } = await supabase.from('project_goals').delete().eq('project_id', project.id).eq('goal_id', goalId)
+    if (err) { setError(err.message); return }
+    load()
+  }
+
+  if (loading) return <div className="max-w-3xl mx-auto"><div className="card h-64 animate-pulse bg-gray-100" /></div>
+  if (error && !project) return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      <div className="card p-8 text-center text-gray-600">{error}</div>
+      <Link href="/dashboard/projects" className="text-sm text-navy-700 hover:underline">← Back to Projects</Link>
+    </div>
+  )
+  if (!project) return null
+
+  const linkedIds = new Set(linkedGoals.map((g) => g.id))
+  const linkableGoals = myGoals.filter((g) => !linkedIds.has(g.id))
+  const doneCount = milestones.filter((m) => m.done).length
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-5">
+      <Link href="/dashboard/projects" className="text-sm text-gray-500 hover:text-gray-700">← Back to Projects</Link>
+
+      {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+
+      {/* Details */}
+      <div className="card p-6 space-y-4">
+        {canEdit ? (
+          <>
+            <div>
+              <label className="label">Title</label>
+              <input className="input font-semibold" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Description</label>
+              <textarea rows={3} className="input resize-none" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}>
+                  {EDITABLE_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Progress %</label>
+                <input type="number" min={0} max={100} className="input" value={form.progress_pct} onChange={(e) => setForm({ ...form, progress_pct: Number(e.target.value) })} />
+              </div>
+              <div>
+                <label className="label">Target date</label>
+                <input type="date" className="input" value={form.target_date} onChange={(e) => setForm({ ...form, target_date: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="label">Google Drive folder link <span className="text-gray-400 font-normal">(optional — the project hub)</span></label>
+              <input className="input" placeholder="https://drive.google.com/drive/folders/…" value={form.drive_folder_url} onChange={(e) => setForm({ ...form, drive_folder_url: e.target.value })} />
+            </div>
+            {(isOwner || myRole === 'admin') && (
+              <div className="flex items-center gap-2">
+                <input id="pd-private" type="checkbox" className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500"
+                  checked={form.visibility === 'private'} onChange={(e) => setForm({ ...form, visibility: e.target.checked ? 'private' : 'normal' })} />
+                <label htmlFor="pd-private" className="text-sm text-gray-700">Private <span className="text-gray-400">— me, my supervisor, and admins only</span></label>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <button onClick={saveDetails} disabled={savingDetails} className="btn-primary">{savingDetails ? 'Saving…' : 'Save details'}</button>
+              {savedTick && <span className="text-sm text-green-600">Saved ✓</span>}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-xl font-display text-gray-900">{project.title}</h1>
+              <span className="badge badge-gray shrink-0">{STATUS_LABEL[project.status]}</span>
+            </div>
+            {project.description && <p className="text-sm text-gray-600">{project.description}</p>}
+            <div>
+              <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>{project.progress_pct}%</span></div>
+              <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-navy-700 h-2 rounded-full" style={{ width: `${Math.min(100, project.progress_pct)}%` }} /></div>
+            </div>
+            {project.target_date && <p className="text-xs text-gray-400">Target {fmtDate(project.target_date)}</p>}
+          </>
+        )}
+        {project.owner && <p className="text-xs text-gray-400">Owner: {project.owner.first_name} {project.owner.last_name}{project.school_year_start ? ` · ${project.school_year_start}–${project.school_year_start + 1}` : ''}</p>}
+      </div>
+
+      {/* Milestones */}
+      <div className="card p-6">
+        <h2 className="font-semibold text-gray-900 mb-3">Milestones <span className="text-gray-400 font-normal">({doneCount}/{milestones.length})</span></h2>
+        {milestones.length === 0 ? (
+          <p className="text-sm text-gray-400">No milestones yet.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100 mb-3">
+            {milestones.map((m) => (
+              <li key={m.id} className="py-2 flex items-center gap-3">
+                <input type="checkbox" checked={m.done} disabled={!canEdit} onChange={() => toggleMilestone(m)} className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500" />
+                <span className={clsx('flex-1 text-sm min-w-0', m.done ? 'text-gray-400 line-through' : 'text-gray-800')}>{m.title}</span>
+                {m.due_date && <span className="text-xs text-gray-400 shrink-0">{fmtDate(m.due_date)}</span>}
+                {canEdit && <button onClick={() => deleteMilestone(m.id)} className="text-xs text-red-600 hover:underline shrink-0">Remove</button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canEdit && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input className="input flex-1" placeholder="Add a milestone…" value={mTitle} onChange={(e) => setMTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addMilestone() }} />
+            <input type="date" className="input sm:w-44" value={mDue} onChange={(e) => setMDue(e.target.value)} />
+            <button onClick={addMilestone} disabled={!mTitle.trim()} className="btn-secondary shrink-0">Add</button>
+          </div>
+        )}
+      </div>
+
+      {/* Linked goals */}
+      <div className="card p-6">
+        <h2 className="font-semibold text-gray-900 mb-3">Goals this advances <span className="text-gray-400 font-normal">({linkedGoals.length})</span></h2>
+        {linkedGoals.length === 0 ? (
+          <p className="text-sm text-gray-400 mb-3">Not linked to any goals yet.</p>
+        ) : (
+          <ul className="space-y-1.5 mb-3">
+            {linkedGoals.map((g) => (
+              <li key={g.id} className="flex items-center gap-2 text-sm">
+                <span className="badge badge-navy shrink-0">Goal</span>
+                <span className="flex-1 text-gray-800 min-w-0">{g.title}</span>
+                {canEdit && <button onClick={() => unlinkGoal(g.id)} className="text-xs text-red-600 hover:underline shrink-0">Unlink</button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canEdit && linkableGoals.length > 0 && (
+          <select className="input text-sm" value="" onChange={(e) => { if (e.target.value) linkGoal(e.target.value) }}>
+            <option value="">+ Link one of your goals…</option>
+            {linkableGoals.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
+          </select>
+        )}
+      </div>
+
+      {/* Collaborators */}
+      <div className="card p-6">
+        <h2 className="font-semibold text-gray-900 mb-3">Collaborators <span className="text-gray-400 font-normal">({collaborators.length})</span></h2>
+        {collaborators.length === 0 ? (
+          <p className="text-sm text-gray-400 mb-3">No collaborators yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {collaborators.map((c) => (
+              <span key={c.id} className="inline-flex items-center gap-1.5 bg-navy-50 text-navy-800 border border-navy-100 rounded-full pl-1 pr-2 py-0.5 text-xs font-medium">
+                <span className="w-4 h-4 rounded-full bg-navy-200 text-navy-900 text-[9px] font-bold flex items-center justify-center">{(c.first_name?.[0] ?? '')}{(c.last_name?.[0] ?? '')}</span>
+                {c.first_name} {c.last_name}
+                {(isOwner || myRole === 'admin') && <button onClick={() => removeCollaborator(c.id)} className="text-navy-400 hover:text-red-600 ml-0.5" aria-label="Remove">×</button>}
+              </span>
+            ))}
+          </div>
+        )}
+        {(isOwner || myRole === 'admin') && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex-1">
+              <PersonPicker
+                profiles={profiles}
+                exclude={[project.owner_id, ...collaborators.map((c) => c.id)]}
+                value={addCollab}
+                onChange={setAddCollab}
+                placeholder="Add a collaborator…"
+              />
+            </div>
+            <button onClick={addCollaborator} disabled={!addCollab} className="btn-secondary shrink-0">Add</button>
+          </div>
+        )}
+      </div>
+
+      {/* Drive folder hub */}
+      {(() => {
+        const embed = driveFolderEmbed(project.drive_folder_url)
+        if (!embed) return null
+        return (
+          <div className="card p-6">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h2 className="font-semibold text-gray-900">Project files</h2>
+              <a href={`https://drive.google.com/drive/folders/${embed.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-navy-700 hover:underline">Open in Drive →</a>
+            </div>
+            <iframe src={embed.embed} className="w-full rounded-lg border border-gray-200" style={{ height: 420 }} title="Project Drive folder" />
+          </div>
+        )
+      })()}
+    </div>
+  )
+}

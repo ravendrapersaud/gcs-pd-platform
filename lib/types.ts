@@ -204,6 +204,43 @@ export interface GoalCollaborator {
   profile?: Profile
 }
 
+// ── Projects: a dedicated, collaborative work object (the non-teaching
+// analogue of an observation — the evidence of work, distinct from a goal's
+// outcome). See supabase/migration_projects.sql.
+export type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'complete' | 'archived'
+export type ProjectVisibility = 'normal' | 'private'
+
+export interface ProjectMilestone {
+  id: string
+  project_id: string
+  title: string
+  due_date: string | null
+  done: boolean
+  sort_order: number
+  created_at: string
+}
+
+export interface Project {
+  id: string
+  title: string
+  description: string | null
+  owner_id: string
+  status: ProjectStatus
+  progress_pct: number
+  school_year_start: number | null // 2026 = 2026–27; scopes the portfolio
+  start_date: string | null
+  target_date: string | null
+  drive_folder_url: string | null
+  visibility: ProjectVisibility
+  created_at: string
+  updated_at?: string
+  // joined / hydrated client-side
+  owner?: Profile
+  collaborators?: Profile[]
+  milestones?: ProjectMilestone[]
+  goals?: { id: string; title: string }[]
+}
+
 export interface GoalUpdate {
   id: string
   goal_id: string

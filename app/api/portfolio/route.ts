@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     { data: settings },
     { data: responses },
     { data: activeForms },
+    { data: projects },
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
     admin.from('goals').select('id, title, goal_type, status, progress_pct, due_date, created_at').eq('owner_id', userId),
@@ -79,6 +80,8 @@ export async function GET(request: NextRequest) {
       .eq('subject_id', userId).eq('status', 'submitted')
       .gte('created_at', start).lte('created_at', endTs).order('submitted_at', { ascending: false }),
     admin.from('form_templates').select('id, title, fill_by').eq('is_active', true).order('title'),
+    admin.from('projects').select('id, title, status, progress_pct, target_date, visibility, school_year_start')
+      .eq('owner_id', userId).eq('school_year_start', year).order('created_at', { ascending: false }),
   ])
 
   if (!profile) return NextResponse.json({ error: 'Employee not found.' }, { status: 404 })
@@ -111,7 +114,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     profile,
     year: { start, end, label, value: year },
+    viewer: { isSelf, privileged },
     goals: yearGoals,
+    projects: projects ?? [],
     observations: observations ?? [],
     shoutouts: shoutouts ?? [],
     pd: { activities: pd ?? [], hoursTotal, target },

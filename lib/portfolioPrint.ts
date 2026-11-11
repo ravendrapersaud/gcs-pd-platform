@@ -20,6 +20,11 @@ export function buildPortfolioHtml(d: PortfolioData): string {
     `<tr><td>${esc(g.title)}</td><td>${g.goal_type === 'faculty_inquiry' ? 'Inquiry' : 'Goal'}</td><td class="cap">${esc(g.status)}</td><td class="num">${g.progress_pct}%</td></tr>`
   ).join('')
 
+  const projStatus: Record<string, string> = { planning: 'Planning', active: 'Active', on_hold: 'On hold', complete: 'Complete', archived: 'Archived' }
+  const projectRows = d.projects.map((pr) =>
+    `<tr><td>${esc(pr.title)}${pr.visibility === 'private' ? ' <span class="form-meta">(private)</span>' : ''}</td><td>${esc(projStatus[pr.status] ?? pr.status)}</td><td class="num">${pr.target_date ? esc(fmtDate(pr.target_date)) : '—'}</td><td class="num">${pr.progress_pct}%</td></tr>`
+  ).join('')
+
   const obsRows = d.observations.map((o) =>
     `<tr><td>${esc(o.twg_data?.frameworkTitle ?? 'Observation')}${o.goal ? ` <span class="form-meta">— toward “${esc(o.goal.title)}”</span>` : ''}</td><td>${o.observer ? esc(`${o.observer.first_name} ${o.observer.last_name}`) : '—'}</td><td class="num">${esc(fmtDate(o.observed_at))}</td></tr>`
   ).join('')
@@ -100,6 +105,7 @@ table.kv td.fl{color:var(--muted);width:34%;font-size:.92em}
   <div><div class="n">${d.goals.length}</div><div class="l">Goals</div></div>
 </div>
 ${section('Goals', d.goals.length, `<table><thead><tr><th>Goal</th><th>Type</th><th>Status</th><th class="num">Progress</th></tr></thead><tbody>${goalRows}</tbody></table>`)}
+${section('Projects', d.projects.length, `<table><thead><tr><th>Project</th><th>Status</th><th class="num">Target</th><th class="num">Progress</th></tr></thead><tbody>${projectRows}</tbody></table>`)}
 ${section('Formal observations', d.observations.length, `<table><thead><tr><th>Framework</th><th>Observer</th><th class="num">Date</th></tr></thead><tbody>${obsRows}</tbody></table>`)}
 ${section('Shout-outs received', d.shoutouts.length, shoutHtml)}
 ${section('PD activities', d.pd.activities.length, `<table><thead><tr><th class="num">Date</th><th>Activity</th><th class="num">Hours</th></tr></thead><tbody>${pdRows}</tbody></table>`)}

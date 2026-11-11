@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatUSD } from '@/lib/funds'
 import { buildPortfolioHtml } from '@/lib/portfolioPrint'
+import PortfolioPromptBlock from '@/components/PortfolioPromptBlock'
 import type { FormField } from '@/lib/types'
 import clsx from 'clsx'
 
@@ -18,7 +19,9 @@ export interface PortfolioData {
     campus: string | null; employee_type: string | null; avatar_url: string | null; email: string
   }
   year: { start: string; end: string; label: string; value: number }
+  viewer: { isSelf: boolean; privileged: boolean }
   goals: { id: string; title: string; goal_type: string; status: string; progress_pct: number; due_date: string | null; created_at: string }[]
+  projects: { id: string; title: string; status: string; progress_pct: number; target_date: string | null; visibility: string; school_year_start: number | null }[]
   observations: { id: string; obs_type: string | null; observed_at: string; notes: string | null; twg_data: { frameworkTitle?: string } | null; goal: { title: string } | null; observer: Named }[]
   shoutouts: { id: string; message: string; tags: string[]; created_at: string; sender: Named }[]
   pd: { activities: { id: string; title: string; type: string | null; activity_date: string; hours: number; verified: boolean }[]; hoursTotal: number; target: number }
@@ -30,6 +33,10 @@ export interface PortfolioData {
 const statusColor: Record<string, string> = {
   active: 'badge-green', completed: 'badge-navy', paused: 'badge-yellow', archived: 'badge-gray',
   approved: 'badge-green', denied: 'badge-red', pending: 'badge-yellow',
+  planning: 'badge-gray', on_hold: 'badge-yellow', complete: 'badge-navy',
+}
+const projectStatusLabel: Record<string, string> = {
+  planning: 'Planning', active: 'Active', on_hold: 'On hold', complete: 'Complete', archived: 'Archived',
 }
 const fmtDate = (d: string) => new Date(d.length <= 10 ? `${d}T12:00:00` : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -38,11 +45,11 @@ function currentSchoolYear(): number {
   return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1
 }
 
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+function Section({ title, count, prompt, children }: { title: string; count: number; prompt?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="card p-5">
       <h3 className="font-semibold text-gray-900 mb-3">{title} <span className="text-gray-400 font-normal">({count})</span></h3>
-      {count === 0 ? <p className="text-sm text-gray-400">Nothing recorded this year.</p> : children}
+      {count === 0 ? (prompt ?? <p className="text-sm text-gray-400">Nothing recorded this year.</p>) : children}
     </div>
   )
 }
@@ -128,6 +135,9 @@ export default function PortfolioPage() {
   const p = data.profile
   const name = `${p.first_name} ${p.last_name}`
   const pct = data.pd.target > 0 ? Math.min(100, Math.round((data.pd.hoursTotal / data.pd.target) * 100)) : 0
+  // Annual "fill out your portfolio" prompts: only for the owner, only for the
+  // current school year — so each new year re-invites them to populate it.
+  const canPrompt = data.viewer?.isSelf && year === currentSchoolYear()
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -160,11 +170,15 @@ export default function PortfolioPage() {
       </div>
 
       {/* PD engagement summary */}
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="card p-4">
           <p className="text-xs uppercase tracking-wide text-gray-400">PD hours</p>
           <p className="text-2xl font-bold text-navy-900">{data.pd.hoursTotal}<span className="text-sm font-normal text-gray-400"> / {data.pd.target}</span></p>
           <div className="h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-navy-900 rounded-full" style={{ width: `${pct}%` }} /></div>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs uppercase tracking-wide text-gray-400">Projects</p>
+          <p className="text-2xl font-bold text-navy-900">{data.projects.length}</p>
         </div>
         <div className="card p-4">
           <p className="text-xs uppercase tracking-wide text-gray-400">Observations</p>
@@ -177,7 +191,11 @@ export default function PortfolioPage() {
       </div>
 
       {/* Goals */}
-      <Section title="Goals" count={data.goals.length}>
+      <Section
+        title="Goals"
+        count={data.goals.length}
+        prompt={canPrompt ? <PortfolioPromptBlock title={`Set your goals for ${data.year.label}`} blurb="What do you want to grow, build, or accomplish this year?" cta="Set a goal" href="/dashboard/goals?new=1" /> : undefined}
+      >
         <ul className="divide-y divide-gray-100">
           {data.goals.map((g) => (
             <li key={g.id} className="py-2 flex items-center gap-3">
@@ -185,6 +203,24 @@ export default function PortfolioPage() {
               <span className="flex-1 text-sm text-gray-800 min-w-0">{g.title}</span>
               <span className={clsx('badge shrink-0 capitalize', statusColor[g.status] ?? 'badge-gray')}>{g.status}</span>
               <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{g.progress_pct}%</span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      {/* Projects */}
+      <Section
+        title="Projects"
+        count={data.projects.length}
+        prompt={canPrompt ? <PortfolioPromptBlock title={`Start a project for ${data.year.label}`} blurb="Capture an initiative you're leading or contributing to — the work behind your goals." cta="New project" href={`/dashboard/projects?new=1&year=${year}`} /> : undefined}
+      >
+        <ul className="divide-y divide-gray-100">
+          {data.projects.map((pr) => (
+            <li key={pr.id} className="py-2 flex items-center gap-3">
+              {pr.visibility === 'private' && <span className="shrink-0" title="Private">🔒</span>}
+              <a href={`/dashboard/projects/${pr.id}`} className="flex-1 text-sm text-gray-800 hover:text-navy-800 min-w-0 truncate">{pr.title}</a>
+              <span className={clsx('badge shrink-0', statusColor[pr.status] ?? 'badge-gray')}>{projectStatusLabel[pr.status] ?? pr.status}</span>
+              <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{pr.progress_pct}%</span>
             </li>
           ))}
         </ul>
@@ -223,7 +259,11 @@ export default function PortfolioPage() {
       </Section>
 
       {/* PD activities & funding */}
-      <Section title="PD activities & funding" count={data.pd.activities.length + data.funding.length}>
+      <Section
+        title="PD activities & funding"
+        count={data.pd.activities.length + data.funding.length}
+        prompt={canPrompt ? <PortfolioPromptBlock title={`Log your first PD of ${data.year.label}`} blurb="Record a conference, workshop, course, or reading you've engaged with." cta="Log PD" href="/dashboard/pd-log?new=1" /> : undefined}
+      >
         {data.pd.activities.length > 0 && (
           <div className="mb-4">
             <p className="text-xs uppercase tracking-wide text-gray-400 mb-1.5">Activities logged</p>

@@ -16,6 +16,7 @@ const routeMeta: Record<string, { title: string; action?: { label: string; href:
   },
   '/dashboard/resources/submit': { title: 'Submit Resource' },
   '/dashboard/goals': { title: 'Goals' },
+  '/dashboard/projects': { title: 'Projects' },
   '/dashboard/goals-directory': { title: 'School Goals' },
   '/dashboard/portfolios': { title: 'Employee Portfolios' },
   '/dashboard/portfolio/me': { title: 'My Portfolio' },
