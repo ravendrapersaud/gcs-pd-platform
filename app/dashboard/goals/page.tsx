@@ -3,19 +3,23 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { Goal, Profile, GoalStatus, GoalType } from '@/lib/types'
+import type { Goal, Profile, GoalStatus, GoalType, GoalScope } from '@/lib/types'
 import { facultyGoalQuestionDue, DEFAULT_FACULTY_GOAL_QUESTION_DUE } from '@/lib/appSettings'
 import { useTabParam, useQueryParam } from '@/lib/useTabParam'
 import SchoolGoalsDirectory from '@/components/SchoolGoalsDirectory'
 import PersonPicker from '@/components/PersonPicker'
 import clsx from 'clsx'
 
-const GOAL_TABS = ['mine', 'collab', 'team', 'archived', 'school'] as const
+const GOAL_TABS = ['mine', 'collab', 'team', 'archived', 'org', 'school'] as const
 
 const fmtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
-type TabId = 'mine' | 'collab' | 'team' | 'archived' | 'school'
+type TabId = 'mine' | 'collab' | 'team' | 'archived' | 'org' | 'school'
+
+const SCOPE_LABEL: Record<GoalScope, string> = {
+  individual: 'Individual', office: 'Office', school: 'School',
+}
 
 const statusColor: Record<GoalStatus, string> = {
   active: 'badge-green',
@@ -184,6 +188,7 @@ function GoalCard({ goal, onUpdate, onEdit, readOnly = false, currentUserId, onA
         <div className="flex items-start gap-1 shrink-0">
           <div className="flex flex-col items-end gap-1">
             <span className={`badge ${statusColor[goal.status]}`}>{goal.status}</span>
+            {goal.scope && goal.scope !== 'individual' && <span className="badge badge-navy">{SCOPE_LABEL[goal.scope]}</span>}
             {goal.goal_type === 'faculty_inquiry' && <span className="badge badge-navy">Inquiry</span>}
             {(goal.evidence_count ?? 0) > 0 && (
               <span className="badge badge-green" title="Observations tagged as evidence toward this goal">{goal.evidence_count} evidence</span>
@@ -233,6 +238,20 @@ function GoalCard({ goal, onUpdate, onEdit, readOnly = false, currentUserId, onA
         )
       ) : (
         goal.description && <p className="text-sm text-gray-500 line-clamp-2">{goal.description}</p>
+      )}
+
+      {goal.parent && (
+        <p className="text-xs text-gray-500">
+          Aligns to <span className="font-medium text-navy-700">{goal.parent.title}</span>
+          {goal.parent.scope && goal.parent.scope !== 'individual' && <span className="text-gray-400"> ({SCOPE_LABEL[goal.parent.scope]})</span>}
+        </p>
+      )}
+
+      {goal.scope && goal.scope !== 'individual' && (
+        <p className="text-xs text-gray-500">
+          <span className="font-medium text-navy-700">{goal.aligned_count ?? 0}</span> goal{(goal.aligned_count ?? 0) === 1 ? '' : 's'} aligned
+          {(goal.aligned_count ?? 0) > 0 && <> · avg {goal.aligned_avg_pct ?? 0}%</>}
+        </p>
       )}
 
       <div>
@@ -332,11 +351,16 @@ interface GoalFormProps {
   currentUserId?: string | null
   defaultVariant: GoalType
   questionDue: string
+  orgGoals: Goal[]
+  myRole: string | null
+  defaultScope?: GoalScope
 }
 
-function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultVariant, questionDue }: GoalFormProps) {
+function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultVariant, questionDue, orgGoals, myRole, defaultScope }: GoalFormProps) {
   const editing = Boolean(initial?.id)
   const [variant, setVariant] = useState<GoalType>(initial?.goal_type ?? defaultVariant)
+  const [scope, setScope] = useState<GoalScope>(initial?.scope ?? defaultScope ?? 'individual')
+  const [parentId, setParentId] = useState<string>(initial?.parent_goal_id ?? '')
   const [form, setForm] = useState({
     title: initial?.title ?? '',
     description: initial?.description ?? '',
@@ -348,12 +372,38 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
   const [collaborators, setCollaborators] = useState<Profile[]>([])
   const [saving, setSaving] = useState(false)
 
+  // Scope options the viewer may choose: everyone → individual; supervisors/
+  // admins → office; admins → school. Always include the goal's existing scope
+  // when editing so it isn't silently downgraded.
+  const allowedScopes: GoalScope[] = [
+    'individual',
+    ...(myRole === 'supervisor' || myRole === 'admin' ? (['office'] as GoalScope[]) : []),
+    ...(myRole === 'admin' ? (['school'] as GoalScope[]) : []),
+  ]
+  if (initial?.scope && !allowedScopes.includes(initial.scope)) allowedScopes.push(initial.scope)
+
+  const isOrg = scope !== 'individual'
+  // An org goal is always a standard goal; faculty-inquiry is individual-only.
+  const effVariant: GoalType = isOrg ? 'standard' : variant
+
+  // Which org goals this one can align under: an office goal aligns to a school
+  // goal; an individual goal aligns to an office or school goal; a school goal
+  // is top-level.
+  const parentOptions = orgGoals.filter((g) =>
+    g.id !== initial?.id && (
+      scope === 'school' ? false
+      : scope === 'office' ? g.scope === 'school'
+      : g.scope === 'office' || g.scope === 'school'
+    )
+  )
+
   const overdue = new Date().toISOString().slice(0, 10) > questionDue
-  const canSave = variant === 'faculty_inquiry' ? form.question.trim().length > 0 : form.title.trim().length > 0
+  const canSave = effVariant === 'faculty_inquiry' ? form.question.trim().length > 0 : form.title.trim().length > 0
 
   const handleSave = async () => {
     setSaving(true)
-    if (variant === 'faculty_inquiry') {
+    const align = scope === 'school' ? null : (parentId || null)
+    if (effVariant === 'faculty_inquiry') {
       await onSave({
         ...initial,
         goal_type: 'faculty_inquiry',
@@ -361,6 +411,7 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
         description: null,
         details: { question: form.question.trim(), capture: form.capture.trim(), reflection: form.reflection.trim() },
         due_date: form.due_date || undefined,
+        scope, parent_goal_id: align,
       }, collaborators)
     } else {
       await onSave({
@@ -370,6 +421,7 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
         description: form.description || undefined,
         details: null,
         due_date: form.due_date || undefined,
+        scope, parent_goal_id: align,
       }, collaborators)
     }
     setSaving(false)
@@ -377,9 +429,35 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
 
   return (
     <div className="card p-6 space-y-4">
-      <h3 className="font-semibold text-gray-900">{editing ? 'Edit Goal' : 'New Goal'}</h3>
+      <h3 className="font-semibold text-gray-900">
+        {editing ? 'Edit Goal' : isOrg ? `New ${SCOPE_LABEL[scope]} Goal` : 'New Goal'}
+      </h3>
 
-      {!editing && (
+      {/* Scope — only shown when the viewer can create more than their own */}
+      {allowedScopes.length > 1 && (
+        <div>
+          <label className="label">Goal level</label>
+          <div className="flex gap-2 flex-wrap">
+            {allowedScopes.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => { setScope(s); if (s === 'school') setParentId('') }}
+                className={clsx('tab', scope === s ? 'tab-active' : 'tab-inactive')}
+              >
+                {SCOPE_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            {scope === 'school' ? 'A school-wide strategic goal others can align under.'
+              : scope === 'office' ? 'An office/department goal that rolls up to a school goal and is aligned to by individuals.'
+              : 'Your own goal. Optionally align it to an office or school goal below.'}
+          </p>
+        </div>
+      )}
+
+      {!editing && !isOrg && (
         <div className="flex gap-2">
           {([['faculty_inquiry', 'Faculty inquiry goal'], ['standard', 'Standard goal']] as [GoalType, string][]).map(([v, label]) => (
             <button key={v} onClick={() => setVariant(v)} className={clsx('tab', variant === v ? 'tab-active' : 'tab-inactive')}>{label}</button>
@@ -387,7 +465,7 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
         </div>
       )}
 
-      {variant === 'faculty_inquiry' ? (
+      {effVariant === 'faculty_inquiry' ? (
         <div className="space-y-4">
           <div>
             <label className="label">1. Formulate a question about your classroom culture or pedagogical practices.</label>
@@ -419,13 +497,30 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
       )}
 
       <div>
-        <label className="label">{variant === 'faculty_inquiry' ? 'Overall target date (optional)' : 'Due Date'}</label>
+        <label className="label">{effVariant === 'faculty_inquiry' ? 'Overall target date (optional)' : 'Due Date'}</label>
         <input type="date" className="input" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
       </div>
 
+      {/* Alignment — pick a parent org goal (not for a top-level school goal) */}
+      {scope !== 'school' && (
+        <div>
+          <label className="label">Aligns to <span className="text-gray-400 font-normal">(optional)</span></label>
+          {parentOptions.length === 0 ? (
+            <p className="text-sm text-gray-400">No {scope === 'office' ? 'school' : 'office or school'} goals to align to yet.</p>
+          ) : (
+            <select className="input" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+              <option value="">Not aligned</option>
+              {parentOptions.map((g) => (
+                <option key={g.id} value={g.id}>{SCOPE_LABEL[g.scope ?? 'individual']}: {g.title}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
       {!editing && (
         <div>
-          <label className="label">Co-owners</label>
+          <label className="label">{isOrg ? 'Co-owners' : 'Co-owners'}</label>
           <PersonPicker multiple profiles={profiles} exclude={currentUserId ? [currentUserId] : []} value={collaborators} onChange={setCollaborators} placeholder="Search colleagues by name…" />
         </div>
       )}
@@ -446,6 +541,7 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [collabGoals, setCollabGoals] = useState<Goal[]>([])
   const [teamGoals, setTeamGoals] = useState<Goal[]>([])
+  const [orgGoals, setOrgGoals] = useState<Goal[]>([])
   const [supervisees, setSupervisees] = useState<Profile[]>([])
   const [selectedOwner, setSelectedOwner] = useQueryParam('person')
   const [archivedGoals, setArchivedGoals] = useState<Goal[]>([])
@@ -456,6 +552,7 @@ export default function GoalsPage() {
   const [myEmployeeType, setMyEmployeeType] = useState<string | null>(null)
   const [questionDue, setQuestionDue] = useState<string>(DEFAULT_FACULTY_GOAL_QUESTION_DUE)
   const [showForm, setShowForm] = useState(false)
+  const [formDefaultScope, setFormDefaultScope] = useState<GoalScope>('individual')
   const [editGoal, setEditGoal] = useState<Goal | null>(null)
   const [loading, setLoading] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -466,7 +563,7 @@ export default function GoalsPage() {
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: myGoals }, { data: collabs }, { data: archived }, { data: allProfiles }, { data: settings }] =
+    const [{ data: myGoals }, { data: collabs }, { data: archived }, { data: allProfiles }, { data: settings }, { data: orgRows }, { data: rollupRows }] =
       await Promise.all([
         supabase
           .from('goals')
@@ -485,6 +582,11 @@ export default function GoalsPage() {
           .eq('status', 'archived'),
         supabase.from('profiles').select('*').order('first_name'),
         supabase.from('app_settings').select('key, value'),
+        // Organization goals (office/school) are readable by everyone — the
+        // cascade parents + the Organization tab.
+        supabase.from('goals').select('*').in('scope', ['office', 'school'])
+          .in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false }),
+        supabase.rpc('org_goal_rollups'),
       ])
 
     const me = (allProfiles ?? []).find((p) => p.id === user.id) as Profile | undefined
@@ -499,6 +601,26 @@ export default function GoalsPage() {
     const arch = (archived ?? []) as Goal[]
 
     const profById = new Map((allProfiles ?? []).map((p) => [p.id, p as Profile]))
+
+    // Org-goal lookups for alignment chips + rollups.
+    const orgList = (orgRows ?? []) as Goal[]
+    const orgById = new Map(orgList.map((g) => [g.id, g]))
+    const rollupMap = new Map(
+      ((rollupRows ?? []) as { parent_goal_id: string; aligned_count: number; avg_pct: number }[])
+        .map((r) => [r.parent_goal_id, r])
+    )
+    const parentOf = (g: Goal): Goal['parent'] => {
+      if (!g.parent_goal_id) return null
+      const p = orgById.get(g.parent_goal_id)
+      return p ? { id: p.id, title: p.title, scope: p.scope } : null
+    }
+    setOrgGoals(orgList.map((g) => ({
+      ...g,
+      owner: profById.get(g.owner_id),
+      parent: parentOf(g),
+      aligned_count: rollupMap.get(g.id)?.aligned_count ?? 0,
+      aligned_avg_pct: rollupMap.get(g.id)?.avg_pct ?? 0,
+    })))
 
     // "My Team's Goals" = goals of the people assigned to me as supervisor
     // (any role). RLS enforces the same scope. Read-only, roster-first.
@@ -543,7 +665,7 @@ export default function GoalsPage() {
       const evCount: Record<string, number> = {}
       for (const r of evRows ?? []) { const gid = r.goal_id as string; evCount[gid] = (evCount[gid] ?? 0) + 1 }
 
-      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id), evidence_count: evCount[g.id] ?? 0 })
+      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id), evidence_count: evCount[g.id] ?? 0, parent: parentOf(g), aligned_count: rollupMap.get(g.id)?.aligned_count ?? 0, aligned_avg_pct: rollupMap.get(g.id)?.avg_pct ?? 0 })
       setGoals(mine.map(attach))
       // Collaborative = any goal you share with someone: goals others added you
       // to, PLUS goals you own that have co-owners (so a goal you shared out,
@@ -588,6 +710,8 @@ export default function GoalsPage() {
         status: 'active',
         goal_type: data.goal_type ?? 'standard',
         details: data.details ?? null,
+        scope: data.scope ?? 'individual',
+        parent_goal_id: data.parent_goal_id ?? null,
       })
       .select()
       .single()
@@ -617,7 +741,7 @@ export default function GoalsPage() {
     setSaveError(null)
     const { error } = await supabase
       .from('goals')
-      .update({ title: data.title, description: data.description ?? null, due_date: data.due_date ?? null, details: data.details ?? null })
+      .update({ title: data.title, description: data.description ?? null, due_date: data.due_date ?? null, details: data.details ?? null, scope: data.scope ?? 'individual', parent_goal_id: data.parent_goal_id ?? null })
       .eq('id', data.id)
     if (error) {
       setSaveError(error.message)
@@ -667,21 +791,25 @@ export default function GoalsPage() {
     loadGoals()
   }
 
+  // My Goals shows only personal goals; org goals I own live on the Organization tab.
+  const mineGoals = goals.filter((g) => (g.scope ?? 'individual') === 'individual')
   const currentGoals =
-    tab === 'mine' ? goals : tab === 'collab' ? collabGoals : archivedGoals
+    tab === 'mine' ? mineGoals : tab === 'collab' ? collabGoals : archivedGoals
 
   const meProfile = profiles.find((p) => p.id === userId)
 
   const canSchoolGoals = myRole === 'admin' || (myDepartment ?? '').toLowerCase() === 'academic administration'
+  const canCreateOrg = myRole === 'supervisor' || myRole === 'admin'
   const tabs: TabId[] = ['mine', 'collab']
   if (supervisees.length > 0) tabs.push('team')
-  tabs.push('archived')
+  tabs.push('archived', 'org')
   if (canSchoolGoals) tabs.push('school')
   const tabLabel = (t: TabId) =>
     t === 'mine' ? 'My Goals'
     : t === 'collab' ? 'Collaborative Goals'
     : t === 'team' ? "My Team's Goals"
-    : t === 'school' ? 'School Goals'
+    : t === 'org' ? 'Organization'
+    : t === 'school' ? 'Goals Directory'
     : 'Archived Goals'
   const selectTab = (t: TabId) => { setTab(t); setSelectedOwner(null) }
 
@@ -702,8 +830,13 @@ export default function GoalsPage() {
           ))}
         </div>
         {tab === 'mine' && (
-          <button onClick={() => setShowForm(true)} className="btn-primary text-sm">
+          <button onClick={() => { setFormDefaultScope('individual'); setShowForm(true) }} className="btn-primary text-sm">
             + Add Goal
+          </button>
+        )}
+        {tab === 'org' && canCreateOrg && (
+          <button onClick={() => { setFormDefaultScope('office'); setShowForm(true) }} className="btn-primary text-sm">
+            + New organization goal
           </button>
         )}
       </div>
@@ -723,6 +856,9 @@ export default function GoalsPage() {
           currentUserId={userId}
           defaultVariant={myEmployeeType === 'faculty' ? 'faculty_inquiry' : 'standard'}
           questionDue={questionDue}
+          orgGoals={orgGoals}
+          myRole={myRole}
+          defaultScope={formDefaultScope}
         />
       )}
 
@@ -736,6 +872,8 @@ export default function GoalsPage() {
           currentUserId={userId}
           defaultVariant={editGoal.goal_type ?? 'standard'}
           questionDue={questionDue}
+          orgGoals={orgGoals}
+          myRole={myRole}
         />
       )}
 
@@ -748,6 +886,40 @@ export default function GoalsPage() {
         </div>
       ) : tab === 'school' ? (
         <SchoolGoalsDirectory />
+      ) : tab === 'org' ? (
+        orgGoals.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <p>No school or office goals yet.</p>
+            {canCreateOrg && <p className="text-sm mt-1">Create one so your team can align their goals under it.</p>}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {(['school', 'office'] as GoalScope[]).map((sc) => {
+              const list = orgGoals.filter((g) => g.scope === sc)
+              if (list.length === 0) return null
+              return (
+                <div key={sc} className="space-y-3">
+                  <h2 className="font-display text-lg text-gray-900">{SCOPE_LABEL[sc]} goals</h2>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {list.map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        onUpdate={handleUpdate}
+                        onEdit={setEditGoal}
+                        currentUserId={userId}
+                        readOnly={goal.owner_id !== userId}
+                        onArchive={handleArchive}
+                        onRestore={handleRestore}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
       ) : tab === 'team' ? (
         <OversightPanel
           roster={supervisees}

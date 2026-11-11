@@ -209,6 +209,10 @@ export interface ResourceFavorite {
 
 export type GoalType = 'standard' | 'faculty_inquiry'
 
+// Cascade scope: an org goal (school/office) that individuals align under, or a
+// person's own goal. See supabase/migration_cascading_goals.sql.
+export type GoalScope = 'individual' | 'office' | 'school'
+
 export interface FacultyInquiryDetails {
   question?: string
   capture?: string
@@ -226,10 +230,16 @@ export interface Goal {
   created_at: string
   goal_type: GoalType
   details: FacultyInquiryDetails | null
+  // Cascade: scope + the goal this one aligns up to.
+  scope?: GoalScope
+  parent_goal_id?: string | null
   // joined
   owner?: Profile
   collaborators?: Profile[]
   evidence_count?: number // observations tagged as evidence toward this goal
+  parent?: { id: string; title: string; scope?: GoalScope } | null // hydrated client-side
+  aligned_count?: number   // org goals: # of goals aligned under this one
+  aligned_avg_pct?: number // org goals: avg progress of aligned goals
 }
 
 export interface GoalCollaborator {
