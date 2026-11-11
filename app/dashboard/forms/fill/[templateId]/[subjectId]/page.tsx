@@ -7,6 +7,10 @@ import { createClient } from '@/lib/supabase/client'
 import type { FormTemplate, Profile, FormField } from '@/lib/types'
 import clsx from 'clsx'
 
+type CaptureIndicator = { id: string; title: string; order_index: number }
+type CaptureDomain = { id: string; title: string; description: string | null; order_index: number; indicators: CaptureIndicator[] }
+type CaptureFramework = { id: string; title: string; domains: CaptureDomain[] }
+
 export default function FillFormPage() {
   const params = useParams()
   const templateId = Array.isArray(params.templateId) ? params.templateId[0] : (params.templateId as string)
@@ -16,7 +20,12 @@ export default function FillFormPage() {
 
   const [template, setTemplate] = useState<FormTemplate | null>(null)
   const [subject, setSubject] = useState<Profile | null>(null)
+  const [framework, setFramework] = useState<CaptureFramework | null>(null)
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
+  // Framework evidence capture: per-domain narrative + per-indicator evidenced/note.
+  const [narrative, setNarrative] = useState<Record<string, string>>({})
+  const [checked, setChecked] = useState<Record<string, boolean>>({})
+  const [indNote, setIndNote] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,6 +41,20 @@ export default function FillFormPage() {
     ])
     setTemplate((t as FormTemplate) ?? null)
     setSubject((s as Profile) ?? null)
+
+    const fwId = (t as FormTemplate | null)?.framework_id
+    if (fwId) {
+      const { data: fw } = await supabase
+        .from('frameworks')
+        .select('id, title, domains:framework_domains(id, title, description, order_index, indicators:framework_indicators(id, title, order_index))')
+        .eq('id', fwId).single()
+      if (fw) {
+        const domains = ((fw as unknown as CaptureFramework).domains ?? [])
+          .slice().sort((a, b) => a.order_index - b.order_index)
+          .map((d) => ({ ...d, indicators: (d.indicators ?? []).slice().sort((a, b) => a.order_index - b.order_index) }))
+        setFramework({ id: (fw as { id: string }).id, title: (fw as { title: string }).title, domains })
+      }
+    }
     setLoading(false)
   }, [templateId, subjectId])
   useEffect(() => { load() }, [load])
@@ -52,9 +75,28 @@ export default function FillFormPage() {
       template_id: template.id, subject_id: subjectId, filled_by: userId,
       answers, status: 'submitted', submitted_at: new Date().toISOString(),
     }).select('id')
+    if (err) { setSaving(false); setError(err.message); return }
+    if (!data || data.length === 0) { setSaving(false); setError('You don’t have permission to fill this form for this person.'); return }
+
+    // Framework evidence: a domain-level narrative row per filled domain, and an
+    // indicator row per indicator marked evidenced.
+    if (framework) {
+      const responseId = data[0].id as string
+      const rows: Record<string, unknown>[] = []
+      for (const d of framework.domains) {
+        const narr = (narrative[d.id] ?? '').trim()
+        if (narr) rows.push({ subject_id: subjectId, framework_id: framework.id, domain_id: d.id, indicator_id: null, source: 'review', response_id: responseId, note: narr, author_id: userId })
+        for (const ind of d.indicators) {
+          if (!checked[ind.id]) continue
+          rows.push({ subject_id: subjectId, framework_id: framework.id, domain_id: d.id, indicator_id: ind.id, source: 'review', response_id: responseId, note: (indNote[ind.id] ?? '').trim() || null, author_id: userId })
+        }
+      }
+      if (rows.length > 0) {
+        const { error: evErr } = await supabase.from('competency_evidence').insert(rows)
+        if (evErr) { setSaving(false); setError(`Review saved, but recording competency evidence failed: ${evErr.message}`); return }
+      }
+    }
     setSaving(false)
-    if (err) { setError(err.message); return }
-    if (!data || data.length === 0) { setError('You don’t have permission to fill this form for this person.'); return }
     router.push(`/dashboard/portfolio/${subjectId}`)
   }
 
@@ -73,9 +115,46 @@ export default function FillFormPage() {
 
       <div className="card p-6 space-y-5">
         {template.fields.map((f) => <FieldInput key={f.id} field={f} value={answers[f.id]} onChange={(v) => setAnswer(f.id, v)} />)}
-        {template.fields.length === 0 && <p className="text-sm text-gray-400">This form has no fields.</p>}
+        {template.fields.length === 0 && !framework && <p className="text-sm text-gray-400">This form has no fields.</p>}
+      </div>
 
-        <div className="flex gap-2 pt-1">
+      {framework && (
+        <div className="card p-6 space-y-5">
+          <div>
+            <h2 className="font-semibold text-gray-900">{framework.title}</h2>
+            <p className="text-sm text-gray-500">Mark the indicators {subject.first_name} has evidenced, and add a description per area. This is evidence, not a score.</p>
+          </div>
+          {framework.domains.map((d) => (
+            <div key={d.id} className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <div>
+                <h3 className="font-medium text-gray-900">{d.title}</h3>
+                {d.description && <p className="text-xs text-gray-400">{d.description}</p>}
+              </div>
+              <div className="space-y-2">
+                {d.indicators.map((ind) => (
+                  <div key={ind.id} className="rounded-lg bg-gray-50 p-2.5">
+                    <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                      <input type="checkbox" className="mt-0.5" checked={!!checked[ind.id]} onChange={(e) => setChecked((c) => ({ ...c, [ind.id]: e.target.checked }))} />
+                      <span>{ind.title}</span>
+                    </label>
+                    {checked[ind.id] && (
+                      <textarea rows={2} className="input text-sm resize-none mt-2" placeholder="Evidence / example (optional)…" value={indNote[ind.id] ?? ''} onChange={(e) => setIndNote((n) => ({ ...n, [ind.id]: e.target.value }))} />
+                    )}
+                  </div>
+                ))}
+                {d.indicators.length === 0 && <p className="text-xs text-gray-400">No indicators in this area.</p>}
+              </div>
+              <div>
+                <label className="label text-xs">Description for {d.title} <span className="text-gray-400 font-normal">(optional)</span></label>
+                <textarea rows={2} className="input text-sm resize-y" placeholder="Narrative on this area…" value={narrative[d.id] ?? ''} onChange={(e) => setNarrative((n) => ({ ...n, [d.id]: e.target.value }))} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="card p-4">
+        <div className="flex gap-2">
           <Link href={`/dashboard/portfolio/${subjectId}`} className="btn-secondary flex-1 text-center">Cancel</Link>
           <button onClick={submit} disabled={saving} className="btn-primary flex-1">{saving ? 'Submitting…' : 'Submit form'}</button>
         </div>

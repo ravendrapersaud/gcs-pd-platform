@@ -18,12 +18,13 @@ type Draft = {
   category: FormCategory
   target_tracks: string[]
   target_roles: string[]
+  framework_id: string
   fields: FormField[]
 }
 
 const blankDraft = (): Draft => ({
   id: null, title: '', description: '', fill_by: 'manager', visible_to_employee: false, is_active: true, category: 'form',
-  target_tracks: [], target_roles: [], fields: [],
+  target_tracks: [], target_roles: [], framework_id: '', fields: [],
 })
 
 // Shared chip-toggle for the track / role targeting pickers.
@@ -46,6 +47,7 @@ export default function FormsSection() {
   const supabase = createClient()
   const [userId, setUserId] = useState<string | null>(null)
   const [templates, setTemplates] = useState<FormTemplate[]>([])
+  const [frameworks, setFrameworks] = useState<{ id: string; title: string }[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -54,9 +56,13 @@ export default function FormsSection() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     setUserId(user?.id ?? null)
-    const { data, error: err } = await supabase.from('form_templates').select('*').order('created_at', { ascending: true })
+    const [{ data, error: err }, { data: fws }] = await Promise.all([
+      supabase.from('form_templates').select('*').order('created_at', { ascending: true }),
+      supabase.from('frameworks').select('id, title').order('title'),
+    ])
     if (err) setError(err.message)
     else setTemplates((data ?? []) as FormTemplate[])
+    setFrameworks((fws ?? []) as { id: string; title: string }[])
     setLoaded(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -65,7 +71,7 @@ export default function FormsSection() {
   const edit = (t: FormTemplate) => setDraft({
     id: t.id, title: t.title, description: t.description ?? '', fill_by: t.fill_by,
     visible_to_employee: t.visible_to_employee, is_active: t.is_active, category: t.category ?? 'form',
-    target_tracks: t.target_tracks ?? [], target_roles: t.target_roles ?? [], fields: t.fields ?? [],
+    target_tracks: t.target_tracks ?? [], target_roles: t.target_roles ?? [], framework_id: t.framework_id ?? '', fields: t.fields ?? [],
   })
 
   const toggleActive = async (t: FormTemplate) => {
@@ -109,6 +115,7 @@ export default function FormsSection() {
       category: draft.category,
       target_tracks: draft.target_tracks,
       target_roles: draft.target_roles,
+      framework_id: draft.framework_id || null,
     }
     const res = draft.id
       ? await supabase.from('form_templates').update(row).eq('id', draft.id).select('id')
@@ -158,6 +165,20 @@ export default function FormsSection() {
             <span className="text-gray-400"> — it appears in its own “Check-ins” section of the portfolio and prompts annually, rather than under general Forms.</span>
           </span>
         </label>
+
+        {/* Competency framework — captures evidence against its indicators */}
+        <div>
+          <label className="label">Competency framework <span className="text-gray-400 font-normal">(optional)</span></label>
+          <select className="input" value={draft.framework_id} onChange={(e) => patch({ framework_id: e.target.value })}>
+            <option value="">None — just the fields above</option>
+            {frameworks.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">
+            When set, filling this review also shows the framework&apos;s domains &amp; indicators — the filler marks which
+            indicators are evidenced and writes a description per domain (evidence, not scores). It appears grouped by
+            domain in the portfolio.
+          </p>
+        </div>
 
         {/* Targeting — who this form/check-in applies to */}
         <div className="rounded-lg border border-gray-200 p-3 space-y-3">

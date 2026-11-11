@@ -31,6 +31,12 @@ export interface PortfolioData {
   funding: { id: string; title: string; amount: number; status: string; is_overseas_travel: boolean; created_at: string }[]
   forms: { id: string; submitted_at: string | null; created_at: string; answers: Record<string, unknown>; template: { id: string; title: string; fields: FormField[]; visible_to_employee: boolean; category?: string } | null; filler: Named }[]
   fillable: { id: string; title: string; fill_by: string; category?: string }[]
+  competencies: {
+    id: string; domain_id: string; indicator_id: string | null; source: string
+    note: string | null; created_at: string
+    framework: { title: string } | null; domain: { title: string } | null
+    indicator: { title: string } | null; author: Named
+  }[]
 }
 
 const statusColor: Record<string, string> = {
@@ -53,6 +59,66 @@ function Section({ title, count, prompt, children }: { title: string; count: num
     <div className="card p-5">
       <h3 className="font-semibold text-gray-900 mb-3">{title} <span className="text-gray-400 font-normal">({count})</span></h3>
       {count === 0 ? (prompt ?? <p className="text-sm text-gray-400">Nothing recorded this year.</p>) : children}
+    </div>
+  )
+}
+
+// Competency evidence grouped framework → domain, across all time. Indicator
+// evidence shows as checked items; domain-level narratives show as notes.
+function CompetenciesByDomain({ items }: { items: PortfolioData['competencies'] }) {
+  if (items.length === 0) return null
+  type Row = PortfolioData['competencies'][number]
+  const byFw = new Map<string, Map<string, Row[]>>()
+  for (const it of items) {
+    const fw = it.framework?.title ?? 'Framework'
+    const dom = it.domain?.title ?? 'Area'
+    if (!byFw.has(fw)) byFw.set(fw, new Map())
+    const dm = byFw.get(fw)!
+    dm.set(dom, [...(dm.get(dom) ?? []), it])
+  }
+  const who = (r: Row) => r.source === 'project'
+    ? 'via a project'
+    : (r.author ? `by ${r.author.first_name} ${r.author.last_name}` : 'review')
+  return (
+    <div className="card p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-900">Competencies <span className="text-gray-400 font-normal">({items.length})</span></h3>
+        <p className="text-xs text-gray-400">Evidence grouped by area, across all time — from reviews and projects.</p>
+      </div>
+      {[...byFw.entries()].map(([fw, domains]) => (
+        <div key={fw} className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-gray-400">{fw}</p>
+          {[...domains.entries()].map(([dom, rows]) => {
+            const narratives = rows.filter((r) => !r.indicator_id)
+            const inds = rows.filter((r) => r.indicator_id)
+            return (
+              <div key={dom} className="rounded-lg border border-gray-100 p-3 space-y-2">
+                <p className="font-medium text-gray-900 text-sm">{dom}</p>
+                {inds.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {inds.map((r) => (
+                      <li key={r.id} className="flex items-start gap-2 text-sm">
+                        <span className="text-navy-700 mt-0.5 shrink-0">✓</span>
+                        <div className="min-w-0">
+                          <span className="text-gray-800">{r.indicator?.title}</span>
+                          {r.note && <p className="text-gray-500 text-xs mt-0.5 whitespace-pre-wrap">{r.note}</p>}
+                          <p className="text-[11px] text-gray-400 mt-0.5">{who(r)} · {fmtDate(r.created_at)}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {narratives.map((n) => (
+                  <div key={n.id} className="text-sm bg-gray-50 rounded p-2">
+                    <p className="text-gray-700 whitespace-pre-wrap">{n.note}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{who(n)} · {fmtDate(n.created_at)}</p>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }
@@ -348,6 +414,9 @@ export default function PortfolioPage() {
           </ul>
         )}
       </div>
+
+      {/* Competencies — evidence grouped by domain, across all time */}
+      <CompetenciesByDomain items={data.competencies} />
 
       {/* Forms */}
       <div className="card p-5">

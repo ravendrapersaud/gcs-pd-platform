@@ -144,8 +144,34 @@ export interface FormTemplate {
   // targetMatchesPerson().
   target_tracks?: string[] // subset of Track
   target_roles?: string[]  // subset of PD_ROLES
+  // Optional competency framework this review captures evidence against (its
+  // domains/indicators appear in the fill flow). See CompetencyEvidence.
+  framework_id?: string | null
   created_by: string | null
   created_at: string
+}
+
+// A piece of competency evidence against a framework indicator (or a
+// domain-level narrative when indicator_id is null), from a review or a
+// project. The non-teaching mirror of Teaching with Grace's evidence model —
+// evidence + description, no scores. See migration_competency_evidence.sql.
+export interface CompetencyEvidence {
+  id: string
+  subject_id: string
+  framework_id: string
+  domain_id: string
+  indicator_id: string | null
+  source: 'review' | 'project'
+  response_id?: string | null
+  project_id?: string | null
+  note: string | null
+  author_id: string | null
+  created_at: string
+  // joined / hydrated
+  framework?: { title: string } | null
+  domain?: { title: string } | null
+  indicator?: { title: string } | null
+  author?: Profile | null
 }
 
 // ── Check-in cadence: an employee's chosen check-in frequency + note slots.

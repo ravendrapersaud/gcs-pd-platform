@@ -6,7 +6,13 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Project, ProjectStatus, ProjectMilestone, Profile, Goal } from '@/lib/types'
 import PersonPicker from '@/components/PersonPicker'
+import { settingsMap } from '@/lib/appSettings'
+import { trackForProfile, studentSupportDepartments, targetMatchesPerson } from '@/lib/tracks'
 import clsx from 'clsx'
+
+type TagIndicator = { id: string; title: string; order_index: number }
+type TagDomain = { id: string; title: string; order_index: number; indicators: TagIndicator[] }
+type TagFramework = { id: string; title: string; target_tracks?: string[]; target_roles?: string[]; domains: TagDomain[] }
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
   planning: 'Planning', active: 'Active', on_hold: 'On hold', complete: 'Complete', archived: 'Archived',
@@ -47,13 +53,20 @@ export default function ProjectDetailPage() {
   const [mDue, setMDue] = useState('')
   const [addCollab, setAddCollab] = useState<Profile | null>(null)
 
+  // Competency tagging (B): frameworks applicable to the owner + which
+  // indicators this project is tagged against.
+  const [tagFrameworks, setTagFrameworks] = useState<TagFramework[]>([])
+  const [tagChecked, setTagChecked] = useState<Record<string, boolean>>({})
+  const [savingTags, setSavingTags] = useState(false)
+  const [tagsSaved, setTagsSaved] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    const [{ data: proj, error: pErr }, { data: collabRows }, { data: ms }, { data: pg }, { data: allProfiles }, { data: goals }, { data: me }] = await Promise.all([
+    const [{ data: proj, error: pErr }, { data: collabRows }, { data: ms }, { data: pg }, { data: allProfiles }, { data: goals }, { data: me }, { data: fws }, { data: settingsRows }, { data: tagRows }] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).maybeSingle(),
       supabase.from('project_collaborators').select('profile:profiles(id, first_name, last_name, title)').eq('project_id', id),
       supabase.from('project_milestones').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
@@ -61,12 +74,31 @@ export default function ProjectDetailPage() {
       supabase.from('profiles').select('*').order('first_name'),
       supabase.from('goals').select('*').eq('owner_id', user.id).in('status', ['active', 'completed', 'paused']).order('created_at', { ascending: false }),
       supabase.from('profiles').select('role').eq('id', user.id).single(),
+      supabase.from('frameworks').select('id, title, target_tracks, target_roles, domains:framework_domains(id, title, order_index, indicators:framework_indicators(id, title, order_index))').order('title'),
+      supabase.from('app_settings').select('key, value'),
+      supabase.from('competency_evidence').select('indicator_id').eq('project_id', id).eq('source', 'project'),
     ])
 
     if (pErr || !proj) { setError('Could not load this project (it may not exist, or you may not have access).'); setLoading(false); return }
     const p = proj as Project
     setProject(p)
     setMyRole((me?.role as string) ?? null)
+
+    // Competency tagging: frameworks applicable to the project OWNER's track/role.
+    const owner = (allProfiles ?? []).find((x) => x.id === p.owner_id) as Profile | undefined
+    const ownerTrack = trackForProfile((owner ?? {}) as Profile, studentSupportDepartments(settingsMap(settingsRows)))
+    const ownerRoles = (owner?.roles) ?? []
+    const applicable = ((fws ?? []) as TagFramework[])
+      .filter((fw) => targetMatchesPerson(fw.target_tracks, fw.target_roles, ownerTrack, ownerRoles))
+      .map((fw) => ({
+        ...fw,
+        domains: (fw.domains ?? []).slice().sort((a, b) => a.order_index - b.order_index)
+          .map((d) => ({ ...d, indicators: (d.indicators ?? []).slice().sort((a, b) => a.order_index - b.order_index) })),
+      }))
+    setTagFrameworks(applicable)
+    const checkedMap: Record<string, boolean> = {}
+    for (const r of (tagRows ?? []) as { indicator_id: string | null }[]) if (r.indicator_id) checkedMap[r.indicator_id] = true
+    setTagChecked(checkedMap)
     setForm({
       title: p.title, description: p.description ?? '', status: p.status, progress_pct: p.progress_pct,
       target_date: p.target_date ?? '', drive_folder_url: p.drive_folder_url ?? '', visibility: p.visibility,
@@ -148,6 +180,25 @@ export default function ProjectDetailPage() {
     const { error: err } = await supabase.from('project_goals').delete().eq('project_id', project.id).eq('goal_id', goalId)
     if (err) { setError(err.message); return }
     load()
+  }
+
+  // Competency tags (B): reconcile this project's evidence against the checked
+  // indicators (delete-then-insert for this project's project-source rows).
+  const saveTags = async () => {
+    if (!project || !userId) return
+    setSavingTags(true); setError(null)
+    const { error: delErr } = await supabase.from('competency_evidence').delete().eq('project_id', project.id).eq('source', 'project')
+    if (delErr) { setSavingTags(false); setError(`Saving competencies failed: ${delErr.message}`); return }
+    const rows: Record<string, unknown>[] = []
+    for (const fw of tagFrameworks) for (const d of fw.domains) for (const ind of d.indicators) {
+      if (!tagChecked[ind.id]) continue
+      rows.push({ subject_id: project.owner_id, framework_id: fw.id, domain_id: d.id, indicator_id: ind.id, source: 'project', project_id: project.id, note: null, author_id: userId })
+    }
+    if (rows.length > 0) {
+      const { error: insErr } = await supabase.from('competency_evidence').insert(rows)
+      if (insErr) { setSavingTags(false); setError(`Saving competencies failed: ${insErr.message}`); return }
+    }
+    setSavingTags(false); setTagsSaved(true); setTimeout(() => setTagsSaved(false), 2000); load()
   }
 
   if (loading) return <div className="max-w-3xl mx-auto"><div className="card h-64 animate-pulse bg-gray-100" /></div>
@@ -279,6 +330,69 @@ export default function ProjectDetailPage() {
           </select>
         )}
       </div>
+
+      {/* Competencies this advances (framework indicators) */}
+      {(() => {
+        const canTag = isOwner || myRole === 'admin'
+        const taggedCount = Object.values(tagChecked).filter(Boolean).length
+        if (tagFrameworks.length === 0 && taggedCount === 0) return null
+        return (
+          <div className="card p-6">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h2 className="font-semibold text-gray-900">Competencies this advances <span className="text-gray-400 font-normal">({taggedCount})</span></h2>
+              {canTag && (
+                <div className="flex items-center gap-2">
+                  {tagsSaved && <span className="text-sm text-green-600">Saved ✓</span>}
+                  <button onClick={saveTags} disabled={savingTags} className="btn-secondary text-sm">{savingTags ? 'Saving…' : 'Save competencies'}</button>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mb-3">Mark the indicators this project advances. They appear as evidence, grouped by area, on {project.owner ? `${project.owner.first_name}’s` : 'the owner’s'} portfolio.</p>
+            {canTag ? (
+              tagFrameworks.length === 0 ? (
+                <p className="text-sm text-gray-400">No competency frameworks apply to this person yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {tagFrameworks.map((fw) => (
+                    <div key={fw.id} className="space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">{fw.title}</p>
+                      {fw.domains.map((d) => (
+                        <div key={d.id} className="rounded-lg border border-gray-100 p-3">
+                          <p className="font-medium text-gray-900 text-sm mb-1.5">{d.title}</p>
+                          <div className="space-y-1">
+                            {d.indicators.map((ind) => (
+                              <label key={ind.id} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" className="mt-0.5" checked={!!tagChecked[ind.id]} onChange={(e) => setTagChecked((c) => ({ ...c, [ind.id]: e.target.checked }))} />
+                                <span>{ind.title}</span>
+                              </label>
+                            ))}
+                            {d.indicators.length === 0 && <p className="text-xs text-gray-400">No indicators.</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              // Read-only: just the tagged indicator titles grouped by framework.
+              <div className="space-y-2">
+                {tagFrameworks.map((fw) => {
+                  const hits = fw.domains.flatMap((d) => d.indicators.filter((i) => tagChecked[i.id]).map((i) => i.title))
+                  if (hits.length === 0) return null
+                  return (
+                    <div key={fw.id}>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">{fw.title}</p>
+                      <ul className="list-disc pl-5 text-sm text-gray-700">{hits.map((h, i) => <li key={i}>{h}</li>)}</ul>
+                    </div>
+                  )
+                })}
+                {taggedCount === 0 && <p className="text-sm text-gray-400">None tagged.</p>}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Collaborators */}
       <div className="card p-6">

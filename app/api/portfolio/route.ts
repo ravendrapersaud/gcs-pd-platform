@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
     { data: responses },
     { data: activeForms },
     { data: projects },
+    { data: competencies },
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
     admin.from('goals').select('id, title, goal_type, status, progress_pct, due_date, created_at').eq('owner_id', userId),
@@ -83,6 +84,11 @@ export async function GET(request: NextRequest) {
     admin.from('form_templates').select('id, title, fill_by, category, target_tracks, target_roles').eq('is_active', true).order('title'),
     admin.from('projects').select('id, title, status, progress_pct, target_date, visibility, school_year_start')
       .eq('owner_id', userId).eq('school_year_start', year).order('created_at', { ascending: false }),
+    // Competency evidence is shown across all time (grouped by domain), not
+    // year-scoped — it's the "areas over time" view.
+    admin.from('competency_evidence')
+      .select('id, domain_id, indicator_id, source, note, created_at, framework:frameworks(title), domain:framework_domains(title), indicator:framework_indicators(title), author:profiles!competency_evidence_author_id_fkey(first_name, last_name)')
+      .eq('subject_id', userId).order('created_at', { ascending: false }),
   ])
 
   if (!profile) return NextResponse.json({ error: 'Employee not found.' }, { status: 404 })
@@ -137,5 +143,6 @@ export async function GET(request: NextRequest) {
     funding: funding ?? [],
     forms,
     fillable,
+    competencies: competencies ?? [],
   })
 }
