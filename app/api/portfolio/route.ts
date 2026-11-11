@@ -76,10 +76,10 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId).gte('created_at', start).lte('created_at', endTs).order('created_at', { ascending: false }),
     admin.from('app_settings').select('key, value'),
     admin.from('form_responses')
-      .select('id, answers, submitted_at, created_at, template:form_templates(id, title, fields, visible_to_employee), filler:profiles!form_responses_filled_by_fkey(first_name, last_name)')
+      .select('id, answers, submitted_at, created_at, template:form_templates(id, title, fields, visible_to_employee, category), filler:profiles!form_responses_filled_by_fkey(first_name, last_name)')
       .eq('subject_id', userId).eq('status', 'submitted')
       .gte('created_at', start).lte('created_at', endTs).order('submitted_at', { ascending: false }),
-    admin.from('form_templates').select('id, title, fill_by').eq('is_active', true).order('title'),
+    admin.from('form_templates').select('id, title, fill_by, category').eq('is_active', true).order('title'),
     admin.from('projects').select('id, title, status, progress_pct, target_date, visibility, school_year_start')
       .eq('owner_id', userId).eq('school_year_start', year).order('created_at', { ascending: false }),
   ])

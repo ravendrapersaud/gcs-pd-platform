@@ -41,7 +41,7 @@ export function buildPortfolioHtml(d: PortfolioData): string {
     `<tr><td class="num">${esc(fmtDate(f.created_at))}</td><td>${esc(f.title)}${f.is_overseas_travel ? ' (overseas)' : ''}</td><td class="cap">${esc(f.status)}</td><td class="num">${esc(formatUSD(Number(f.amount)))}</td></tr>`
   ).join('')
 
-  const formsHtml = d.forms.map((r) => {
+  const renderForm = (r: PortfolioData['forms'][number]) => {
     const fields = (r.template?.fields ?? []).filter((f) => f.type !== 'section')
     const rows = fields.map((f) => {
       const v = r.answers[f.id]
@@ -50,7 +50,11 @@ export function buildPortfolioHtml(d: PortfolioData): string {
     }).join('')
     const who = r.filler ? esc(`${r.filler.first_name} ${r.filler.last_name}`) : '—'
     return `<div class="form"><div class="form-h">${esc(r.template?.title ?? 'Form')} <span class="form-meta">— ${who}, ${esc(fmtDate(r.submitted_at ?? r.created_at))}</span></div><table class="kv">${rows}</table></div>`
-  }).join('')
+  }
+  const checkInForms = d.forms.filter((r) => r.template?.category === 'check_in')
+  const otherForms = d.forms.filter((r) => r.template?.category !== 'check_in')
+  const checkInsHtml = checkInForms.map(renderForm).join('')
+  const formsHtml = otherForms.map(renderForm).join('')
 
   const section = (title: string, count: number, body: string) =>
     `<section><h2>${esc(title)} <span class="count">(${count})</span></h2>${count === 0 ? '<p class="empty">Nothing recorded this year.</p>' : body}</section>`
@@ -110,6 +114,7 @@ ${section('Formal observations', d.observations.length, `<table><thead><tr><th>F
 ${section('Shout-outs received', d.shoutouts.length, shoutHtml)}
 ${section('PD activities', d.pd.activities.length, `<table><thead><tr><th class="num">Date</th><th>Activity</th><th class="num">Hours</th></tr></thead><tbody>${pdRows}</tbody></table>`)}
 ${section('Funding requests', d.funding.length, `<table><thead><tr><th class="num">Date</th><th>Request</th><th>Status</th><th class="num">Amount</th></tr></thead><tbody>${fundRows}</tbody></table>`)}
-${section('Forms', d.forms.length, formsHtml)}
+${section('Check-ins', checkInForms.length, checkInsHtml)}
+${section('Forms', otherForms.length, formsHtml)}
 </body></html>`
 }

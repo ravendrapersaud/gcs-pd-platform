@@ -116,6 +116,7 @@ export interface PdEvent {
 // ── Forms engine ─────────────────────────────────────────────
 export type FormFieldType = 'short_text' | 'long_text' | 'select' | 'checkboxes' | 'date' | 'number' | 'link' | 'section'
 export type FillBy = 'employee' | 'manager' | 'both'
+export type FormCategory = 'form' | 'check_in'
 
 export interface FormField {
   id: string
@@ -134,6 +135,7 @@ export interface FormTemplate {
   fill_by: FillBy
   visible_to_employee: boolean
   is_active: boolean
+  category: FormCategory // 'check_in' templates surface in the portfolio's Check-ins section
   created_by: string | null
   created_at: string
 }

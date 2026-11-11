@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { FormTemplate, FormField, FormFieldType, FillBy } from '@/lib/types'
+import type { FormTemplate, FormField, FormFieldType, FillBy, FormCategory } from '@/lib/types'
 import { FIELD_TYPES, FIELD_TYPE_LABELS, FILL_BY_LABELS, hasOptions, newFieldId } from '@/lib/forms'
 import clsx from 'clsx'
 
@@ -13,11 +13,12 @@ type Draft = {
   fill_by: FillBy
   visible_to_employee: boolean
   is_active: boolean
+  category: FormCategory
   fields: FormField[]
 }
 
 const blankDraft = (): Draft => ({
-  id: null, title: '', description: '', fill_by: 'manager', visible_to_employee: false, is_active: true, fields: [],
+  id: null, title: '', description: '', fill_by: 'manager', visible_to_employee: false, is_active: true, category: 'form', fields: [],
 })
 
 export default function FormsSection() {
@@ -42,7 +43,7 @@ export default function FormsSection() {
 
   const edit = (t: FormTemplate) => setDraft({
     id: t.id, title: t.title, description: t.description ?? '', fill_by: t.fill_by,
-    visible_to_employee: t.visible_to_employee, is_active: t.is_active, fields: t.fields ?? [],
+    visible_to_employee: t.visible_to_employee, is_active: t.is_active, category: t.category ?? 'form', fields: t.fields ?? [],
   })
 
   const toggleActive = async (t: FormTemplate) => {
@@ -83,6 +84,7 @@ export default function FormsSection() {
       fill_by: draft.fill_by,
       visible_to_employee: draft.visible_to_employee,
       is_active: draft.is_active,
+      category: draft.category,
     }
     const res = draft.id
       ? await supabase.from('form_templates').update(row).eq('id', draft.id).select('id')
@@ -124,6 +126,14 @@ export default function FormsSection() {
             </label>
           </div>
         </div>
+
+        <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer rounded-lg border border-gray-200 p-3">
+          <input type="checkbox" className="mt-0.5" checked={draft.category === 'check_in'} onChange={(e) => patch({ category: e.target.checked ? 'check_in' : 'form' })} />
+          <span>
+            This is a <strong>check-in / 1:1</strong>
+            <span className="text-gray-400"> — it appears in its own “Check-ins” section of the portfolio and prompts annually, rather than under general Forms.</span>
+          </span>
+        </label>
 
         {/* Fields */}
         <div className="space-y-3">
@@ -186,6 +196,7 @@ export default function FormsSection() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm text-gray-900 truncate">{t.title}</span>
+                  {t.category === 'check_in' && <span className="badge badge-navy text-[10px] shrink-0">check-in</span>}
                   {!t.is_active && <span className="badge badge-gray text-[10px] shrink-0">inactive</span>}
                   {t.visible_to_employee && <span className="badge badge-green text-[10px] shrink-0">employee-visible</span>}
                 </div>
