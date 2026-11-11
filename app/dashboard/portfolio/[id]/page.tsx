@@ -89,7 +89,7 @@ function CompetenciesByDomain({ items }: { items: PortfolioData['competencies'] 
         <div key={fw} className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-gray-400">{fw}</p>
           {[...domains.entries()].map(([dom, rows]) => {
-            const narratives = rows.filter((r) => !r.indicator_id)
+            const narratives = rows.filter((r) => !r.indicator_id && r.note)
             const inds = rows.filter((r) => r.indicator_id)
             return (
               <div key={dom} className="rounded-lg border border-gray-100 p-3 space-y-2">

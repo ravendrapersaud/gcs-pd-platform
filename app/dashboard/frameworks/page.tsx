@@ -133,6 +133,64 @@ interface DomainInput {
 interface EditIndicator { id?: string; title: string; description: string }
 interface EditDomain { id?: string; title: string; description: string; indicators: EditIndicator[] }
 
+// A competency-evidence row for the cross-staff Coverage roll-up.
+type CoverageRow = {
+  id: string; subject_id: string; domain_id: string; indicator_id: string | null
+  source: string; note: string | null; created_at: string
+  subject: { first_name: string; last_name: string; title: string | null } | null
+  domain: { title: string } | null
+  indicator: { title: string } | null
+}
+
+const covDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+// Who-has-evidence-in-this-framework, grouped domain → person → items, over
+// time. RLS scopes the rows: admins see everyone, supervisors see their reports.
+function FrameworkCoverage({ rows, loading }: { rows: CoverageRow[]; loading: boolean }) {
+  if (loading) return <div className="card p-5 h-24 animate-pulse bg-gray-100" />
+  const people = new Set(rows.map((r) => r.subject_id))
+  const byDomain = new Map<string, { title: string; subjects: Map<string, CoverageRow[]> }>()
+  for (const r of rows) {
+    if (!byDomain.has(r.domain_id)) byDomain.set(r.domain_id, { title: r.domain?.title ?? 'Area', subjects: new Map() })
+    const d = byDomain.get(r.domain_id)!
+    d.subjects.set(r.subject_id, [...(d.subjects.get(r.subject_id) ?? []), r])
+  }
+  const name = (r: CoverageRow) => (r.subject ? `${r.subject.first_name} ${r.subject.last_name}` : 'Someone')
+  return (
+    <div className="card p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-900">Coverage</h3>
+        <p className="text-xs text-gray-400">Who has evidence in this framework — your reports (admins: everyone), grouped by area, over time.</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-400">No evidence recorded against this framework yet.</p>
+      ) : (
+        <>
+          <p className="text-sm text-gray-500">{people.size} {people.size === 1 ? 'person has' : 'people have'} evidence here.</p>
+          {[...byDomain.values()].map((d, di) => (
+            <div key={di} className="rounded-lg border border-gray-100 p-3 space-y-2">
+              <p className="font-medium text-gray-900 text-sm">{d.title} <span className="text-gray-400 font-normal">· {d.subjects.size} {d.subjects.size === 1 ? 'person' : 'people'}</span></p>
+              {[...d.subjects.values()].map((items, si) => {
+                const inds = items.filter((x) => x.indicator_id)
+                const narrs = items.filter((x) => !x.indicator_id && x.note)
+                return (
+                  <div key={si} className="pl-2 border-l-2 border-gray-100">
+                    <p className="text-sm text-gray-800">{name(items[0])}{items[0].subject?.title && <span className="text-gray-400 text-xs"> · {items[0].subject.title}</span>}</p>
+                    <ul className="mt-0.5 space-y-0.5">
+                      {inds.map((r) => <li key={r.id} className="text-xs text-gray-500">✓ {r.indicator?.title} <span className="text-gray-300">· {r.source === 'project' ? 'project' : 'review'} · {covDate(r.created_at)}</span></li>)}
+                      {narrs.map((r) => <li key={r.id} className="text-xs text-gray-500 italic">“{r.note}” <span className="text-gray-300 not-italic">· {covDate(r.created_at)}</span></li>)}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function FrameworksPage() {
   const supabase = createClient()
   const [frameworks, setFrameworks] = useState<Framework[]>([])
@@ -150,6 +208,8 @@ export default function FrameworksPage() {
   const [editForm, setEditForm] = useState<{ title: string; division: string; department: string; description: string; target_tracks: string[]; target_roles: string[] }>({ title: '', division: '', department: '', description: '', target_tracks: [], target_roles: [] })
   const [usageCount, setUsageCount] = useState<number | null>(null)
   const [editDomains, setEditDomains] = useState<EditDomain[]>([])
+  const [coverage, setCoverage] = useState<CoverageRow[]>([])
+  const [coverageLoading, setCoverageLoading] = useState(false)
   const [managing, setManaging] = useState(false)
   const [manageError, setManageError] = useState<string | null>(null)
 
@@ -209,6 +269,19 @@ export default function FrameworksPage() {
       .eq('framework_id', selected.id)
       .then(({ count }) => setUsageCount(count ?? 0))
   }, [selected])
+
+  // Cross-staff coverage roll-up (supervisors/admins): who has competency
+  // evidence against this framework. RLS scopes it to reports / everyone.
+  useEffect(() => {
+    if (!selected || !(userRole === 'admin' || userRole === 'supervisor')) { setCoverage([]); return }
+    setCoverageLoading(true)
+    supabase
+      .from('competency_evidence')
+      .select('id, subject_id, domain_id, indicator_id, source, note, created_at, subject:profiles!competency_evidence_subject_id_fkey(first_name, last_name, title), domain:framework_domains(title), indicator:framework_indicators(title)')
+      .eq('framework_id', selected.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { setCoverage((data ?? []) as unknown as CoverageRow[]); setCoverageLoading(false) })
+  }, [selected, userRole])
 
   const handleSaveHeader = async () => {
     if (!selected) return
@@ -555,6 +628,7 @@ export default function FrameworksPage() {
             </>
           )}
         </div>
+        {isSupervisorOrAdmin && !editing && <FrameworkCoverage rows={coverage} loading={coverageLoading} />}
       </div>
     )
   }
