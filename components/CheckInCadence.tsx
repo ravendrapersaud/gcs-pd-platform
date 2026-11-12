@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { CheckInSchedule, CheckInNote, CheckInFollowUp, CheckInFrequency, Profile } from '@/lib/types'
+import type { CheckInSchedule, CheckInNote, CheckInFollowUp, CheckInLink, CheckInFrequency, Profile } from '@/lib/types'
 import { settingsMap } from '@/lib/appSettings'
 import { trackForProfile, studentSupportDepartments, targetMatchesPerson } from '@/lib/tracks'
 import clsx from 'clsx'
@@ -33,12 +33,30 @@ function addInterval(dateStr: string, freq: CheckInFrequency): string | null {
 
 type Participant = { id: string; first_name: string; last_name: string }
 
+// A friendly label for a linked doc, inferred from the URL (Google Docs etc.).
+function docKind(url: string): string {
+  const u = url.toLowerCase()
+  if (u.includes('docs.google.com/document')) return 'Doc'
+  if (u.includes('docs.google.com/spreadsheets')) return 'Sheet'
+  if (u.includes('docs.google.com/presentation')) return 'Slides'
+  if (u.includes('docs.google.com/forms') || u.includes('forms.gle')) return 'Form'
+  if (u.includes('drive.google.com')) return 'Drive'
+  if (u.endsWith('.pdf')) return 'PDF'
+  return 'Link'
+}
+const normalizeUrl = (raw: string) => {
+  const t = raw.trim()
+  if (!t) return ''
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`
+}
+
 export default function CheckInCadence({ employeeId, employeeFirstName }: { employeeId: string; employeeFirstName: string }) {
   const supabase = createClient()
   const [userId, setUserId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<CheckInSchedule | null>(null)
   const [notes, setNotes] = useState<CheckInNote[]>([])
+  const [links, setLinks] = useState<CheckInLink[]>([])
   const [followUps, setFollowUps] = useState<CheckInFollowUp[]>([])
   const [participants, setParticipants] = useState<Participant[]>([])
   const [templates, setTemplates] = useState<{ id: string; title: string }[]>([])
@@ -57,19 +75,23 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
   const [fuOwner, setFuOwner] = useState('')
   const [fuDue, setFuDue] = useState('')
 
+  const [linkTitle, setLinkTitle] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
     setUserId(user.id)
 
-    const [{ data: me }, { data: emp }, { data: settingsRows }, { data: sched }, { data: noteRows }, { data: fuRows }, { data: supRows }, { data: tmpls }, { data: resp }] = await Promise.all([
+    const [{ data: me }, { data: emp }, { data: settingsRows }, { data: sched }, { data: noteRows }, { data: fuRows }, { data: linkRows }, { data: supRows }, { data: tmpls }, { data: resp }] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', user.id).single(),
       supabase.from('profiles').select('first_name, last_name, department, employee_type, teaches_classes, track, roles').eq('id', employeeId).single(),
       supabase.from('app_settings').select('key, value'),
       supabase.from('check_in_schedules').select('*').eq('employee_id', employeeId).maybeSingle(),
       supabase.from('check_in_notes').select('*, author:profiles!check_in_notes_author_id_fkey(first_name, last_name)').eq('employee_id', employeeId).order('created_at', { ascending: false }),
       supabase.from('check_in_follow_ups').select('*, author:profiles!check_in_follow_ups_author_id_fkey(first_name, last_name), owner:profiles!check_in_follow_ups_owner_id_fkey(first_name, last_name)').eq('employee_id', employeeId).order('created_at', { ascending: true }),
+      supabase.from('check_in_links').select('*, author:profiles!check_in_links_author_id_fkey(first_name, last_name)').eq('employee_id', employeeId).order('created_at', { ascending: false }),
       supabase.from('supervisor_assignments').select('is_primary, supervisor:profiles!supervisor_assignments_supervisor_id_fkey(id, first_name, last_name)').eq('staff_id', employeeId),
       supabase.from('form_templates').select('id, title, target_tracks, target_roles').eq('is_active', true).eq('category', 'check_in').order('title'),
       supabase.from('form_responses').select('submitted_at, template:form_templates(category)').eq('subject_id', employeeId).eq('status', 'submitted').order('submitted_at', { ascending: false }),
@@ -81,6 +103,7 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
     if (s) setForm({ frequency: s.frequency, template_id: s.template_id ?? '', active: s.active })
     setNotes((noteRows ?? []).map((n) => ({ ...n, author: (n as { author?: Profile }).author })) as CheckInNote[])
     setFollowUps((fuRows ?? []) as unknown as CheckInFollowUp[])
+    setLinks((linkRows ?? []) as unknown as CheckInLink[])
 
     // Owner options = the employee + their supervisor(s), deduped.
     const empRow = (emp ?? {}) as { first_name?: string; last_name?: string }
@@ -163,6 +186,24 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
     load()
   }
 
+  const addLink = async () => {
+    const url = normalizeUrl(linkUrl)
+    if (!url || !userId) return
+    setBusy(true); setError(null)
+    const { data, error: err } = await supabase.from('check_in_links')
+      .insert({ employee_id: employeeId, author_id: userId, title: linkTitle.trim() || url, url })
+      .select('id')
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    if (!data || data.length === 0) { setError('Could not add link (permission).'); return }
+    setLinkTitle(''); setLinkUrl(''); load()
+  }
+  const deleteLink = async (id: string) => {
+    const { error: err } = await supabase.from('check_in_links').delete().eq('id', id)
+    if (err) { setError(err.message); return }
+    load()
+  }
+
   if (loading) return <div className="card h-28 animate-pulse bg-gray-100" />
 
   const anchor = lastCheckIn ? lastCheckIn.slice(0, 10) : schedule?.start_date ?? null
@@ -241,6 +282,38 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
           {isSelf ? 'Do a check-in now →' : 'Start a check-in →'}
         </Link>
       )}
+
+      {/* Linked docs — the running Google doc(s) that anchor the 1:1 */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-sm font-medium text-gray-800">Linked docs</p>
+        <p className="text-xs text-gray-400 mb-2">Pin the running doc(s) you keep between check-ins — a shared Google Doc, agenda, or folder. Visible to {isSelf ? 'you and your supervisor' : `${employeeFirstName} and their supervisors`}.</p>
+
+        <div className="flex flex-col gap-2 mb-3">
+          <div className="flex flex-wrap gap-2">
+            <input className="input text-sm flex-1 min-w-[8rem]" placeholder="Label (e.g. Running 1:1 notes)" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} />
+            <input className="input text-sm flex-1 min-w-[10rem]" placeholder="Paste a Google Doc / Drive link…" value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && linkUrl.trim()) addLink() }} />
+            <button onClick={addLink} disabled={busy || !linkUrl.trim()} className="btn-secondary text-xs shrink-0">Add link</button>
+          </div>
+        </div>
+
+        {links.length === 0 ? (
+          <p className="text-sm text-gray-400">No linked docs yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {links.map((l) => (
+              <li key={l.id} className="flex items-center gap-2 rounded-lg border border-gray-100 p-2.5">
+                <span className="badge badge-navy text-[10px] shrink-0">{docKind(l.url)}</span>
+                <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-sm text-navy-800 hover:underline min-w-0 truncate flex-1">{l.title}</a>
+                {(l.author_id === userId || role === 'admin') && (
+                  <button onClick={() => deleteLink(l.id)} className="text-xs text-red-600 hover:underline shrink-0">Remove</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* Follow-ups — the trackable action layer that carries between meetings */}
       <div className="border-t border-gray-100 pt-4">

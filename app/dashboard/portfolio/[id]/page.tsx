@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -70,8 +70,7 @@ function Section({ title, count, prompt, children }: { title: string; count: num
 
 // Competency evidence grouped framework → domain, across all time. Indicator
 // evidence shows as checked items; domain-level narratives show as notes.
-function CompetenciesByDomain({ items }: { items: PortfolioData['competencies'] }) {
-  if (items.length === 0) return null
+function CompetenciesByDomain({ items, emptyPrompt }: { items: PortfolioData['competencies']; emptyPrompt?: ReactNode }) {
   type Row = PortfolioData['competencies'][number]
   const byFw = new Map<string, Map<string, Row[]>>()
   for (const it of items) {
@@ -90,7 +89,9 @@ function CompetenciesByDomain({ items }: { items: PortfolioData['competencies'] 
         <h3 className="font-semibold text-gray-900">Competencies <span className="text-gray-400 font-normal">({items.length})</span></h3>
         <p className="text-xs text-gray-400">Evidence grouped by area, across all time — from reviews and projects.</p>
       </div>
-      {[...byFw.entries()].map(([fw, domains]) => (
+      {items.length === 0 ? (
+        emptyPrompt ?? <p className="text-sm text-gray-400">No competency evidence yet.</p>
+      ) : [...byFw.entries()].map(([fw, domains]) => (
         <div key={fw} className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-gray-400">{fw}</p>
           {[...domains.entries()].map(([dom, rows]) => {
@@ -496,8 +497,10 @@ export default function PortfolioPage() {
         )}
       </Section>
 
-      {/* Check-in cadence (frequency + note slots) */}
-      <CheckInCadence employeeId={p.id} employeeFirstName={p.first_name} />
+      {/* Check-in cadence (frequency + linked docs + follow-ups + notes) */}
+      <div id="one-on-one" className="scroll-mt-20">
+        <CheckInCadence employeeId={p.id} employeeFirstName={p.first_name} />
+      </div>
 
       {/* Check-ins */}
       <div className="card p-5">
@@ -536,7 +539,17 @@ export default function PortfolioPage() {
       <FocusCompetencies subjectId={p.id} subjectFirstName={p.first_name} canAssign={!!data.viewer?.privileged} />
 
       {/* Competencies — evidence grouped by domain, across all time */}
-      <CompetenciesByDomain items={data.competencies} />
+      <CompetenciesByDomain
+        items={data.competencies}
+        emptyPrompt={canPrompt ? (
+          <PortfolioPromptBlock
+            title="Your competencies will build up here"
+            blurb="As you complete check-ins and tag projects, the competencies they show evidence for collect here — no scores, just evidence over time."
+            cta="See your frameworks"
+            href="/dashboard/frameworks"
+          />
+        ) : undefined}
+      />
 
       {/* Forms */}
       <div className="card p-5">

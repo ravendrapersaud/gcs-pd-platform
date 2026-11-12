@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, Workspace } from '@/lib/types'
 import { DIVISIONS, EMPLOYEE_TYPES } from '@/lib/taxonomy'
@@ -208,6 +209,29 @@ export default function WorkspacesPage() {
           {notice}
         </div>
       )}
+
+      {/* Private 1:1 callback — a POINTER, not a group workspace. The running 1:1
+          (check-in notes, follow-ups, linked docs) lives on the portfolio, scoped
+          to the person + their supervisor(s) + admins; its content is never copied
+          into a browsable workspace row. */}
+      <Link
+        href="/dashboard/portfolio/me#one-on-one"
+        className="block card p-5 border-l-4 border-navy-700 hover:shadow-md transition-shadow"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-display font-bold text-navy-900">Your 1:1 space</h3>
+              <span className="badge badge-gray text-[10px]">Private</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              Your running check-in notes, follow-ups, and linked docs with your supervisor — private to you,
+              your supervisor(s), and admins. It lives on your portfolio, not in a shared workspace.
+            </p>
+          </div>
+          <span className="text-navy-700 text-sm font-medium shrink-0 mt-1">Open →</span>
+        </div>
+      </Link>
 
       {/* Header actions */}
       <div className="flex items-center justify-between">

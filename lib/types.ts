@@ -199,6 +199,16 @@ export interface CheckInNote {
   author?: Profile
 }
 
+export interface CheckInLink {
+  id: string
+  employee_id: string
+  author_id: string | null
+  title: string
+  url: string
+  created_at: string
+  author?: Profile
+}
+
 export type FollowUpStatus = 'open' | 'done'
 
 export interface CheckInFollowUp {
