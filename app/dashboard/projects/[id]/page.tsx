@@ -48,6 +48,12 @@ export default function ProjectDetailPage() {
   const [savingDetails, setSavingDetails] = useState(false)
   const [savedTick, setSavedTick] = useState(false)
 
+  // Inline Drive-folder link editor (separate from the full Edit form, so a bad
+  // or stale link can be fixed/removed straight from the Project files card).
+  const [folderEditing, setFolderEditing] = useState(false)
+  const [folderInput, setFolderInput] = useState('')
+  const [savingFolder, setSavingFolder] = useState(false)
+
   // Milestone / collaborator inputs
   const [mTitle, setMTitle] = useState('')
   const [mDue, setMDue] = useState('')
@@ -137,6 +143,18 @@ export default function ProjectDetailPage() {
     if (!data || data.length === 0) { setError('Could not save (you may not have permission).'); return }
     setSavedTick(true); setTimeout(() => setSavedTick(false), 2000)
     load()
+  }
+
+  const saveFolder = async (url: string | null) => {
+    if (!project) return
+    setSavingFolder(true); setError(null)
+    const { data, error: err } = await supabase.from('projects')
+      .update({ drive_folder_url: url, updated_at: new Date().toISOString() })
+      .eq('id', project.id).select('id')
+    setSavingFolder(false)
+    if (err) { setError(err.message); return }
+    if (!data || data.length === 0) { setError('Could not update the folder link (you may not have permission).'); return }
+    setFolderEditing(false); setFolderInput(''); load()
   }
 
   // Milestones
@@ -431,17 +449,74 @@ export default function ProjectDetailPage() {
 
       {/* Drive folder hub */}
       {(() => {
-        const embed = driveFolderEmbed(project.drive_folder_url)
-        if (!embed) return null
-        return (
-          <div className="card p-6">
-            <div className="flex items-center justify-between gap-2 mb-3">
+        const url = project.drive_folder_url
+        const embed = driveFolderEmbed(url)
+        const openEditor = () => { setFolderInput(url ?? ''); setFolderEditing(true) }
+
+        // Inline editor — fix, replace, or remove the folder link.
+        if (folderEditing) {
+          return (
+            <div className="card p-6 space-y-3">
               <h2 className="font-semibold text-gray-900">Project files</h2>
-              <a href={`https://drive.google.com/drive/folders/${embed.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-navy-700 hover:underline">Open in Drive →</a>
+              <div>
+                <label className="label">Google Drive folder link</label>
+                <input className="input" placeholder="https://drive.google.com/drive/folders/…"
+                  value={folderInput} onChange={(e) => setFolderInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveFolder(folderInput.trim() || null) }} />
+                <p className="text-xs text-gray-400 mt-1">Paste a Drive <em>folder</em> link to embed its contents here. Its files are managed in Google Drive.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => saveFolder(folderInput.trim() || null)} disabled={savingFolder} className="btn-primary text-sm">{savingFolder ? 'Saving…' : 'Save link'}</button>
+                {url && <button onClick={() => saveFolder(null)} disabled={savingFolder} className="btn-ghost text-sm text-red-600">Remove link</button>}
+                <button onClick={() => { setFolderEditing(false); setError(null) }} className="btn-ghost text-sm">Cancel</button>
+              </div>
             </div>
-            <iframe src={embed.embed} className="w-full rounded-lg border border-gray-200" style={{ height: 420 }} title="Project Drive folder" />
-          </div>
-        )
+          )
+        }
+
+        // Valid folder link → embed, with a Replace / Remove control for editors.
+        if (embed) {
+          return (
+            <div className="card p-6">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h2 className="font-semibold text-gray-900">Project files</h2>
+                <div className="flex items-center gap-3 shrink-0">
+                  <a href={`https://drive.google.com/drive/folders/${embed.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-navy-700 hover:underline">Open in Drive →</a>
+                  {canEdit && <button onClick={openEditor} className="text-sm text-gray-500 hover:text-navy-700">Replace / Remove</button>}
+                </div>
+              </div>
+              <iframe src={embed.embed} className="w-full rounded-lg border border-gray-200" style={{ height: 420 }} title="Project Drive folder" />
+            </div>
+          )
+        }
+
+        // A link is saved but isn't an embeddable folder URL — let editors fix it.
+        if (url && canEdit) {
+          return (
+            <div className="card p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-gray-900">Project files</h2>
+                  <p className="text-sm text-yellow-700 mt-1">The saved link isn&rsquo;t a Google Drive <em>folder</em> URL, so it can&rsquo;t be shown here.</p>
+                  <p className="text-xs text-gray-500 mt-0.5 break-all">{url}</p>
+                </div>
+                <button onClick={openEditor} className="btn-secondary text-sm shrink-0">Fix / Remove</button>
+              </div>
+            </div>
+          )
+        }
+
+        // No link yet — editors can add one without opening the full Edit form.
+        if (!url && canEdit) {
+          return (
+            <button onClick={openEditor} className="card p-6 w-full text-left hover:shadow-md transition-shadow border-2 border-dashed border-gray-200">
+              <h2 className="font-semibold text-gray-900">Project files</h2>
+              <p className="text-sm text-gray-500 mt-1">Link a Google Drive folder to use as this project&rsquo;s hub.</p>
+            </button>
+          )
+        }
+
+        return null
       })()}
     </div>
   )
