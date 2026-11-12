@@ -440,13 +440,11 @@ export default function CheckInCadence({
 
       {/* ═══ Growth log column — the templated review / check-in forms, over time ═══ */}
       <div className="space-y-3 lg:border-l lg:border-gray-100 lg:pl-6">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h4 className="text-sm font-semibold text-gray-900">Growth log{pastCheckInCount > 0 ? <span className="text-gray-400 font-normal"> ({pastCheckInCount})</span> : null}</h4>
-            <p className="text-xs text-gray-400 mt-0.5">Self-reviews and reviews, kept as a record over time.</p>
-          </div>
-          {startControl}
+        <div>
+          <h4 className="text-sm font-semibold text-gray-900">Growth log{pastCheckInCount > 0 ? <span className="text-gray-400 font-normal"> ({pastCheckInCount})</span> : null}</h4>
+          <p className="text-xs text-gray-400 mt-0.5">Self-reviews and reviews, kept as a record over time.</p>
         </div>
+        {startControl && <div>{startControl}</div>}
         {pastCheckIns}
       </div>
       </div>
