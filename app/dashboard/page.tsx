@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiveAllotment, formatUSD } from '@/lib/funds'
 import { pdHoursTarget } from '@/lib/appSettings'
 import { IconMegaphone } from '@/components/icons'
+import DashboardCheckIns from '@/components/DashboardCheckIns'
 
 interface ReportRow {
   id: string
@@ -302,6 +303,9 @@ export default async function DashboardPage() {
           ))}
         </div>
       </section>
+
+      {/* Your 1:1s — next check-in, open follow-ups, and reports due */}
+      <DashboardCheckIns />
 
       {/* Team summary (supervisors and admins) */}
       {team && (

@@ -1,35 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { CheckInSchedule, CheckInNote, CheckInFollowUp, CheckInLink, CheckInFrequency, Profile } from '@/lib/types'
 import { settingsMap } from '@/lib/appSettings'
 import { trackForProfile, studentSupportDepartments, targetMatchesPerson } from '@/lib/tracks'
+import { FREQ_LABEL, FREQ_ADVERB, FREQS, nextDueDate, isOverdue, todayISO } from '@/lib/checkins'
 import clsx from 'clsx'
 
-const FREQ_LABEL: Record<CheckInFrequency, string> = {
-  weekly: 'Weekly', biweekly: 'Every two weeks', monthly: 'Monthly',
-  quarterly: 'Quarterly', twice_yearly: 'Twice a year', none: 'No set cadence',
-}
-const FREQS: CheckInFrequency[] = ['weekly', 'biweekly', 'monthly', 'quarterly', 'twice_yearly', 'none']
-
-const TODAY = () => new Date().toISOString().slice(0, 10)
 const fmtDate = (d: string) => new Date(d.length <= 10 ? `${d}T12:00:00` : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-
-function addInterval(dateStr: string, freq: CheckInFrequency): string | null {
-  const d = new Date(`${dateStr.slice(0, 10)}T12:00:00`)
-  if (isNaN(d.getTime())) return null
-  switch (freq) {
-    case 'weekly': d.setDate(d.getDate() + 7); break
-    case 'biweekly': d.setDate(d.getDate() + 14); break
-    case 'monthly': d.setMonth(d.getMonth() + 1); break
-    case 'quarterly': d.setMonth(d.getMonth() + 3); break
-    case 'twice_yearly': d.setMonth(d.getMonth() + 6); break
-    default: return null
-  }
-  return d.toISOString().slice(0, 10)
-}
 
 type Participant = { id: string; first_name: string; last_name: string }
 
@@ -50,8 +31,19 @@ const normalizeUrl = (raw: string) => {
   return /^https?:\/\//i.test(t) ? t : `https://${t}`
 }
 
-export default function CheckInCadence({ employeeId, employeeFirstName }: { employeeId: string; employeeFirstName: string }) {
+export default function CheckInCadence({
+  employeeId,
+  employeeFirstName,
+  pastCheckIns,
+  pastCheckInCount = 0,
+}: {
+  employeeId: string
+  employeeFirstName: string
+  pastCheckIns?: ReactNode
+  pastCheckInCount?: number
+}) {
   const supabase = createClient()
+  const router = useRouter()
   const [userId, setUserId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
   const [schedule, setSchedule] = useState<CheckInSchedule | null>(null)
@@ -206,9 +198,10 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
 
   if (loading) return <div className="card h-28 animate-pulse bg-gray-100" />
 
-  const anchor = lastCheckIn ? lastCheckIn.slice(0, 10) : schedule?.start_date ?? null
-  const nextDue = schedule && schedule.active && anchor ? addInterval(anchor, schedule.frequency) : null
-  const overdue = nextDue ? nextDue < TODAY() : false
+  const nextDue = schedule
+    ? nextDueDate({ frequency: schedule.frequency, active: schedule.active, lastCheckIn, startDate: schedule.start_date })
+    : null
+  const overdue = isOverdue(nextDue)
   const preferredId = schedule?.template_id || templates[0]?.id || null
 
   const ownerLabel = (id: string | null) => {
@@ -224,28 +217,50 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
     return a.created_at < b.created_at ? -1 : 1
   })
   const doneFUs = followUps.filter((f) => f.status === 'done').sort((a, b) => ((b.completed_at ?? '') < (a.completed_at ?? '') ? -1 : 1))
-  const today = TODAY()
+  const today = todayISO()
+
+  const supervisors = participants.filter((p) => p.id !== employeeId)
+  const withWhom = isSelf
+    ? (supervisors.length === 1 ? ` with ${supervisors[0].first_name}` : supervisors.length > 1 ? ' with your supervisors' : '')
+    : ''
+  const title = isSelf ? 'Your 1:1' : `${employeeFirstName}'s 1:1`
+
+  const startControl = templates.length > 1 ? (
+    <select
+      className="input text-sm py-1.5 w-auto"
+      value=""
+      onChange={(e) => { if (e.target.value) router.push(`/dashboard/forms/fill/${e.target.value}/${employeeId}`) }}
+    >
+      <option value="">Start a check-in…</option>
+      {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+    </select>
+  ) : preferredId ? (
+    <Link href={`/dashboard/forms/fill/${preferredId}/${employeeId}`} className="btn-primary text-sm shrink-0">Start a check-in</Link>
+  ) : null
 
   return (
     <div className="card p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-gray-900">Check-in cadence</h3>
+          <h3 className="font-semibold text-gray-900">{title}</h3>
           {schedule ? (
             <p className="text-sm text-gray-500 mt-0.5">
-              {isSelf ? 'You check in' : `${employeeFirstName} checks in`} <span className="font-medium text-gray-700">{FREQ_LABEL[schedule.frequency].toLowerCase()}</span>
+              {isSelf ? 'You check in' : `${employeeFirstName} checks in`} <span className="font-medium text-gray-700">{FREQ_ADVERB[schedule.frequency]}</span>{withWhom}
               {!schedule.active && ' (paused)'}
               {nextDue && (
                 <> · <span className={clsx(overdue ? 'text-red-600 font-medium' : 'text-gray-500')}>{overdue ? 'due now' : `next around ${fmtDate(nextDue)}`}</span></>
               )}
             </p>
           ) : (
-            <p className="text-sm text-gray-500 mt-0.5">{isSelf ? "You haven't set a check-in cadence yet." : 'No cadence set yet.'}</p>
+            <p className="text-sm text-gray-500 mt-0.5">{isSelf ? "You haven't set how often you check in yet." : 'No check-in rhythm set yet.'}</p>
           )}
         </div>
-        {canEditFreq && !editing && (
-          <button onClick={() => setEditing(true)} className="btn-secondary text-xs shrink-0">{schedule ? 'Edit' : 'Set cadence'}</button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {startControl}
+          {canEditFreq && !editing && (
+            <button onClick={() => setEditing(true)} className="btn-ghost text-xs">{schedule ? 'Edit' : 'Set rhythm'}</button>
+          )}
+        </div>
       </div>
 
       {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
@@ -271,16 +286,10 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
             <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Active (pause anytime if circumstances change)
           </label>
           <div className="flex gap-2">
-            <button onClick={saveSchedule} disabled={busy} className="btn-primary text-sm">{busy ? 'Saving…' : 'Save cadence'}</button>
+            <button onClick={saveSchedule} disabled={busy} className="btn-primary text-sm">{busy ? 'Saving…' : 'Save rhythm'}</button>
             <button onClick={() => { setEditing(false); setError(null) }} className="btn-ghost text-sm">Cancel</button>
           </div>
         </div>
-      )}
-
-      {preferredId && (
-        <Link href={`/dashboard/forms/fill/${preferredId}/${employeeId}`} className="btn-secondary text-sm inline-block">
-          {isSelf ? 'Do a check-in now →' : 'Start a check-in →'}
-        </Link>
       )}
 
       {/* Linked docs — the running Google doc(s) that anchor the 1:1 */}
@@ -390,9 +399,20 @@ export default function CheckInCadence({ employeeId, employeeFirstName }: { empl
         )}
       </div>
 
+      {/* Past check-ins — the submitted reflections (injected from the portfolio) */}
+      {pastCheckIns && (
+        <div className="border-t border-gray-100 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-sm font-medium text-gray-800">Past check-ins</p>
+            {pastCheckInCount > 0 && <span className="badge badge-gray text-[10px]">{pastCheckInCount}</span>}
+          </div>
+          {pastCheckIns}
+        </div>
+      )}
+
       {/* Note slots */}
       <div className="border-t border-gray-100 pt-4">
-        <p className="text-sm font-medium text-gray-800">Notes for your check-ins</p>
+        <p className="text-sm font-medium text-gray-800">Notes to raise</p>
         <p className="text-xs text-gray-400 mb-2">Jot things to raise. {isSelf ? 'Mark a note private to keep it to yourself, or shared so your supervisor sees it.' : 'Notes you add here are shared with the employee.'}</p>
 
         <div className="flex flex-col gap-2 mb-3">

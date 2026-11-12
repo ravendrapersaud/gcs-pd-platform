@@ -315,8 +315,6 @@ export default function PortfolioPage() {
   const otherResponses = data.forms.filter((r) => !isCheckIn(r.template?.category))
   const checkInFillable = data.fillable.filter((f) => isCheckIn(f.category))
   const otherFillable = data.fillable.filter((f) => !isCheckIn(f.category))
-  const isCurrentYear = year === currentSchoolYear()
-  const canCheckInPrompt = isCurrentYear && checkInFillable.length > 0 && (data.viewer?.isSelf || data.viewer?.privileged)
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -497,42 +495,24 @@ export default function PortfolioPage() {
         )}
       </Section>
 
-      {/* Check-in cadence (frequency + linked docs + follow-ups + notes) */}
+      {/* Your 1:1 — rhythm, running docs, follow-ups, past check-ins, and notes,
+          all in one place. The "Past check-ins" list (submitted reflections) is
+          rendered here and passed in, so the fill flow / edit links stay local. */}
       <div id="one-on-one" className="scroll-mt-20">
-        <CheckInCadence employeeId={p.id} employeeFirstName={p.first_name} />
-      </div>
-
-      {/* Check-ins */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h3 className="font-semibold text-gray-900">Check-ins <span className="text-gray-400 font-normal">({checkInResponses.length})</span></h3>
-          {checkInFillable.length > 0 && (
-            <select
-              className="input text-sm py-1.5 w-auto"
-              value=""
-              onChange={(e) => { if (e.target.value) router.push(`/dashboard/forms/fill/${e.target.value}/${p.id}`) }}
-            >
-              <option value="">+ Start a check-in…</option>
-              {checkInFillable.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
-            </select>
-          )}
-        </div>
-        {checkInResponses.length === 0 ? (
-          canCheckInPrompt ? (
-            <PortfolioPromptBlock
-              title={data.viewer?.isSelf ? `Complete your ${data.year.label} check-in` : `Start a check-in with ${p.first_name}`}
-              blurb={data.viewer?.isSelf ? 'A short reflection on how the year is going, to share with your supervisor.' : 'Open a 1:1 or review for this employee — their reflection and your notes land here.'}
-              cta={data.viewer?.isSelf ? 'Start check-in' : 'Start a check-in'}
-              href={`/dashboard/forms/fill/${checkInFillable[0].id}/${p.id}`}
-            />
-          ) : (
-            <p className="text-sm text-gray-400">No check-ins recorded this year.</p>
-          )
-        ) : (
-          <ul className="space-y-2">
-            {checkInResponses.map((r) => <FormResponseCard key={r.id} r={r} subjectId={data.profile.id} />)}
-          </ul>
-        )}
+        <CheckInCadence
+          employeeId={p.id}
+          employeeFirstName={p.first_name}
+          pastCheckInCount={checkInResponses.length}
+          pastCheckIns={
+            checkInResponses.length === 0 ? (
+              <p className="text-sm text-gray-400">No check-ins recorded for {data.year.label} yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {checkInResponses.map((r) => <FormResponseCard key={r.id} r={r} subjectId={data.profile.id} />)}
+              </ul>
+            )
+          }
+        />
       </div>
 
       {/* Focus competencies — frameworks assigned to this person */}
