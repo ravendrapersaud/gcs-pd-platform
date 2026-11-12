@@ -199,6 +199,22 @@ export interface CheckInNote {
   author?: Profile
 }
 
+export type FollowUpStatus = 'open' | 'done'
+
+export interface CheckInFollowUp {
+  id: string
+  employee_id: string
+  author_id: string | null
+  owner_id: string | null
+  content: string
+  status: FollowUpStatus
+  due_date: string | null
+  created_at: string
+  completed_at: string | null
+  author?: Profile
+  owner?: Profile
+}
+
 export interface FormResponse {
   id: string
   template_id: string
