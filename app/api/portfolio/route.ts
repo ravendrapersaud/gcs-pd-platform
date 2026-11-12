@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', userId).gte('created_at', start).lte('created_at', endTs).order('created_at', { ascending: false }),
     admin.from('app_settings').select('key, value'),
     admin.from('form_responses')
-      .select('id, answers, submitted_at, created_at, template:form_templates(id, title, fields, visible_to_employee, category), filler:profiles!form_responses_filled_by_fkey(first_name, last_name)')
+      .select('id, answers, submitted_at, created_at, filled_by, template:form_templates(id, title, fields, visible_to_employee, category), filler:profiles!form_responses_filled_by_fkey(first_name, last_name)')
       .eq('subject_id', userId).eq('status', 'submitted')
       .gte('created_at', start).lte('created_at', endTs).order('submitted_at', { ascending: false }),
     admin.from('form_templates').select('id, title, fill_by, category, target_tracks, target_roles').eq('is_active', true).order('title'),
@@ -131,10 +131,17 @@ export async function GET(request: NextRequest) {
 
   // A non-privileged viewer (the subject themselves) only sees completed forms
   // whose template is marked visible_to_employee.
-  const forms = (responses ?? []).filter((r) => {
-    const tmpl = r.template as { visible_to_employee?: boolean } | null
-    return privileged || tmpl?.visible_to_employee === true
-  })
+  // `editable`: the person who filled a response (or an admin) may revise it —
+  // e.g. an employee editing their own self-reflection. RLS enforces the same.
+  const forms = (responses ?? [])
+    .filter((r) => {
+      const tmpl = r.template as { visible_to_employee?: boolean } | null
+      return privileged || tmpl?.visible_to_employee === true
+    })
+    .map((r) => ({
+      ...r,
+      editable: (r as { filled_by?: string }).filled_by === user.id || role === 'admin',
+    }))
 
   // The subject's development track routes which templates apply to them.
   const subjectTrack = trackForProfile(

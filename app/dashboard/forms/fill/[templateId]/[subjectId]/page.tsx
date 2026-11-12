@@ -30,9 +30,16 @@ export default function FillFormPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  // When editing an existing submission (?responseId=…), we UPDATE instead of
+  // INSERT and prefill from the saved answers + evidence.
+  const [editingResponseId, setEditingResponseId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    const responseId = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('responseId')
+      : null
+    setEditingResponseId(responseId)
     const { data: { user } } = await supabase.auth.getUser()
     setUserId(user?.id ?? null)
     const [{ data: t }, { data: s }] = await Promise.all([
@@ -55,6 +62,23 @@ export default function FillFormPage() {
         setFramework({ id: (fw as { id: string }).id, title: (fw as { title: string }).title, domains })
       }
     }
+
+    // Editing: prefill answers, and the framework evidence tied to this response.
+    if (responseId) {
+      const [{ data: resp }, { data: ev }] = await Promise.all([
+        supabase.from('form_responses').select('answers').eq('id', responseId).single(),
+        supabase.from('competency_evidence').select('domain_id, indicator_id, note').eq('response_id', responseId),
+      ])
+      if (resp?.answers) setAnswers((resp.answers as Record<string, unknown>) ?? {})
+      for (const r of (ev ?? []) as { domain_id: string; indicator_id: string | null; note: string | null }[]) {
+        if (r.indicator_id) {
+          setChecked((c) => ({ ...c, [r.indicator_id as string]: true }))
+          if (r.note) setIndNote((n) => ({ ...n, [r.indicator_id as string]: r.note as string }))
+        } else if (r.note) {
+          setNarrative((n) => ({ ...n, [r.domain_id]: r.note as string }))
+        }
+      }
+    }
     setLoading(false)
   }, [templateId, subjectId])
   useEffect(() => { load() }, [load])
@@ -71,17 +95,35 @@ export default function FillFormPage() {
       if (empty) { setError(`“${f.label}” is required.`); return }
     }
     setSaving(true); setError(null)
-    const { data, error: err } = await supabase.from('form_responses').insert({
-      template_id: template.id, subject_id: subjectId, filled_by: userId,
-      answers, status: 'submitted', submitted_at: new Date().toISOString(),
-    }).select('id')
-    if (err) { setSaving(false); setError(err.message); return }
-    if (!data || data.length === 0) { setSaving(false); setError('You don’t have permission to fill this form for this person.'); return }
+
+    // Create a new submission, or update the one being edited. `.select('id')`
+    // detects a zero-row result (RLS blocked the write).
+    let responseId: string
+    if (editingResponseId) {
+      const { data, error: err } = await supabase.from('form_responses')
+        .update({ answers }).eq('id', editingResponseId).select('id')
+      if (err) { setSaving(false); setError(err.message); return }
+      if (!data || data.length === 0) { setSaving(false); setError('You don’t have permission to edit this response.'); return }
+      responseId = editingResponseId
+    } else {
+      const { data, error: err } = await supabase.from('form_responses').insert({
+        template_id: template.id, subject_id: subjectId, filled_by: userId,
+        answers, status: 'submitted', submitted_at: new Date().toISOString(),
+      }).select('id')
+      if (err) { setSaving(false); setError(err.message); return }
+      if (!data || data.length === 0) { setSaving(false); setError('You don’t have permission to fill this form for this person.'); return }
+      responseId = data[0].id as string
+    }
 
     // Framework evidence: a domain-level narrative row per filled domain, and an
-    // indicator row per indicator marked evidenced.
+    // indicator row per indicator marked evidenced. On edit, reconcile by
+    // clearing this response's review-sourced rows first, then re-inserting.
     if (framework) {
-      const responseId = data[0].id as string
+      if (editingResponseId) {
+        const { error: delErr } = await supabase.from('competency_evidence')
+          .delete().eq('response_id', responseId).eq('source', 'review')
+        if (delErr) { setSaving(false); setError(`Saved, but updating competency evidence failed: ${delErr.message}`); return }
+      }
       const rows: Record<string, unknown>[] = []
       for (const d of framework.domains) {
         const narr = (narrative[d.id] ?? '').trim()
@@ -107,7 +149,7 @@ export default function FillFormPage() {
     <div className="max-w-2xl mx-auto space-y-5">
       <div>
         <Link href={`/dashboard/portfolio/${subjectId}`} className="text-sm text-gray-500 hover:text-gray-700">← {subject.first_name}’s portfolio</Link>
-        <h1 className="text-2xl font-display text-gray-900 mt-2">{template.title}</h1>
+        <h1 className="text-2xl font-display text-gray-900 mt-2">{editingResponseId ? `Edit · ${template.title}` : template.title}</h1>
         <p className="text-gray-500 text-sm">For {subject.first_name} {subject.last_name}{template.description ? ` · ${template.description}` : ''}</p>
       </div>
 
@@ -156,7 +198,7 @@ export default function FillFormPage() {
       <div className="card p-4">
         <div className="flex gap-2">
           <Link href={`/dashboard/portfolio/${subjectId}`} className="btn-secondary flex-1 text-center">Cancel</Link>
-          <button onClick={submit} disabled={saving} className="btn-primary flex-1">{saving ? 'Submitting…' : 'Submit form'}</button>
+          <button onClick={submit} disabled={saving} className="btn-primary flex-1">{saving ? 'Saving…' : editingResponseId ? 'Save changes' : 'Submit form'}</button>
         </div>
       </div>
     </div>

@@ -84,12 +84,15 @@ export default function ProjectDetailPage() {
     setProject(p)
     setMyRole((me?.role as string) ?? null)
 
-    // Competency tagging: frameworks applicable to the project OWNER's track/role.
+    // Competency tagging: frameworks applicable to the project OWNER — those
+    // their track/role targets, PLUS any explicitly assigned as a focus.
     const owner = (allProfiles ?? []).find((x) => x.id === p.owner_id) as Profile | undefined
     const ownerTrack = trackForProfile((owner ?? {}) as Profile, studentSupportDepartments(settingsMap(settingsRows)))
     const ownerRoles = (owner?.roles) ?? []
+    const { data: assignRows } = await supabase.from('competency_assignments').select('framework_id').eq('subject_id', p.owner_id)
+    const assignedFwIds = new Set(((assignRows ?? []) as { framework_id: string }[]).map((r) => r.framework_id))
     const applicable = ((fws ?? []) as TagFramework[])
-      .filter((fw) => targetMatchesPerson(fw.target_tracks, fw.target_roles, ownerTrack, ownerRoles))
+      .filter((fw) => assignedFwIds.has(fw.id) || targetMatchesPerson(fw.target_tracks, fw.target_roles, ownerTrack, ownerRoles))
       .map((fw) => ({
         ...fw,
         domains: (fw.domains ?? []).slice().sort((a, b) => a.order_index - b.order_index)

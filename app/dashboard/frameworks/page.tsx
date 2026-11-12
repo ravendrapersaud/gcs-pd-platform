@@ -198,6 +198,7 @@ export default function FrameworksPage() {
   const [userRole, setUserRole] = useState<string>('staff')
   const [viewerTrack, setViewerTrack] = useState<Track>('institutional')
   const [viewerRoles, setViewerRoles] = useState<string[]>([])
+  const [assignedToMe, setAssignedToMe] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -223,9 +224,10 @@ export default function FrameworksPage() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const [{ data: p }, { data: settingsRows }] = await Promise.all([
+      const [{ data: p }, { data: settingsRows }, { data: mine }] = await Promise.all([
         supabase.from('profiles').select('role, department, employee_type, teaches_classes, track, roles').eq('id', user.id).single(),
         supabase.from('app_settings').select('key, value'),
+        supabase.from('competency_assignments').select('framework_id').eq('subject_id', user.id),
       ])
       setUserRole(p?.role ?? 'staff')
       setViewerRoles(((p as { roles?: string[] } | null)?.roles) ?? [])
@@ -233,6 +235,7 @@ export default function FrameworksPage() {
         (p ?? {}) as { track?: string | null; employee_type?: string | null; teaches_classes?: boolean | null; department?: string | null },
         studentSupportDepartments(settingsMap(settingsRows))
       ))
+      setAssignedToMe(new Set(((mine ?? []) as { framework_id: string }[]).map((r) => r.framework_id)))
     }
     const { data: fws } = await supabase
       .from('frameworks')
@@ -523,11 +526,11 @@ export default function FrameworksPage() {
 
   const isSupervisorOrAdmin = userRole === 'supervisor' || userRole === 'admin'
 
-  // Members see only frameworks that apply to their track + role; supervisors
-  // and admins see all (they observe others and manage the rubrics).
+  // Members see frameworks that apply to their track + role, PLUS any assigned
+  // to them as a focus; supervisors and admins see all (they manage the rubrics).
   const visibleFrameworks = isSupervisorOrAdmin
     ? frameworks
-    : frameworks.filter((fw) => targetMatchesPerson(fw.target_tracks, fw.target_roles, viewerTrack, viewerRoles))
+    : frameworks.filter((fw) => assignedToMe.has(fw.id) || targetMatchesPerson(fw.target_tracks, fw.target_roles, viewerTrack, viewerRoles))
 
   if (selected) {
     return (

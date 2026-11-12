@@ -269,6 +269,20 @@ export interface Goal {
   aligned_total?: number   // org goals: # of descendant goals across all levels
 }
 
+// A framework pinned to a specific person as a named focus (distinct from
+// track/role targeting). See supabase/migration_competency_assignments.sql.
+export interface CompetencyAssignment {
+  id: string
+  subject_id: string
+  framework_id: string
+  assigned_by: string | null
+  note: string | null
+  created_at: string
+  // joined
+  framework?: { id: string; title: string } | null
+  assigner?: { first_name: string; last_name: string } | null
+}
+
 export interface GoalCollaborator {
   goal_id: string
   user_id: string
