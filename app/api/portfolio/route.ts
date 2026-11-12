@@ -62,9 +62,11 @@ export async function GET(request: NextRequest) {
     { data: activeForms },
     { data: projects },
     { data: competencies },
+    { data: orgGoals },
+    { data: goalRollups },
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
-    admin.from('goals').select('id, title, goal_type, status, progress_pct, due_date, created_at').eq('owner_id', userId),
+    admin.from('goals').select('id, title, goal_type, status, progress_pct, due_date, created_at, scope, parent_goal_id').eq('owner_id', userId),
     admin.from('observations')
       .select('id, obs_type, observed_at, notes, twg_data, goal:goals(title), observer:profiles!observations_observer_id_fkey(first_name, last_name)')
       .eq('observed_id', userId).eq('is_peer', false).eq('status', 'published')
@@ -89,15 +91,39 @@ export async function GET(request: NextRequest) {
     admin.from('competency_evidence')
       .select('id, domain_id, indicator_id, source, note, created_at, framework:frameworks(title), domain:framework_domains(title), indicator:framework_indicators(title), author:profiles!competency_evidence_author_id_fkey(first_name, last_name)')
       .eq('subject_id', userId).order('created_at', { ascending: false }),
+    // Org goals (any scope) so we can show what this person's goals align up to,
+    // and multi-level rollups for any org goals they own.
+    admin.from('goals').select('id, title, scope').in('scope', ['office', 'school']),
+    admin.rpc('org_goal_rollups'),
   ])
 
   if (!profile) return NextResponse.json({ error: 'Employee not found.' }, { status: 404 })
 
   // Goals relevant to the year: created within it, or still active.
-  const yearGoals = (goals ?? []).filter((g) => {
-    const created = (g.created_at as string)?.slice(0, 10) ?? ''
-    return (created >= start && created <= end) || g.status === 'active'
-  })
+  // Enriched with cascade context: what each aligns up to (parent title) and,
+  // for any org goals this person owns, the multi-level rollup beneath them.
+  const orgById = new Map((orgGoals ?? []).map((g) => [g.id as string, g]))
+  const rollupById = new Map(
+    ((goalRollups ?? []) as { parent_goal_id: string; aligned_count: number; avg_pct: number; total_count: number }[])
+      .map((r) => [r.parent_goal_id, r])
+  )
+  const yearGoals = (goals ?? [])
+    .filter((g) => {
+      const created = (g.created_at as string)?.slice(0, 10) ?? ''
+      return (created >= start && created <= end) || g.status === 'active'
+    })
+    .map((g) => {
+      const parentId = (g as { parent_goal_id?: string | null }).parent_goal_id
+      const parent = parentId ? orgById.get(parentId) : null
+      const roll = rollupById.get(g.id as string)
+      return {
+        ...g,
+        parent: parent ? { id: parent.id, title: parent.title, scope: parent.scope } : null,
+        aligned_count: roll?.aligned_count ?? 0,
+        aligned_avg_pct: roll?.avg_pct ?? 0,
+        aligned_total: roll?.total_count ?? 0,
+      }
+    })
 
   const hoursTotal = (pd ?? []).reduce((sum, a) => sum + (Number(a.hours) || 0), 0)
   const settingsMap = Object.fromEntries((settings ?? []).map((r) => [r.key, r.value]))

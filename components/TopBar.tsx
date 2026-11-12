@@ -29,6 +29,7 @@ const routeMeta: Record<string, { title: string; action?: { label: string; href:
   '/dashboard/observations/peer': { title: 'Peer Feedback' },
   '/dashboard/approvals': { title: 'Funding Approvals' },
   '/dashboard/frameworks': { title: 'Frameworks' },
+  '/dashboard/competencies': { title: 'Competency Coverage' },
   '/dashboard/admin/staff': { title: 'Roster' },
   '/dashboard/admin/import': { title: 'Import' },
   '/dashboard/admin/reports': { title: 'Reports' },

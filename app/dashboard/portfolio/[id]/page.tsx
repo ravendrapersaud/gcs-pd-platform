@@ -23,7 +23,12 @@ export interface PortfolioData {
   track: Track
   year: { start: string; end: string; label: string; value: number }
   viewer: { isSelf: boolean; privileged: boolean }
-  goals: { id: string; title: string; goal_type: string; status: string; progress_pct: number; due_date: string | null; created_at: string }[]
+  goals: {
+    id: string; title: string; goal_type: string; status: string; progress_pct: number; due_date: string | null; created_at: string
+    scope?: string | null; parent_goal_id?: string | null
+    parent?: { id: string; title: string; scope?: string | null } | null
+    aligned_count?: number; aligned_avg_pct?: number; aligned_total?: number
+  }[]
   projects: { id: string; title: string; status: string; progress_pct: number; target_date: string | null; visibility: string; school_year_start: number | null }[]
   observations: { id: string; obs_type: string | null; observed_at: string; notes: string | null; twg_data: { frameworkTitle?: string } | null; goal: { title: string } | null; observer: Named }[]
   shoutouts: { id: string; message: string; tags: string[]; created_at: string; sender: Named }[]
@@ -280,14 +285,33 @@ export default function PortfolioPage() {
         prompt={canPrompt ? <PortfolioPromptBlock title={`Set your goals for ${data.year.label}`} blurb="What do you want to grow, build, or accomplish this year?" cta="Set a goal" href="/dashboard/goals?new=1" /> : undefined}
       >
         <ul className="divide-y divide-gray-100">
-          {data.goals.map((g) => (
-            <li key={g.id} className="py-2 flex items-center gap-3">
-              <span className={clsx('badge shrink-0', g.goal_type === 'faculty_inquiry' ? 'badge-navy' : 'badge-gray')}>{g.goal_type === 'faculty_inquiry' ? 'Inquiry' : 'Goal'}</span>
-              <span className="flex-1 text-sm text-gray-800 min-w-0">{g.title}</span>
-              <span className={clsx('badge shrink-0 capitalize', statusColor[g.status] ?? 'badge-gray')}>{g.status}</span>
-              <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{g.progress_pct}%</span>
+          {data.goals.map((g) => {
+            const isOrg = g.scope === 'office' || g.scope === 'school'
+            const scopeLabel = g.scope === 'school' ? 'School' : g.scope === 'office' ? 'Department' : null
+            return (
+            <li key={g.id} className="py-2 space-y-1">
+              <div className="flex items-center gap-3">
+                <span className={clsx('badge shrink-0', isOrg ? 'badge-navy' : g.goal_type === 'faculty_inquiry' ? 'badge-navy' : 'badge-gray')}>
+                  {scopeLabel ?? (g.goal_type === 'faculty_inquiry' ? 'Inquiry' : 'Goal')}
+                </span>
+                <span className="flex-1 text-sm text-gray-800 min-w-0">{g.title}</span>
+                <span className={clsx('badge shrink-0 capitalize', statusColor[g.status] ?? 'badge-gray')}>{g.status}</span>
+                <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{g.progress_pct}%</span>
+              </div>
+              {(g.parent || isOrg) && (
+                <p className="text-xs text-gray-500 pl-1">
+                  {g.parent && <>Aligns to <span className="text-navy-700">{g.parent.title}</span></>}
+                  {g.parent && isOrg && (g.aligned_count ?? 0) > 0 && ' · '}
+                  {isOrg && (g.aligned_count ?? 0) > 0 && (
+                    <>
+                      <span className="font-medium text-navy-700">{g.aligned_count}</span> aligned · avg {g.aligned_avg_pct ?? 0}%
+                      {(g.aligned_total ?? 0) > (g.aligned_count ?? 0) && <> · {g.aligned_total} across all levels</>}
+                    </>
+                  )}
+                </p>
+              )}
             </li>
-          ))}
+          )})}
         </ul>
       </Section>
 

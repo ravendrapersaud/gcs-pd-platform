@@ -252,6 +252,9 @@ function GoalCard({ goal, onUpdate, onEdit, readOnly = false, currentUserId, onA
         <p className="text-xs text-gray-500">
           <span className="font-medium text-navy-700">{goal.aligned_count ?? 0}</span> goal{(goal.aligned_count ?? 0) === 1 ? '' : 's'} aligned
           {(goal.aligned_count ?? 0) > 0 && <> · avg {goal.aligned_avg_pct ?? 0}%</>}
+          {(goal.aligned_total ?? 0) > (goal.aligned_count ?? 0) && (
+            <> · {goal.aligned_total} across all levels</>
+          )}
         </p>
       )}
 
@@ -607,7 +610,7 @@ export default function GoalsPage() {
     const orgList = (orgRows ?? []) as Goal[]
     const orgById = new Map(orgList.map((g) => [g.id, g]))
     const rollupMap = new Map(
-      ((rollupRows ?? []) as { parent_goal_id: string; aligned_count: number; avg_pct: number }[])
+      ((rollupRows ?? []) as { parent_goal_id: string; aligned_count: number; avg_pct: number; total_count: number }[])
         .map((r) => [r.parent_goal_id, r])
     )
     const parentOf = (g: Goal): Goal['parent'] => {
@@ -621,6 +624,7 @@ export default function GoalsPage() {
       parent: parentOf(g),
       aligned_count: rollupMap.get(g.id)?.aligned_count ?? 0,
       aligned_avg_pct: rollupMap.get(g.id)?.avg_pct ?? 0,
+      aligned_total: rollupMap.get(g.id)?.total_count ?? 0,
     })))
 
     // "My Team's Goals" = goals of the people assigned to me as supervisor
@@ -666,7 +670,7 @@ export default function GoalsPage() {
       const evCount: Record<string, number> = {}
       for (const r of evRows ?? []) { const gid = r.goal_id as string; evCount[gid] = (evCount[gid] ?? 0) + 1 }
 
-      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id), evidence_count: evCount[g.id] ?? 0, parent: parentOf(g), aligned_count: rollupMap.get(g.id)?.aligned_count ?? 0, aligned_avg_pct: rollupMap.get(g.id)?.avg_pct ?? 0 })
+      const attach = (g: Goal): Goal => ({ ...g, collaborators: collabMap[g.id] ?? [], owner: profById.get(g.owner_id), evidence_count: evCount[g.id] ?? 0, parent: parentOf(g), aligned_count: rollupMap.get(g.id)?.aligned_count ?? 0, aligned_avg_pct: rollupMap.get(g.id)?.avg_pct ?? 0, aligned_total: rollupMap.get(g.id)?.total_count ?? 0 })
       setGoals(mine.map(attach))
       // Collaborative = any goal you share with someone: goals others added you
       // to, PLUS goals you own that have co-owners (so a goal you shared out,

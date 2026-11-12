@@ -264,8 +264,9 @@ export interface Goal {
   collaborators?: Profile[]
   evidence_count?: number // observations tagged as evidence toward this goal
   parent?: { id: string; title: string; scope?: GoalScope } | null // hydrated client-side
-  aligned_count?: number   // org goals: # of goals aligned under this one
-  aligned_avg_pct?: number // org goals: avg progress of aligned goals
+  aligned_count?: number   // org goals: # of goals *directly* aligned under this one
+  aligned_avg_pct?: number // org goals: avg progress of directly-aligned goals
+  aligned_total?: number   // org goals: # of descendant goals across all levels
 }
 
 export interface GoalCollaborator {

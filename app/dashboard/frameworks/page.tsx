@@ -383,6 +383,18 @@ export default function FrameworksPage() {
     setEditDomains((ds) => ds.map((d, idx) => (idx === di
       ? { ...d, indicators: d.indicators.map((ind, j) => (j === ii ? { ...ind, [key]: val } : ind)) }
       : d)))
+  // Reorder domains / indicators by swapping array positions. handleSaveHeader
+  // writes order_index from the array index, so the new order persists on Save.
+  const swap = <T,>(arr: T[], a: number, b: number): T[] => {
+    if (b < 0 || b >= arr.length) return arr
+    const next = arr.slice()
+    ;[next[a], next[b]] = [next[b], next[a]]
+    return next
+  }
+  const edMoveDomain = (i: number, dir: -1 | 1) =>
+    setEditDomains((ds) => swap(ds, i, i + dir))
+  const edMoveIndicator = (di: number, ii: number, dir: -1 | 1) =>
+    setEditDomains((ds) => ds.map((d, idx) => (idx === di ? { ...d, indicators: swap(d.indicators, ii, ii + dir) } : d)))
 
   const handleDelete = async () => {
     if (!selected) return
@@ -564,7 +576,11 @@ export default function FrameworksPage() {
                   <div key={dom.id ?? `new-${di}`} className="bg-gray-50 rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-gray-400">DOMAIN {di + 1}</span>
-                      <button type="button" onClick={() => edRemoveDomain(di)} className="ml-auto text-xs text-red-500 hover:text-red-700">Remove</button>
+                      <div className="ml-auto flex items-center gap-1">
+                        <button type="button" onClick={() => edMoveDomain(di, -1)} disabled={di === 0} className="text-gray-400 hover:text-navy-700 disabled:opacity-30 disabled:hover:text-gray-400 px-1" aria-label="Move domain up" title="Move up">↑</button>
+                        <button type="button" onClick={() => edMoveDomain(di, 1)} disabled={di === editDomains.length - 1} className="text-gray-400 hover:text-navy-700 disabled:opacity-30 disabled:hover:text-gray-400 px-1" aria-label="Move domain down" title="Move down">↓</button>
+                        <button type="button" onClick={() => edRemoveDomain(di)} className="text-xs text-red-500 hover:text-red-700 ml-1">Remove</button>
+                      </div>
                     </div>
                     <input className="input text-sm" placeholder="Domain title (required)" value={dom.title} onChange={(e) => edUpdateDomain(di, 'title', e.target.value)} />
                     <input className="input text-sm" placeholder="Domain description (optional)" value={dom.description} onChange={(e) => edUpdateDomain(di, 'description', e.target.value)} />
@@ -575,6 +591,10 @@ export default function FrameworksPage() {
                           <div className="flex-1 space-y-1">
                             <input className="input text-sm" placeholder="Indicator title" value={ind.title} onChange={(e) => edUpdateIndicator(di, ii, 'title', e.target.value)} />
                             <input className="input text-sm" placeholder="Indicator description (optional)" value={ind.description} onChange={(e) => edUpdateIndicator(di, ii, 'description', e.target.value)} />
+                          </div>
+                          <div className="flex flex-col items-center mt-1 leading-none">
+                            <button type="button" onClick={() => edMoveIndicator(di, ii, -1)} disabled={ii === 0} className="text-gray-300 hover:text-navy-700 disabled:opacity-30 disabled:hover:text-gray-300 text-xs" aria-label="Move indicator up" title="Move up">↑</button>
+                            <button type="button" onClick={() => edMoveIndicator(di, ii, 1)} disabled={ii === dom.indicators.length - 1} className="text-gray-300 hover:text-navy-700 disabled:opacity-30 disabled:hover:text-gray-300 text-xs" aria-label="Move indicator down" title="Move down">↓</button>
                           </div>
                           <button type="button" onClick={() => edRemoveIndicator(di, ii)} className="text-gray-400 hover:text-red-500 mt-1 text-lg leading-none">×</button>
                         </div>
