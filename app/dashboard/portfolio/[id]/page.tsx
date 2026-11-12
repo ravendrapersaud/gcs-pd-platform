@@ -523,7 +523,7 @@ export default function PortfolioPage() {
           pastCheckInCount={checkInResponses.length}
           pastCheckIns={
             checkInResponses.length === 0 ? (
-              <p className="text-sm text-gray-400">No check-ins recorded for {data.year.label} yet.</p>
+              <p className="text-sm text-gray-400">Nothing logged for {data.year.label} yet.</p>
             ) : (
               <ul className="space-y-2">
                 {checkInResponses.map((r) => <FormResponseCard key={r.id} r={r} subjectId={data.profile.id} />)}

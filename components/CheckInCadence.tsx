@@ -231,66 +231,68 @@ export default function CheckInCadence({
       value=""
       onChange={(e) => { if (e.target.value) router.push(`/dashboard/forms/fill/${e.target.value}/${employeeId}`) }}
     >
-      <option value="">Start a check-in…</option>
+      <option value="">New entry…</option>
       {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
     </select>
   ) : preferredId ? (
-    <Link href={`/dashboard/forms/fill/${preferredId}/${employeeId}`} className="btn-primary text-sm shrink-0">Start a check-in</Link>
+    <Link href={`/dashboard/forms/fill/${preferredId}/${employeeId}`} className="btn-primary text-sm shrink-0">New entry</Link>
   ) : null
 
   return (
     <div className="card p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-gray-900">{title}</h3>
-          {schedule ? (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {isSelf ? 'You check in' : `${employeeFirstName} checks in`} <span className="font-medium text-gray-700">{FREQ_ADVERB[schedule.frequency]}</span>{withWhom}
-              {!schedule.active && ' (paused)'}
-              {nextDue && (
-                <> · <span className={clsx(overdue ? 'text-red-600 font-medium' : 'text-gray-500')}>{overdue ? 'due now' : `next around ${fmtDate(nextDue)}`}</span></>
-              )}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-500 mt-0.5">{isSelf ? "You haven't set how often you check in yet." : 'No check-in rhythm set yet.'}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {startControl}
-          {canEditFreq && !editing && (
-            <button onClick={() => setEditing(true)} className="btn-ghost text-xs">{schedule ? 'Edit' : 'Set rhythm'}</button>
-          )}
-        </div>
-      </div>
+      <h3 className="font-semibold text-gray-900">{title}</h3>
 
       {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
 
-      {editing && (
-        <div className="rounded-xl border border-gray-200 p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="label">How often</label>
-              <select className="input" value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value as CheckInFrequency })}>
-                {FREQS.map((f) => <option key={f} value={f}>{FREQ_LABEL[f]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Preferred check-in form <span className="text-gray-400 font-normal">(optional)</span></label>
-              <select className="input" value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}>
-                <option value="">No preference</option>
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-              </select>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ═══ Check-ins column — the ongoing 1:1: rhythm, docs, follow-ups, notes ═══ */}
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900">Check-ins</h4>
+            {schedule ? (
+              <p className="text-sm text-gray-500 mt-0.5">
+                {isSelf ? 'You check in' : `${employeeFirstName} checks in`} <span className="font-medium text-gray-700">{FREQ_ADVERB[schedule.frequency]}</span>{withWhom}
+                {!schedule.active && ' (paused)'}
+                {nextDue && (
+                  <> · <span className={clsx(overdue ? 'text-red-600 font-medium' : 'text-gray-500')}>{overdue ? 'due now' : `next around ${fmtDate(nextDue)}`}</span></>
+                )}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 mt-0.5">{isSelf ? "You haven't set how often you check in yet." : 'No check-in rhythm set yet.'}</p>
+            )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Active (pause anytime if circumstances change)
-          </label>
-          <div className="flex gap-2">
-            <button onClick={saveSchedule} disabled={busy} className="btn-primary text-sm">{busy ? 'Saving…' : 'Save rhythm'}</button>
-            <button onClick={() => { setEditing(false); setError(null) }} className="btn-ghost text-sm">Cancel</button>
-          </div>
+          {canEditFreq && !editing && (
+            <button onClick={() => setEditing(true)} className="btn-ghost text-xs shrink-0">{schedule ? 'Edit' : 'Set rhythm'}</button>
+          )}
         </div>
-      )}
+
+        {editing && (
+          <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label">How often</label>
+                <select className="input" value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value as CheckInFrequency })}>
+                  {FREQS.map((f) => <option key={f} value={f}>{FREQ_LABEL[f]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Preferred form <span className="text-gray-400 font-normal">(optional)</span></label>
+                <select className="input" value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}>
+                  <option value="">No preference</option>
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Active (pause anytime if circumstances change)
+            </label>
+            <div className="flex gap-2">
+              <button onClick={saveSchedule} disabled={busy} className="btn-primary text-sm">{busy ? 'Saving…' : 'Save rhythm'}</button>
+              <button onClick={() => { setEditing(false); setError(null) }} className="btn-ghost text-sm">Cancel</button>
+            </div>
+          </div>
+        )}
 
       {/* Linked docs — the running Google doc(s) that anchor the 1:1 */}
       <div className="border-t border-gray-100 pt-4">
@@ -399,17 +401,6 @@ export default function CheckInCadence({
         )}
       </div>
 
-      {/* Past check-ins — the submitted reflections (injected from the portfolio) */}
-      {pastCheckIns && (
-        <div className="border-t border-gray-100 pt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <p className="text-sm font-medium text-gray-800">Past check-ins</p>
-            {pastCheckInCount > 0 && <span className="badge badge-gray text-[10px]">{pastCheckInCount}</span>}
-          </div>
-          {pastCheckIns}
-        </div>
-      )}
-
       {/* Note slots */}
       <div className="border-t border-gray-100 pt-4">
         <p className="text-sm font-medium text-gray-800">Notes to raise</p>
@@ -447,6 +438,20 @@ export default function CheckInCadence({
             ))}
           </ul>
         )}
+      </div>
+      </div>
+
+      {/* ═══ Growth log column — the templated review / check-in forms, over time ═══ */}
+      <div className="space-y-3 lg:border-l lg:border-gray-100 lg:pl-6">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900">Growth log{pastCheckInCount > 0 ? <span className="text-gray-400 font-normal"> ({pastCheckInCount})</span> : null}</h4>
+            <p className="text-xs text-gray-400 mt-0.5">Self-reviews and reviews, kept as a record over time.</p>
+          </div>
+          {startControl}
+        </div>
+        {pastCheckIns}
+      </div>
       </div>
     </div>
   )
