@@ -223,7 +223,6 @@ export default function CheckInCadence({
   const withWhom = isSelf
     ? (supervisors.length === 1 ? ` with ${supervisors[0].first_name}` : supervisors.length > 1 ? ' with your supervisors' : '')
     : ''
-  const title = isSelf ? 'Your 1:1' : `${employeeFirstName}'s 1:1`
 
   const startControl = templates.length > 1 ? (
     <select
@@ -240,8 +239,6 @@ export default function CheckInCadence({
 
   return (
     <div className="card p-5 space-y-4">
-      <h3 className="font-semibold text-gray-900">{title}</h3>
-
       {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
