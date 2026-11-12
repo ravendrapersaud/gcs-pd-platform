@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -284,6 +284,24 @@ export default function PortfolioPage() {
     }
   }, [id, year])
   useEffect(() => { load() }, [load])
+
+  // Deep-link scroll (e.g. #one-on-one from the dashboard / Workspaces callback):
+  // the target only exists after the data loads, and async children (the 1:1 card)
+  // keep growing after that, so a single scroll lands in the wrong place. Re-apply
+  // for ~1.5s as the layout settles, then stop.
+  const scrolledToHash = useRef(false)
+  useEffect(() => {
+    if (loading || !data || scrolledToHash.current) return
+    const id = window.location.hash.slice(1)
+    if (!id) return
+    let tries = 0
+    const timer = setInterval(() => {
+      const el = document.getElementById(id)
+      if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' })
+      if (++tries >= 6) { clearInterval(timer); scrolledToHash.current = true }
+    }, 250)
+    return () => clearInterval(timer)
+  }, [loading, data])
 
   const years = Array.from({ length: 4 }, (_, i) => currentSchoolYear() - i)
 
