@@ -14,7 +14,7 @@ import {
   settingsMap,
 } from '@/lib/appSettings'
 import { DEFAULT_ACADEMIC_DEPARTMENTS, DEFAULT_OPERATIONAL_DEPARTMENTS } from '@/lib/taxonomy'
-import { studentSupportDepartments, DEFAULT_STUDENT_SUPPORT_DEPARTMENTS } from '@/lib/tracks'
+import { studentSupportDepartments } from '@/lib/tracks'
 import type { TaxonomyTerm, TaxonomyCategory } from '@/lib/taxonomyDb'
 import type { EventSource } from '@/lib/types'
 import { useTabParam } from '@/lib/useTabParam'
@@ -317,47 +317,73 @@ function TaxonomySection() {
 function StudentSupportSection() {
   const supabase = createClient()
   const [userId, setUserId] = useState<string | null>(null)
-  const [text, setText] = useState('')
+  const [academic, setAcademic] = useState<string[]>([])
+  const [operational, setOperational] = useState<string[]>([])
+  const [selected, setSelected] = useState<string[]>([])
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     setUserId(user?.id ?? null)
     const { data: settings } = await supabase.from('app_settings').select('key, value')
-    setText(studentSupportDepartments(settingsMap(settings)).join('\n'))
+    const map = settingsMap(settings)
+    const parse = (v: string | undefined, defaults: readonly string[]) =>
+      (v ?? '').trim() ? v!.split('\n').map((s) => s.trim()).filter(Boolean) : [...defaults]
+    setAcademic(parse(map['academic_departments'], DEFAULT_ACADEMIC_DEPARTMENTS))
+    setOperational(parse(map['operational_departments'], DEFAULT_OPERATIONAL_DEPARTMENTS))
+    setSelected(studentSupportDepartments(map))
     setLoaded(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => { load() }, [load])
 
-  const save = async () => {
-    setBusy(true); setError(null); setSaved(false)
-    const normalized = normalizeList(text)
+  const saveSelected = async (next: string[]) => {
+    setBusy(true); setError(null)
+    setSelected(next) // optimistic — toggles feel instant
     const { error: err } = await supabase.from('app_settings').upsert(
-      { key: 'student_support_departments', value: normalized, updated_by: userId, updated_at: new Date().toISOString() },
+      { key: 'student_support_departments', value: normalizeList(next.join('\n')), updated_by: userId, updated_at: new Date().toISOString() },
       { onConflict: 'key' }
     )
     setBusy(false)
-    if (err) { setError(err.message); return }
-    setText(normalized ? normalized : DEFAULT_STUDENT_SUPPORT_DEPARTMENTS.join('\n'))
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    if (err) { setError(err.message); load() }
   }
+  const toggle = (dept: string) => {
+    saveSelected(selected.includes(dept) ? selected.filter((d) => d !== dept) : [...selected, dept])
+  }
+
+  const roster = [...academic, ...operational]
+  const custom = selected.filter((d) => !roster.includes(d))
+
+  const Row = ({ dept }: { dept: string }) => (
+    <label className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+      <input type="checkbox" checked={selected.includes(dept)} onChange={() => toggle(dept)} disabled={busy}
+        className="w-4 h-4 rounded border-gray-300 text-navy-800 focus:ring-navy-500" />
+      <span className="text-sm text-gray-800">{dept}</span>
+    </label>
+  )
+  const Group = ({ label, depts }: { label: string; depts: string[] }) => (
+    depts.length === 0 ? null : (
+      <div>
+        <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">{label}</p>
+        <div className="rounded-lg border border-gray-100 divide-y divide-gray-50">
+          {depts.map((d) => <Row key={d} dept={d} />)}
+        </div>
+      </div>
+    )
+  )
 
   return (
     <div className="card p-6 space-y-4">
       <div>
         <h2 className="font-semibold text-gray-900 text-lg">Student Support departments</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          People in these departments are student-facing support (counseling, health, learning
-          support). They derive the <span className="font-medium text-gray-700">Student Support</span> track —
+          Check the departments whose people are student-facing support (counseling, health,
+          learning support). They derive the <span className="font-medium text-gray-700">Student Support</span> track —
           projects are private by default and check-ins carry confidentiality guidance. Everyone
           non-teaching outside this list is <span className="font-medium text-gray-700">Institutional</span>.
-          One department per line; the names must match the Roster departments above. A single
-          person can be overridden on their Roster card.
+          A single person can be overridden on their Roster card.
         </p>
       </div>
 
@@ -366,21 +392,23 @@ function StudentSupportSection() {
       {!loaded ? (
         <div className="h-28 animate-pulse bg-gray-100 rounded-lg" />
       ) : (
-        <>
-          <textarea
-            className="input font-mono text-sm min-h-[7rem]"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={DEFAULT_STUDENT_SUPPORT_DEPARTMENTS.join('\n')}
-          />
-          <div className="flex items-center gap-3">
-            <button onClick={save} disabled={busy} className="btn-primary text-sm">
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-            {saved && <span className="text-sm text-green-700">Saved.</span>}
-            <span className="text-xs text-gray-400">Clear the box and save to restore defaults.</span>
-          </div>
-        </>
+        <div className="space-y-4">
+          <Group label="Academic" depts={academic} />
+          <Group label="Administrative & operations" depts={operational} />
+          {custom.length > 0 && (
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">Not a current department</p>
+              <p className="text-[11px] text-gray-400 mb-1">
+                Marked Student Support but not in the department list above — add it under Departments so people can be
+                assigned to it, or uncheck to drop.
+              </p>
+              <div className="rounded-lg border border-yellow-100 bg-yellow-50/40 divide-y divide-gray-50">
+                {custom.map((d) => <Row key={d} dept={d} />)}
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-gray-400">{busy ? 'Saving…' : 'Changes save automatically.'}</p>
+        </div>
       )}
     </div>
   )
