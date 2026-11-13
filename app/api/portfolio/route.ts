@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     // Competency evidence is shown across all time (grouped by domain), not
     // year-scoped — it's the "areas over time" view.
     admin.from('competency_evidence')
-      .select('id, domain_id, indicator_id, source, note, created_at, framework:frameworks(title), domain:framework_domains(title), indicator:framework_indicators(title), author:profiles!competency_evidence_author_id_fkey(first_name, last_name)')
+      .select('id, domain_id, indicator_id, source, note, created_at, response_id, project_id, framework:frameworks(title), domain:framework_domains(title), indicator:framework_indicators(title), project:projects(title), author:profiles!competency_evidence_author_id_fkey(first_name, last_name)')
       .eq('subject_id', userId).order('created_at', { ascending: false }),
     // Org goals (any scope) so we can show what this person's goals align up to,
     // and multi-level rollups for any org goals they own.

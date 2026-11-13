@@ -39,8 +39,9 @@ export interface PortfolioData {
   competencies: {
     id: string; domain_id: string; indicator_id: string | null; source: string
     note: string | null; created_at: string
+    response_id: string | null; project_id: string | null
     framework: { title: string } | null; domain: { title: string } | null
-    indicator: { title: string } | null; author: Named
+    indicator: { title: string } | null; project: { title: string } | null; author: Named
   }[]
 }
 
@@ -68,8 +69,10 @@ function Section({ title, count, prompt, children }: { title: string; count: num
   )
 }
 
-// Competency evidence grouped framework → domain, across all time. Indicator
-// evidence shows as checked items; domain-level narratives show as notes.
+// Competency evidence, framework → domain (two columns) → indicator. All the
+// evidence for one indicator is aggregated under it, and each piece links to its
+// source (a project page, or the review entry in the Growth log on this page), so
+// a competency can be reviewed with its evidence connected in one place.
 function CompetenciesByDomain({ items, emptyPrompt }: { items: PortfolioData['competencies']; emptyPrompt?: ReactNode }) {
   type Row = PortfolioData['competencies'][number]
   const byFw = new Map<string, Map<string, Row[]>>()
@@ -80,49 +83,72 @@ function CompetenciesByDomain({ items, emptyPrompt }: { items: PortfolioData['co
     const dm = byFw.get(fw)!
     dm.set(dom, [...(dm.get(dom) ?? []), it])
   }
-  const who = (r: Row) => r.source === 'project'
-    ? 'via a project'
-    : (r.author ? `by ${r.author.first_name} ${r.author.last_name}` : 'review')
+  const newest = (a: Row, b: Row) => (a.created_at < b.created_at ? 1 : -1)
+  // Each evidence item links back to where it came from.
+  const SourceLink = ({ r }: { r: Row }) => {
+    if (r.source === 'project' && r.project_id) {
+      return <Link href={`/dashboard/projects/${r.project_id}`} className="text-navy-700 hover:underline">{r.project?.title ? `via ${r.project.title}` : 'via a project'}</Link>
+    }
+    if (r.source === 'review' && r.response_id) {
+      return <a href={`#response-${r.response_id}`} className="text-navy-700 hover:underline">{r.author ? `by ${r.author.first_name} ${r.author.last_name}` : 'from a review'}</a>
+    }
+    return <span>{r.source === 'project' ? 'via a project' : (r.author ? `by ${r.author.first_name} ${r.author.last_name}` : 'review')}</span>
+  }
   return (
     <div className="card p-5 space-y-4">
       <div>
         <h3 className="font-semibold text-gray-900">Competencies <span className="text-gray-400 font-normal">({items.length})</span></h3>
-        <p className="text-xs text-gray-400">Evidence grouped by area, across all time — from reviews and projects.</p>
+        <p className="text-xs text-gray-400">Evidence per indicator, grouped by area — each piece links to its source review or project.</p>
       </div>
       {items.length === 0 ? (
         emptyPrompt ?? <p className="text-sm text-gray-400">No competency evidence yet.</p>
       ) : [...byFw.entries()].map(([fw, domains]) => (
         <div key={fw} className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-gray-400">{fw}</p>
-          {[...domains.entries()].map(([dom, rows]) => {
-            const narratives = rows.filter((r) => !r.indicator_id && r.note)
-            const inds = rows.filter((r) => r.indicator_id)
-            return (
-              <div key={dom} className="rounded-lg border border-gray-100 p-3 space-y-2">
-                <p className="font-medium text-gray-900 text-sm">{dom}</p>
-                {inds.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {inds.map((r) => (
-                      <li key={r.id} className="flex items-start gap-2 text-sm">
-                        <span className="text-navy-700 mt-0.5 shrink-0">✓</span>
-                        <div className="min-w-0">
-                          <span className="text-gray-800">{r.indicator?.title}</span>
-                          {r.note && <p className="text-gray-500 text-xs mt-0.5 whitespace-pre-wrap">{r.note}</p>}
-                          <p className="text-[11px] text-gray-400 mt-0.5">{who(r)} · {fmtDate(r.created_at)}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {narratives.map((n) => (
-                  <div key={n.id} className="text-sm bg-gray-50 rounded p-2">
-                    <p className="text-gray-700 whitespace-pre-wrap">{n.note}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{who(n)} · {fmtDate(n.created_at)}</p>
-                  </div>
-                ))}
-              </div>
-            )
-          })}
+          <div className="grid sm:grid-cols-2 gap-3 items-start">
+            {[...domains.entries()].map(([dom, rows]) => {
+              const narratives = rows.filter((r) => !r.indicator_id && r.note)
+              // Aggregate every piece of evidence under its indicator.
+              const byInd = new Map<string, { title: string; rows: Row[] }>()
+              for (const r of rows) {
+                if (!r.indicator_id) continue
+                if (!byInd.has(r.indicator_id)) byInd.set(r.indicator_id, { title: r.indicator?.title ?? 'Indicator', rows: [] })
+                byInd.get(r.indicator_id)!.rows.push(r)
+              }
+              return (
+                <div key={dom} className="rounded-lg border border-gray-100 p-3 space-y-2">
+                  <p className="font-medium text-gray-900 text-sm">{dom}</p>
+                  {byInd.size > 0 && (
+                    <ul className="space-y-2">
+                      {[...byInd.entries()].map(([indId, ind]) => (
+                        <li key={indId} className="flex items-start gap-2 text-sm">
+                          <span className="text-navy-700 mt-0.5 shrink-0">✓</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-gray-800">{ind.title}</span>
+                            {ind.rows.length > 1 && <span className="text-gray-400 text-xs"> · {ind.rows.length} pieces</span>}
+                            <ul className="mt-1 space-y-1">
+                              {[...ind.rows].sort(newest).map((r) => (
+                                <li key={r.id} className="text-[11px] text-gray-400">
+                                  <SourceLink r={r} /> · {fmtDate(r.created_at)}
+                                  {r.note && <span className="block text-gray-500 whitespace-pre-wrap mt-0.5">{r.note}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {narratives.sort(newest).map((n) => (
+                    <div key={n.id} className="text-sm bg-gray-50 rounded p-2">
+                      <p className="text-gray-700 whitespace-pre-wrap">{n.note}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5"><SourceLink r={n} /> · {fmtDate(n.created_at)}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
         </div>
       ))}
     </div>
@@ -219,9 +245,22 @@ function FocusCompetencies({ subjectId, subjectFirstName, canAssign }: { subject
 
 function FormResponseCard({ r, subjectId }: { r: PortfolioData['forms'][number]; subjectId: string }) {
   const [open, setOpen] = useState(false)
+  const anchorId = `response-${r.id}`
   const fields = (r.template?.fields ?? []).filter((f) => f.type !== 'section')
+  // Open + scroll this entry into view when a competency's review link targets it.
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === `#${anchorId}`) {
+        setOpen(true)
+        document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+    check()
+    window.addEventListener('hashchange', check)
+    return () => window.removeEventListener('hashchange', check)
+  }, [anchorId])
   return (
-    <li className="rounded-lg border border-gray-100 p-3">
+    <li id={anchorId} className="rounded-lg border border-gray-100 p-3 scroll-mt-20 target:ring-2 target:ring-navy-300">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between gap-2 text-left">
         <div className="min-w-0">
           <p className="text-sm font-medium text-gray-900 truncate">{r.template?.title ?? 'Form'}</p>
