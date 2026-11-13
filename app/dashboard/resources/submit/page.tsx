@@ -9,40 +9,8 @@ import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '@/lib/taxonomy'
 import { IconCheckCircle } from '@/components/icons'
 import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
 import { resourceModerationOn, type AppSettingRow } from '@/lib/appSettings'
+import ChipGroup from '@/components/ChipGroup'
 import clsx from 'clsx'
-
-function ChipGroup({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: readonly string[]
-  selected: string[]
-  onToggle: (value: string) => void
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((opt) => {
-        const active = selected.includes(opt)
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onToggle(opt)}
-            className={clsx(
-              'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
-              active
-                ? 'bg-navy-900 text-white border-navy-900'
-                : 'border-gray-300 text-gray-600 hover:border-navy-400'
-            )}
-          >
-            {opt}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 export default function SubmitResourcePage() {
   const supabase = createClient()

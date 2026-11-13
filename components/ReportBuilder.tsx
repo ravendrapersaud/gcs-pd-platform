@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { parseFundSettings } from '@/lib/funds'
 import { pdHoursTarget, departmentGroups, type DepartmentGroup } from '@/lib/appSettings'
 import { EMPLOYEE_TYPES } from '@/lib/taxonomy'
+import ChipGroup from '@/components/ChipGroup'
 import clsx from 'clsx'
 import {
   SUBJECTS, CANNED_REPORTS, recordsFor, runReport, subjectFields,
@@ -283,29 +284,22 @@ export default function ReportBuilder() {
             </button>
           </div>
           <div className="mt-2 space-y-2.5">
-            {groups.map((g) => (
-              <div key={g} className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-24 shrink-0">{g}</span>
-                {fields.filter((f) => f.group === g).map((f) => {
-                  const on = columns.includes(f.key)
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => toggleColumn(f.key)}
-                      aria-pressed={on}
-                      className={clsx(
-                        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                        on
-                          ? 'border-navy-700 bg-navy-700 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-navy-300 hover:bg-gray-50'
-                      )}
-                    >
-                      {f.label}
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
+            {groups.map((g) => {
+              const groupFields = fields.filter((f) => f.group === g)
+              return (
+                <div key={g} className="flex items-start gap-2">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-24 shrink-0 pt-1">{g}</span>
+                  <div className="flex-1">
+                    <ChipGroup
+                      options={groupFields.map((f) => f.key)}
+                      selected={columns}
+                      onToggle={toggleColumn}
+                      labelFor={(k) => groupFields.find((f) => f.key === k)?.label ?? k}
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 
