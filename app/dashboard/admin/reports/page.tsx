@@ -29,6 +29,7 @@ interface DivRow {
   goalsTotal: number
   goalsDone: number
   goalPct: number
+  servicePct: number
 }
 
 export default function ReportsPage() {
@@ -50,7 +51,7 @@ export default function ReportsPage() {
     setLoading(true)
     const year = new Date().getFullYear()
 
-    const [{ data: profiles }, { data: pdActs }, { data: observations }, { data: funding }, { data: settings }, { data: goals }] =
+    const [{ data: profiles }, { data: pdActs }, { data: observations }, { data: funding }, { data: settings }, { data: goals }, { data: serviceRows }, { data: committeeRows }] =
       await Promise.all([
         supabase.from('profiles').select('*'),
         supabase
@@ -61,6 +62,10 @@ export default function ReportsPage() {
         supabase.from('funding_requests').select('amount').eq('status', 'approved'),
         supabase.from('app_settings').select('key, value'),
         supabase.from('goals').select('owner_id, status'),
+        // Service engagement: shared service entries + committee memberships, to
+        // show whether community load is spread fairly (never a per-person rank).
+        supabase.from('service_entries').select('subject_id').eq('visibility', 'shared'),
+        supabase.from('workspace_members').select('user_id, workspace:workspaces!inner(kind)').eq('workspace.kind', 'committee'),
       ])
 
     setPdGoal(pdHoursTarget(settings))
@@ -81,6 +86,11 @@ export default function ReportsPage() {
 
     // Observation set
     const obsSet = new Set((observations ?? []).map((o) => o.observed_id))
+
+    // People engaged in community service: ≥1 shared service entry or a committee.
+    const engagedSet = new Set<string>()
+    for (const s of (serviceRows ?? []) as { subject_id: string }[]) engagedSet.add(s.subject_id)
+    for (const c of (committeeRows ?? []) as { user_id: string }[]) engagedSet.add(c.user_id)
 
     // Staff with ≥1 observation
     const staffWithObs = filteredProfiles.filter((p) => obsSet.has(p.id)).length
@@ -126,12 +136,14 @@ export default function ReportsPage() {
       const withObs = people.filter((p) => obsSet.has(p.id)).length
       const gls = (goals ?? []).filter((g) => ids.has(g.owner_id) && g.status !== 'archived')
       const done = gls.filter((g) => g.status === 'completed').length
+      const engaged = people.filter((p) => engagedSet.has(p.id)).length
       return {
         division, campus: campusForDivision(division) ?? '—', count: people.length,
         avg: people.length ? hrs / people.length : 0,
         obsPct: people.length ? Math.round((withObs / people.length) * 100) : 0,
         goalsTotal: gls.length, goalsDone: done,
         goalPct: gls.length ? Math.round((done / gls.length) * 100) : 0,
+        servicePct: people.length ? Math.round((engaged / people.length) * 100) : 0,
       }
     }).sort((a, b) => (a.campus === b.campus ? a.division.localeCompare(b.division) : a.campus.localeCompare(b.campus)))
     setDivRows(divisionRows)

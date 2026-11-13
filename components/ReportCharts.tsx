@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 export type DivChartRow = {
   division: string; campus: string; count: number; avg: number
   obsPct: number; goalsTotal: number; goalsDone: number; goalPct: number
+  servicePct: number
 }
 
 const NAVY = '#003882'   // navy-900, official Grace Navy
@@ -94,6 +95,27 @@ export default function ReportCharts({ data, pdGoal, loading }: { data: DivChart
             <Bar dataKey="obsPct" radius={[4, 4, 0, 0]} maxBarSize={56}>
               {data.map((d, i) => (
                 <Cell key={i} fill={d.obsPct >= 80 ? GREEN : d.obsPct >= 40 ? NAVY : AMBER} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      {/* Service engagement % by division — is community load spread fairly? */}
+      <ChartCard title="Service engagement by division" subtitle="Staff on a committee or with logged service">
+        <ResponsiveContainer>
+          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="division" tick={axisTick} axisLine={axisLine} tickLine={false} interval={0} />
+            <YAxis domain={[0, 100]} unit="%" tick={axisTick} axisLine={axisLine} tickLine={false} width={48} />
+            <Tooltip
+              cursor={{ fill: 'rgba(0,56,130,0.05)' }}
+              formatter={((v: number, _n: string, entry: { payload?: DivChartRow }) =>
+                [`${v}% of ${entry?.payload?.count ?? 0} staff`, 'Engaged']) as never}
+            />
+            <Bar dataKey="servicePct" radius={[4, 4, 0, 0]} maxBarSize={56}>
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.servicePct >= 80 ? GREEN : d.servicePct >= 40 ? NAVY : AMBER} />
               ))}
             </Bar>
           </BarChart>
