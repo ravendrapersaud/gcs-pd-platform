@@ -6,6 +6,7 @@ import type { Profile } from '@/lib/types'
 import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget } from '@/lib/appSettings'
 import { campusForDivision } from '@/lib/taxonomy'
 import ReportBuilder from '@/components/ReportBuilder'
+import ReportCharts from '@/components/ReportCharts'
 
 interface DeptStats {
   department: string
@@ -181,6 +182,9 @@ export default function ReportsPage() {
           </div>
         ))}
       </div>
+
+      {/* Charts — visual overview of the by-division comparison */}
+      <ReportCharts data={divRows} pdGoal={pdGoal} loading={loading} />
 
       {/* Whole-school comparison by division */}
       <div className="card overflow-hidden">
