@@ -29,15 +29,15 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
 export default function ReportCharts({ data, pdGoal, loading }: { data: DivChartRow[]; pdGoal: number; loading: boolean }) {
   if (loading) {
     return (
-      <div className="grid lg:grid-cols-2 gap-4">
-        {[0, 1].map((i) => <div key={i} className="card h-[332px] animate-pulse bg-gray-100" />)}
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2].map((i) => <div key={i} className="card h-[332px] animate-pulse bg-gray-100" />)}
       </div>
     )
   }
   if (data.length === 0) return null
 
   return (
-    <div className="grid lg:grid-cols-2 gap-4">
+    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
       {/* Avg PD hours by division, with the target as a reference line */}
       <ChartCard title="Avg PD hours by division" subtitle={`Dashed line = ${pdGoal}h target`}>
         <ResponsiveContainer>
@@ -73,6 +73,27 @@ export default function ReportCharts({ data, pdGoal, loading }: { data: DivChart
             <Bar dataKey="goalPct" radius={[4, 4, 0, 0]} maxBarSize={56}>
               {data.map((d, i) => (
                 <Cell key={i} fill={d.goalPct >= 80 ? GREEN : d.goalPct >= 40 ? NAVY : AMBER} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      {/* Observation coverage % by division (staff with at least one observation) */}
+      <ChartCard title="Observation coverage by division" subtitle="Staff with at least one observation">
+        <ResponsiveContainer>
+          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="division" tick={axisTick} axisLine={axisLine} tickLine={false} interval={0} />
+            <YAxis domain={[0, 100]} unit="%" tick={axisTick} axisLine={axisLine} tickLine={false} width={48} />
+            <Tooltip
+              cursor={{ fill: 'rgba(0,56,130,0.05)' }}
+              formatter={((v: number, _n: string, entry: { payload?: DivChartRow }) =>
+                [`${v}% of ${entry?.payload?.count ?? 0} staff`, 'Observed']) as never}
+            />
+            <Bar dataKey="obsPct" radius={[4, 4, 0, 0]} maxBarSize={56}>
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.obsPct >= 80 ? GREEN : d.obsPct >= 40 ? NAVY : AMBER} />
               ))}
             </Bar>
           </BarChart>
