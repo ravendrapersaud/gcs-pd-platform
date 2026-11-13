@@ -209,6 +209,26 @@ export interface CheckInLink {
   author?: Profile
 }
 
+export type ServiceTimeframe = 'ongoing' | 'school_year' | 'one_off'
+
+export interface ServiceEntry {
+  id: string
+  subject_id: string
+  created_by: string | null
+  title: string
+  service_type: string | null
+  role: string | null
+  timeframe: ServiceTimeframe
+  on_date: string | null
+  reflection: string | null
+  link: string | null
+  visibility: 'shared' | 'private'
+  school_year_start: number
+  created_at: string
+  updated_at?: string
+  creator?: Profile
+}
+
 export type FollowUpStatus = 'open' | 'done'
 
 export interface CheckInFollowUp {

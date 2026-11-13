@@ -8,6 +8,7 @@ import { formatUSD } from '@/lib/funds'
 import { buildPortfolioHtml } from '@/lib/portfolioPrint'
 import PortfolioPromptBlock from '@/components/PortfolioPromptBlock'
 import CheckInCadence from '@/components/CheckInCadence'
+import ServiceCommunity from '@/components/ServiceCommunity'
 import type { FormField } from '@/lib/types'
 import { TRACK_LABELS, TRACK_BLURBS, type Track } from '@/lib/tracks'
 import clsx from 'clsx'
@@ -586,6 +587,14 @@ export default function PortfolioPage() {
             href="/dashboard/frameworks"
           />
         ) : undefined}
+      />
+
+      {/* Service & Community — committees, groups, events, volunteering */}
+      <ServiceCommunity
+        subjectId={p.id}
+        subjectFirstName={p.first_name}
+        year={data.year.value}
+        isSelf={!!data.viewer?.isSelf}
       />
 
       {/* Forms */}

@@ -21,6 +21,13 @@ export const THEMES = [
   'Academic Leadership', 'Modeling Virtues', 'Grace Curated Lists',
 ] as const
 
+// Service & Community engagement types (fallback for the service_type taxonomy).
+export const SERVICE_TYPES = [
+  'Committee', 'Affinity / Cultural group', 'Focus group / Task force',
+  'Event / Production', 'Coaching / Club', 'One-off volunteer',
+  'Service learning', 'Trip / Chaperoning', 'Admissions help', 'Other',
+] as const
+
 export const RESOURCE_TYPE_LABELS: Record<string, string> = {
   website: 'Website', blog_post: 'Blog Post', pdf: 'PDF Document', video: 'Video',
   podcast: 'Podcast', webinar: 'Webinar', certificate: 'Certificate',

@@ -7,9 +7,9 @@
 // hardcoded constants in lib/taxonomy.ts so nothing breaks before the
 // migration has been run.
 
-import { AUDIENCES, SUBJECTS, THEMES } from './taxonomy'
+import { AUDIENCES, SUBJECTS, THEMES, SERVICE_TYPES } from './taxonomy'
 
-export type TaxonomyCategory = 'audience' | 'subject' | 'theme'
+export type TaxonomyCategory = 'audience' | 'subject' | 'theme' | 'service_type'
 
 export interface TaxonomyTerm {
   id: string
@@ -23,6 +23,7 @@ const FALLBACKS: Record<TaxonomyCategory, readonly string[]> = {
   audience: AUDIENCES,
   subject: SUBJECTS,
   theme: THEMES,
+  service_type: SERVICE_TYPES,
 }
 
 // Ordered labels for one category. Active terms only by default

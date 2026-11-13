@@ -80,6 +80,7 @@ const TAXONOMY_TABS: { key: TaxonomyCategory; label: string }[] = [
   { key: 'audience', label: 'Audiences' },
   { key: 'subject', label: 'Subjects' },
   { key: 'theme', label: 'Themes' },
+  { key: 'service_type', label: 'Service types' },
 ]
 
 function TaxonomySection() {
