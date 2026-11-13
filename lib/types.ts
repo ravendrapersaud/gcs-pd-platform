@@ -364,6 +364,8 @@ export interface Project {
   target_date: string | null
   drive_folder_url: string | null
   visibility: ProjectVisibility
+  sync_frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | null
+  next_sync: string | null
   created_at: string
   updated_at?: string
   // joined / hydrated client-side
@@ -371,6 +373,18 @@ export interface Project {
   collaborators?: Profile[]
   milestones?: ProjectMilestone[]
   goals?: { id: string; title: string }[]
+}
+
+export interface ProjectFollowUp {
+  id: string
+  project_id: string
+  created_by: string | null
+  owner_id: string | null
+  content: string
+  status: 'open' | 'done'
+  due_date: string | null
+  created_at: string
+  completed_at: string | null
 }
 
 export interface GoalUpdate {

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Project, ProjectStatus, ProjectMilestone, Profile, Goal } from '@/lib/types'
 import PersonPicker from '@/components/PersonPicker'
+import ProjectSyncs from '@/components/ProjectSyncs'
 import { settingsMap } from '@/lib/appSettings'
 import { trackForProfile, studentSupportDepartments, targetMatchesPerson } from '@/lib/tracks'
 import clsx from 'clsx'
@@ -327,6 +328,15 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Syncs & follow-ups — a sync cadence + owned action items for the team */}
+      <ProjectSyncs
+        projectId={project.id}
+        participants={[profiles.find((pp) => pp.id === project.owner_id), ...collaborators].filter(Boolean) as Profile[]}
+        canEdit={canEdit}
+        syncFrequency={project.sync_frequency}
+        nextSync={project.next_sync}
+      />
 
       {/* Linked goals */}
       <div className="card p-6">
