@@ -15,6 +15,12 @@ export const maxDuration = 300 // scraping several sites can take a while
 
 const MAX_EVENTS_PER_SOURCE = 200
 
+// Skip clearly non-English listings (CJK scripts): this is an English-language
+// school calendar, and PD Guide aggregates some international orgs. Latin-script
+// foreign-language events are rarer and left for review.
+const CJK = /[぀-ヿ㐀-鿿豈-﫿가-힯]/
+const isNonEnglish = (s: string) => CJK.test(s)
+
 async function authorize(request: NextRequest): Promise<{ ok: boolean; error?: string; userId?: string }> {
   const secret = process.env.CRON_SECRET
   const auth = request.headers.get('authorization') ?? ''
@@ -62,7 +68,9 @@ export async function POST(request: NextRequest) {
     let updated = 0
 
     if (result.status === 'ok' && result.events.length > 0) {
-      const events = result.events.slice(0, MAX_EVENTS_PER_SOURCE)
+      const events = result.events
+        .filter((e) => !isNonEnglish(`${e.title} ${e.description ?? ''}`))
+        .slice(0, MAX_EVENTS_PER_SOURCE)
 
       // Existing scraped rows for this source, keyed by external_key.
       const { data: existing } = await admin

@@ -194,8 +194,11 @@ export default function CalendarPage() {
     day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
 
   const todayIso = today.toISOString().split('T')[0]
+  // "Upcoming" = hasn't started yet. Multi-month programs that began earlier
+  // (e.g. a Sept–May cohort) are still visible on the month grid, but they don't
+  // belong in a list titled Upcoming — otherwise a Sept-1 start pins to the top.
   const upcoming = filteredEvents
-    .filter((e) => (e.end_date ?? e.start_date) >= todayIso)
+    .filter((e) => e.start_date >= todayIso)
     .sort((a, b) => a.start_date.localeCompare(b.start_date))
 
   const toggleAudience = (value: string) =>
