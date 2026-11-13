@@ -41,6 +41,7 @@ export default function WorkspacesPage() {
   const [form, setForm] = useState({
     name: '',
     description: '',
+    is_committee: false,
     rule_division: '',
     rule_department: '',
     rule_employee_type: '',
@@ -100,6 +101,7 @@ export default function WorkspacesPage() {
       .insert({
         name: form.name.trim(),
         description: form.description.trim() || null,
+        kind: form.is_committee ? 'committee' : 'team',
         rule_division: form.rule_division || null,
         rule_department: form.rule_department.trim() || null,
         rule_employee_type: form.rule_employee_type || null,
@@ -137,7 +139,7 @@ export default function WorkspacesPage() {
       )
     }
 
-    setForm({ name: '', description: '', rule_division: '', rule_department: '', rule_employee_type: '' })
+    setForm({ name: '', description: '', is_committee: false, rule_division: '', rule_department: '', rule_employee_type: '' })
     setShowForm(false)
     setSaving(false)
     load()
@@ -171,8 +173,11 @@ export default function WorkspacesPage() {
       onClick={() => router.push(`/dashboard/workspaces/${ws.id}`)}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-display font-bold text-navy-900">{ws.name}</h3>
-        <span className="text-xs text-gray-400 whitespace-nowrap">
+        <div className="min-w-0">
+          <h3 className="font-display font-bold text-navy-900">{ws.name}</h3>
+          {ws.kind === 'committee' && <span className="badge badge-navy text-[10px] mt-1 inline-block">Committee</span>}
+        </div>
+        <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
           {ws.member_count} member{ws.member_count === 1 ? '' : 's'}
         </span>
       </div>
@@ -268,6 +273,13 @@ export default function WorkspacesPage() {
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={form.is_committee} onChange={(e) => setForm({ ...form, is_committee: e.target.checked })} />
+                This is a <span className="font-medium">committee</span>
+              </label>
+              <p className="text-xs text-gray-400 mt-1">Committee members see it on their portfolio under Service &amp; Community. The manager is the chair.</p>
             </div>
             <div>
               <label className="label">Auto-add by Division</label>

@@ -1,10 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { ServiceEntry, ServiceTimeframe } from '@/lib/types'
 import { termsFor, type TaxonomyTerm } from '@/lib/taxonomyDb'
-import clsx from 'clsx'
+
+type Committee = { id: string; name: string; is_manager: boolean }
 
 // Service & Community (v1): a qualitative, self-owned log of community engagement.
 // Loads client-side so RLS enforces the private tier + division-scoped admin
@@ -32,6 +34,7 @@ export default function ServiceCommunity({ subjectId, subjectFirstName, year, is
   const [userId, setUserId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
   const [entries, setEntries] = useState<ServiceEntry[]>([])
+  const [committees, setCommittees] = useState<Committee[]>([])
   const [types, setTypes] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,17 +50,28 @@ export default function ServiceCommunity({ subjectId, subjectFirstName, year, is
     if (!user) { setLoading(false); return }
     setUserId(user.id)
 
-    const [{ data: me }, { data: rows }, { data: terms }] = await Promise.all([
+    const [{ data: me }, { data: rows }, { data: terms }, { data: cm }] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', user.id).single(),
       supabase.from('service_entries')
         .select('*, creator:profiles!service_entries_created_by_fkey(first_name, last_name)')
         .eq('subject_id', subjectId).eq('school_year_start', year)
         .order('created_at', { ascending: false }),
       supabase.from('taxonomy_terms').select('*').eq('category', 'service_type').order('sort_order'),
+      // Committees are standing committee-type workspaces this person belongs to.
+      supabase.from('workspace_members')
+        .select('is_manager, workspace:workspaces!inner(id, name, kind)')
+        .eq('user_id', subjectId).eq('workspace.kind', 'committee'),
     ])
     setRole((me?.role as string) ?? null)
     setEntries((rows ?? []) as unknown as ServiceEntry[])
     setTypes(termsFor((terms ?? []) as TaxonomyTerm[], 'service_type'))
+    const comms = ((cm ?? []) as unknown as { is_manager: boolean; workspace: { id: string; name: string } | { id: string; name: string }[] }[])
+      .map((r) => {
+        const w = Array.isArray(r.workspace) ? r.workspace[0] : r.workspace
+        return w ? { id: w.id, name: w.name, is_manager: r.is_manager } : null
+      })
+      .filter(Boolean) as Committee[]
+    setCommittees(comms.sort((a, b) => a.name.localeCompare(b.name)))
     setLoading(false)
   }, [subjectId, year])
   useEffect(() => { load() }, [load])
@@ -106,7 +120,7 @@ export default function ServiceCommunity({ subjectId, subjectFirstName, year, is
 
   if (loading) return <div className="card h-28 animate-pulse bg-gray-100" />
   // Hide entirely from non-managers when there's nothing to show.
-  if (entries.length === 0 && !canManage) return null
+  if (entries.length === 0 && committees.length === 0 && !canManage) return null
 
   // Group by service type for display.
   const byType = new Map<string, ServiceEntry[]>()
@@ -119,7 +133,7 @@ export default function ServiceCommunity({ subjectId, subjectFirstName, year, is
     <div className="card p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-gray-900">Service &amp; Community <span className="text-gray-400 font-normal">({entries.length})</span></h3>
+          <h3 className="font-semibold text-gray-900">Service &amp; Community <span className="text-gray-400 font-normal">({entries.length + committees.length})</span></h3>
           <p className="text-xs text-gray-400">Committees, groups, events, and volunteering — {isSelf ? 'the work you do' : `the work ${subjectFirstName} does`} beyond the role.</p>
         </div>
         {canManage && !showForm && (
@@ -171,8 +185,25 @@ export default function ServiceCommunity({ subjectId, subjectFirstName, year, is
         </div>
       )}
 
+      {committees.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs uppercase tracking-wide text-gray-400">Committees</p>
+          <div className="flex flex-wrap gap-1.5">
+            {committees.map((c) => (
+              <Link key={c.id} href={`/dashboard/workspaces/${c.id}`}
+                className="inline-flex items-center gap-1 bg-navy-50 text-navy-800 border border-navy-100 rounded-full px-2.5 py-1 text-xs hover:bg-navy-100 transition-colors">
+                {c.name}{c.is_manager && <span className="text-navy-500">· chair</span>}
+              </Link>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-400">From committee workspaces {isSelf ? 'you belong to' : `${subjectFirstName} belongs to`}.</p>
+        </div>
+      )}
+
       {entries.length === 0 ? (
-        <p className="text-sm text-gray-400">{isSelf ? 'Nothing logged yet — add a committee, group, event, or anything you volunteered for.' : 'Nothing logged yet.'}</p>
+        committees.length > 0 ? null : (
+          <p className="text-sm text-gray-400">{isSelf ? 'Nothing logged yet — add a group, event, or anything you volunteered for.' : 'Nothing logged yet.'}</p>
+        )
       ) : (
         <div className="space-y-3">
           {[...byType.entries()].map(([type, list]) => (

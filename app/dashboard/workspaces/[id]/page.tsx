@@ -193,6 +193,14 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
     setWorkspace((w) => (w ? { ...w, drive_folder_url: value } : w))
     setFolderEditing(false)
   }
+  const toggleCommittee = async () => {
+    if (!workspace) return
+    const next = workspace.kind === 'committee' ? 'team' : 'committee'
+    const { data, error: err } = await supabase.from('workspaces').update({ kind: next }).eq('id', wsId).select('id')
+    if (err) { setError(err.message); return }
+    if (!data || data.length === 0) { setError('You don’t have permission to change this workspace.'); return }
+    setWorkspace((w) => (w ? { ...w, kind: next } : w))
+  }
   const managerCount = members.filter((m) => m.is_manager).length
   const canViewContent = isMember || isAdmin
 
@@ -459,7 +467,8 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
             {members.length} member{members.length === 1 ? '' : 's'}
           </span>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {workspace.kind === 'committee' && <span className="badge badge-navy">Committee</span>}
           {workspace.rule_division && <span className="badge badge-navy">{workspace.rule_division}</span>}
           {workspace.rule_department && <span className="badge badge-gray">{workspace.rule_department}</span>}
           {workspace.rule_employee_type && (
@@ -467,6 +476,11 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
           )}
           {!workspace.rule_division && !workspace.rule_department && !workspace.rule_employee_type && (
             <span className="badge badge-gray">Manual membership</span>
+          )}
+          {isManager && (
+            <button onClick={toggleCommittee} className="text-xs text-gray-400 hover:text-navy-700 ml-1">
+              {workspace.kind === 'committee' ? 'Unmark committee' : 'Mark as committee'}
+            </button>
           )}
         </div>
       </div>
