@@ -243,6 +243,9 @@ export default function CalendarPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Professional Development Calendar</h2>
           <p className="text-sm text-gray-500">Upcoming conferences, workshops, and learning opportunities.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Events found via <a href="https://pdguide.org" target="_blank" rel="noopener noreferrer" className="text-navy-700 hover:underline">PD Guide</a> (pdguide.org) — explore it to find professional development for your own growth.
+          </p>
         </div>
         <button onClick={() => { setShowForm((s) => !s); setSubmitNotice(null) }} className="btn-primary shrink-0">
           {showForm ? 'Close' : canApprove ? '+ Add Event' : '+ Submit Event'}
