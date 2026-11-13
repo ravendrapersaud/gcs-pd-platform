@@ -29,6 +29,13 @@ async function authorize(request: NextRequest): Promise<{ ok: boolean; error?: s
   return { ok: true, userId: user.id }
 }
 
+// Vercel Cron invokes the path with a GET and an `Authorization: Bearer
+// <CRON_SECRET>` header (when CRON_SECRET is set). Delegate to the same handler;
+// the body is never read, so GET→POST is safe.
+export async function GET(request: NextRequest) {
+  return POST(request)
+}
+
 export async function POST(request: NextRequest) {
   const auth = await authorize(request)
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 401 })
