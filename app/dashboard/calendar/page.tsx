@@ -60,6 +60,10 @@ export default function CalendarPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [audienceFilter, setAudienceFilter] = useState<string>('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [view, setView] = useState<'calendar' | 'list'>('calendar')
+  const [expandedDay, setExpandedDay] = useState<string | null>(null)
 
   // Add-event form
   const [showForm, setShowForm] = useState(false)
@@ -129,10 +133,13 @@ export default function CalendarPage() {
     // until someone narrows them). Only tagged events are actually filtered out.
     const aud = e.audience ?? []
     const matchAudience = !audienceFilter || aud.length === 0 || aud.includes(audienceFilter)
-    return matchSearch && matchType && matchAudience
+    // Date range: event overlaps [dateFrom, dateTo] (either bound optional).
+    const end = e.end_date ?? e.start_date
+    const matchRange = (!dateFrom || end >= dateFrom) && (!dateTo || e.start_date <= dateTo)
+    return matchSearch && matchType && matchAudience && matchRange
   })
 
-  const filtersActive = Boolean(search.trim() || typeFilter || audienceFilter)
+  const filtersActive = Boolean(search.trim() || typeFilter || audienceFilter || dateFrom || dateTo)
 
   // ── Month grid math ────────────────────────────────────────
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
@@ -458,6 +465,19 @@ export default function CalendarPage() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex flex-wrap items-center gap-2">
+          {/* Calendar / list view toggle — shares every filter below */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
+            {(['calendar', 'list'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={clsx('px-3 py-1.5 text-sm capitalize transition-colors', view === v ? 'bg-navy-900 text-white' : 'text-gray-600 hover:bg-gray-50')}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
           <select
             className="input w-auto text-sm py-1.5"
             value={typeFilter}
@@ -476,6 +496,11 @@ export default function CalendarPage() {
             <option value="">All audiences</option>
             {audienceOptions.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
+          <div className="flex items-center gap-1 text-sm text-gray-500">
+            <input type="date" className="input w-auto text-sm py-1.5" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="From date" />
+            <span>→</span>
+            <input type="date" className="input w-auto text-sm py-1.5" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="To date" />
+          </div>
           {filtersActive && (
             <>
               <span className="text-xs text-gray-500">
@@ -485,24 +510,27 @@ export default function CalendarPage() {
               </span>
               <button
                 type="button"
-                onClick={() => { setSearch(''); setTypeFilter(''); setAudienceFilter('') }}
+                onClick={() => { setSearch(''); setTypeFilter(''); setAudienceFilter(''); setDateFrom(''); setDateTo('') }}
                 className="text-xs text-navy-800 font-medium hover:underline"
               >
                 Clear filters
               </button>
-              <button
-                type="button"
-                onClick={goToNextEvent}
-                className="text-xs text-navy-800 font-medium hover:underline"
-              >
-                Jump to next match →
-              </button>
+              {view === 'calendar' && (
+                <button
+                  type="button"
+                  onClick={goToNextEvent}
+                  className="text-xs text-navy-800 font-medium hover:underline"
+                >
+                  Jump to next match →
+                </button>
+              )}
             </>
           )}
         </div>
       </div>
 
       {/* Month grid */}
+      {view === 'calendar' && (
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4 gap-2">
           <button type="button" onClick={prevMonth} className="btn-secondary text-sm px-3 py-1.5" aria-label="Previous month">
@@ -567,7 +595,13 @@ export default function CalendarPage() {
                         </a>
                       ))}
                       {dayEvents.length > 2 && (
-                        <p className="text-[10px] text-gray-400 px-1">+{dayEvents.length - 2} more</p>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedDay(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`)}
+                          className="text-[10px] text-navy-700 px-1 hover:underline"
+                        >
+                          +{dayEvents.length - 2} more
+                        </button>
                       )}
                     </div>
                   </>
@@ -577,8 +611,10 @@ export default function CalendarPage() {
           })}
         </div>
       </div>
+      )}
 
       {/* Upcoming events list */}
+      {view === 'list' && (
       <div>
         <h3 className="font-semibold text-gray-900 mb-3">Upcoming events</h3>
         {loading ? (
@@ -652,6 +688,43 @@ export default function CalendarPage() {
           </div>
         )}
       </div>
+      )}
+
+      {/* Day detail — the "+N more" expander on a calendar cell */}
+      {expandedDay && (() => {
+        const d = parseDate(expandedDay)
+        const dayEvents = filteredEvents.filter((e) => expandedDay >= e.start_date && expandedDay <= (e.end_date ?? e.start_date))
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setExpandedDay(null)}>
+            <div className="card p-5 max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h3>
+                <button type="button" onClick={() => setExpandedDay(null)} className="text-sm text-gray-400 hover:text-gray-700">Close</button>
+              </div>
+              {dayEvents.length === 0 ? (
+                <p className="text-sm text-gray-400">No events.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {dayEvents.map((e) => (
+                    <li key={e.id} className="rounded-lg border border-gray-100 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-900">{e.title}</p>
+                        {e.event_type && <span className={clsx('badge shrink-0', eventTypeColor[e.event_type] ?? 'badge-gray')}>{e.event_type}</span>}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-gray-500">
+                        <span>{fmtRange(e.start_date, e.end_date)}</span>
+                        <span>·</span>
+                        <span>{e.is_virtual ? 'Virtual' : (e.location ?? '—')}</span>
+                      </div>
+                      {e.url && <a href={e.url} target="_blank" rel="noopener noreferrer" className="text-navy-800 text-xs font-semibold hover:text-navy-900 mt-1 inline-block">Details →</a>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
