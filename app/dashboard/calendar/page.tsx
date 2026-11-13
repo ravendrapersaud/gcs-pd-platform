@@ -124,7 +124,11 @@ export default function CalendarPage() {
     ].filter(Boolean).join(' ').toLowerCase()
     const matchSearch = !q || haystack.includes(q)
     const matchType = !typeFilter || e.event_type === typeFilter
-    const matchAudience = !audienceFilter || (e.audience ?? []).includes(audienceFilter)
+    // An event with no audience tags isn't audience-specific, so it shows for any
+    // audience filter (imported events arrive untagged — they're for everyone
+    // until someone narrows them). Only tagged events are actually filtered out.
+    const aud = e.audience ?? []
+    const matchAudience = !audienceFilter || aud.length === 0 || aud.includes(audienceFilter)
     return matchSearch && matchType && matchAudience
   })
 
