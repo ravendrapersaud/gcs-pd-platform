@@ -282,16 +282,28 @@ export default function ReportBuilder() {
               Reset to defaults
             </button>
           </div>
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 space-y-2.5">
             {groups.map((g) => (
-              <div key={g} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div key={g} className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-24 shrink-0">{g}</span>
-                {fields.filter((f) => f.group === g).map((f) => (
-                  <label key={f.key} className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={columns.includes(f.key)} onChange={() => toggleColumn(f.key)} />
-                    {f.label}
-                  </label>
-                ))}
+                {fields.filter((f) => f.group === g).map((f) => {
+                  const on = columns.includes(f.key)
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => toggleColumn(f.key)}
+                      aria-pressed={on}
+                      className={clsx(
+                        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        on
+                          ? 'border-navy-700 bg-navy-700 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-navy-300 hover:bg-gray-50'
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  )
+                })}
               </div>
             ))}
           </div>
