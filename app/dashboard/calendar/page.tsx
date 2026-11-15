@@ -154,8 +154,16 @@ export default function CalendarPage() {
     const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     return filteredEvents.filter((e) => {
       const start = e.start_date
+      if (iso === start) return true
+      // Short multi-day events (≤7 days, e.g. a conference) still span their days;
+      // long programs (a months-long series) show only on their start day so they
+      // don't blanket every cell.
       const end = e.end_date ?? e.start_date
-      return iso >= start && iso <= end
+      if (iso > start && iso <= end) {
+        const spanDays = (parseDate(end).getTime() - parseDate(start).getTime()) / 86_400_000
+        return spanDays <= 7
+      }
+      return false
     })
   }
 
