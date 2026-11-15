@@ -154,6 +154,9 @@ export default function CalendarPage() {
     const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     return filteredEvents.filter((e) => {
       const start = e.start_date
+      // Hide anything already started — like the list, the grid only surfaces PD
+      // you can still sign up for.
+      if (start < todayIso) return false
       if (iso === start) return true
       // Short multi-day events (≤7 days, e.g. a conference) still span their days;
       // long programs (a months-long series) show only on their start day so they
