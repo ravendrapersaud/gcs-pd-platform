@@ -64,6 +64,7 @@ export default function CalendarPage() {
   const [dateTo, setDateTo] = useState('')
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
+  const [showPast, setShowPast] = useState(false)
 
   // Add-event form
   const [showForm, setShowForm] = useState(false)
@@ -155,8 +156,8 @@ export default function CalendarPage() {
     return filteredEvents.filter((e) => {
       const start = e.start_date
       // Hide anything already started — like the list, the grid only surfaces PD
-      // you can still sign up for.
-      if (start < todayIso) return false
+      // you can still sign up for (unless "Show past" is on).
+      if (!showPast && start < todayIso) return false
       if (iso === start) return true
       // Short multi-day events (≤7 days, e.g. a conference) still span their days;
       // long programs (a months-long series) show only on their start day so they
@@ -209,7 +210,7 @@ export default function CalendarPage() {
   // (e.g. a Sept–May cohort) are still visible on the month grid, but they don't
   // belong in a list titled Upcoming — otherwise a Sept-1 start pins to the top.
   const upcoming = filteredEvents
-    .filter((e) => e.start_date >= todayIso)
+    .filter((e) => showPast || e.start_date >= todayIso)
     .sort((a, b) => a.start_date.localeCompare(b.start_date))
 
   const toggleAudience = (value: string) =>
@@ -515,6 +516,9 @@ export default function CalendarPage() {
             <span>→</span>
             <input type="date" className="input w-auto text-sm py-1.5" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="To date" />
           </div>
+          <label className="flex items-center gap-1.5 text-sm text-gray-600 shrink-0">
+            <input type="checkbox" checked={showPast} onChange={(e) => setShowPast(e.target.checked)} /> Show past
+          </label>
           {filtersActive && (
             <>
               <span className="text-xs text-gray-500">
@@ -630,7 +634,7 @@ export default function CalendarPage() {
       {/* Upcoming events list */}
       {view === 'list' && (
       <div>
-        <h3 className="font-semibold text-gray-900 mb-3">Upcoming events</h3>
+        <h3 className="font-semibold text-gray-900 mb-3">{showPast ? 'All events' : 'Upcoming events'}</h3>
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
