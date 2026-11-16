@@ -436,25 +436,30 @@ export default function PortfolioPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="card p-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+      {/* Header — navy hero band anchors the page, light footer carries controls */}
+      <div className="card p-0 overflow-hidden">
+        <div className="bg-gradient-to-r from-navy-900 to-navy-800 px-6 py-5">
           <div className="flex items-center gap-4 min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {p.avatar_url
-              ? <img src={p.avatar_url} alt={name} className="w-14 h-14 rounded-full object-cover shrink-0" />
-              : <div className="w-14 h-14 rounded-full bg-navy-900 text-white grid place-items-center font-semibold shrink-0">{p.first_name[0]}{p.last_name[0]}</div>}
+              ? <img src={p.avatar_url} alt={name} className="w-16 h-16 rounded-full object-cover shrink-0 ring-2 ring-white/30" />
+              : <div className="w-16 h-16 rounded-full bg-white/15 text-white grid place-items-center font-semibold text-lg shrink-0 ring-2 ring-white/30">{p.first_name[0]}{p.last_name[0]}</div>}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-display text-gray-900 truncate">{name}</h1>
-                <span className="badge badge-navy text-[11px]" title={TRACK_BLURBS[data.track]}>{TRACK_LABELS[data.track]}</span>
+                <h1 className="text-2xl font-display text-white truncate">{name}</h1>
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-white/15 text-white ring-1 ring-white/20" title={TRACK_BLURBS[data.track]}>{TRACK_LABELS[data.track]}</span>
               </div>
-              <p className="text-gray-500 text-sm">
+              <p className="text-navy-100 text-sm mt-0.5">
                 {[p.title, p.division, p.department, p.campus ? `Campus ${p.campus}` : null].filter(Boolean).join(' · ') || '—'}
               </p>
-              <p className="text-xs text-gray-400 mt-0.5 capitalize">{p.employee_type ?? ''} · {p.role}</p>
+              <p className="text-xs text-navy-200/80 mt-0.5 capitalize">{p.employee_type ?? ''} · {p.role}</p>
             </div>
           </div>
+        </div>
+        <div className="px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-gray-400">
+            Professional portfolio · School year {data.year.label} · Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
           <div className="flex items-center gap-2 shrink-0">
             <select className="input w-auto text-sm py-1.5" value={year} onChange={(e) => setYear(Number(e.target.value))}>
               {years.map((y) => <option key={y} value={y}>{y}–{y + 1}</option>)}
@@ -462,9 +467,6 @@ export default function PortfolioPage() {
             <button onClick={print} className="btn-secondary text-sm">Print / Save PDF</button>
           </div>
         </div>
-        <p className="text-xs text-gray-400 mt-3">
-          Professional portfolio · School year {data.year.label} · Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-        </p>
       </div>
 
       {/* PD engagement summary */}
