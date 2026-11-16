@@ -46,6 +46,7 @@ export default function CheckInCadence({
   const router = useRouter()
   const [userId, setUserId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
+  const [isSupervisor, setIsSupervisor] = useState(false)
   const [schedule, setSchedule] = useState<CheckInSchedule | null>(null)
   const [notes, setNotes] = useState<CheckInNote[]>([])
   const [links, setLinks] = useState<CheckInLink[]>([])
@@ -105,6 +106,8 @@ export default function CheckInCadence({
     const parts: Participant[] = [{ id: employeeId, first_name: empRow.first_name ?? employeeFirstName, last_name: empRow.last_name ?? '' }, ...sup]
     const seen = new Set<string>()
     setParticipants(parts.filter((p) => p && p.id && !seen.has(p.id) && seen.add(p.id)))
+    // Viewer is a supervisor of this employee → may set/adjust their cadence.
+    setIsSupervisor(sup.some((s) => s.id === user.id))
     // Default a new follow-up's owner to the viewer when they're a participant.
     setFuOwner((prev) => prev || (parts.some((p) => p.id === user.id) ? user.id : ''))
 
@@ -123,7 +126,9 @@ export default function CheckInCadence({
   useEffect(() => { load() }, [load])
 
   const isSelf = userId === employeeId
-  const canEditFreq = isSelf || role === 'admin'
+  // The employee owns their rhythm, but a supervisor (or admin) may set it up and
+  // adjust it too — so a report who hasn't set one isn't stuck without a cadence.
+  const canEditFreq = isSelf || role === 'admin' || isSupervisor
 
   const saveSchedule = async () => {
     setBusy(true); setError(null)
