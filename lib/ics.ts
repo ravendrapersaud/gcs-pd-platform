@@ -12,8 +12,16 @@ export interface IcsEvent {
   location?: string
   organizerName: string
   organizerEmail: string
-  attendeeName: string
-  attendeeEmail: string
+  // Single attendee (back-compat) OR a list. When `attendees` is set it wins,
+  // so one invite can land on several calendars (e.g. the new faculty + host).
+  attendeeName?: string
+  attendeeEmail?: string
+  attendees?: { name: string; email: string }[]
+  // REQUEST (default) adds/updates the event; CANCEL removes it. A CANCEL must
+  // reuse the same uid and a higher sequence than the REQUEST it cancels.
+  method?: 'REQUEST' | 'CANCEL'
+  status?: 'CONFIRMED' | 'CANCELLED'
+  sequence?: number
 }
 
 // Convert a wall-clock date + time in an IANA timezone to the matching UTC
@@ -46,14 +54,21 @@ function esc(s: string): string {
 }
 
 export function buildInviteIcs(ev: IcsEvent): string {
+  const method = ev.method ?? 'REQUEST'
+  const status = ev.status ?? (method === 'CANCEL' ? 'CANCELLED' : 'CONFIRMED')
+  const rsvp = method === 'CANCEL' ? 'FALSE' : 'TRUE'
+  const attendees = ev.attendees && ev.attendees.length > 0
+    ? ev.attendees
+    : (ev.attendeeEmail ? [{ name: ev.attendeeName ?? '', email: ev.attendeeEmail }] : [])
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//GCS PD Platform//EN',
     'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
+    `METHOD:${method}`,
     'BEGIN:VEVENT',
     `UID:${ev.uid}`,
+    `SEQUENCE:${ev.sequence ?? 0}`,
     `DTSTAMP:${fmtUtc(new Date())}`,
     `DTSTART:${fmtUtc(ev.start)}`,
     `DTEND:${fmtUtc(ev.end)}`,
@@ -61,8 +76,8 @@ export function buildInviteIcs(ev: IcsEvent): string {
     ...(ev.description ? [`DESCRIPTION:${esc(ev.description)}`] : []),
     ...(ev.location ? [`LOCATION:${esc(ev.location)}`] : []),
     `ORGANIZER;CN=${esc(ev.organizerName)}:mailto:${ev.organizerEmail}`,
-    `ATTENDEE;CN=${esc(ev.attendeeName)};ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${ev.attendeeEmail}`,
-    'STATUS:CONFIRMED',
+    ...attendees.map((a) => `ATTENDEE;CN=${esc(a.name)};ROLE=REQ-PARTICIPANT;RSVP=${rsvp}:mailto:${a.email}`),
+    `STATUS:${status}`,
     'END:VEVENT',
     'END:VCALENDAR',
   ]

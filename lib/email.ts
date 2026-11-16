@@ -247,6 +247,53 @@ export async function sendObservationInvite(params: {
   }
 }
 
+// Generic calendar-invite sender. Like sendObservationInvite but method-aware
+// (REQUEST to add/update, CANCEL to remove) and accepts several recipients, so
+// one send can reach both the new faculty member and the host. Never throws;
+// degrades to 'skipped' without RESEND_API_KEY.
+export async function sendCalendarInvite(params: {
+  to: string | string[]
+  cc?: string[]
+  subject: string
+  html: string
+  events: IcsEvent[]
+  method?: 'REQUEST' | 'CANCEL'
+}): Promise<EmailResult> {
+  const to = (Array.isArray(params.to) ? params.to : [params.to]).filter(Boolean)
+  const cc = (params.cc ?? []).filter(Boolean)
+  const bcc: string[] = []
+  const method = params.method ?? 'REQUEST'
+  const resend = getResend()
+  if (!resend) {
+    console.warn('[sendCalendarInvite] RESEND_API_KEY not set — skipping.')
+    return { status: 'skipped', to, cc, bcc, subject: params.subject }
+  }
+  if (to.length === 0) {
+    return { status: 'skipped', to, cc, bcc, subject: params.subject, error: 'No recipients' }
+  }
+  try {
+    const attachments = params.events.map((ev, i) => ({
+      filename: method === 'CANCEL'
+        ? (i === 0 ? 'cancel.ics' : `cancel-${i + 1}.ics`)
+        : (i === 0 ? 'invite.ics' : `event-${i + 1}.ics`),
+      content: Buffer.from(buildInviteIcs({ ...ev, method })).toString('base64'),
+      contentType: `text/calendar; method=${method}`,
+    }))
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      ...(cc.length ? { cc } : {}),
+      subject: params.subject,
+      html: params.html,
+      attachments,
+    })
+    if (error) return { status: 'failed', to, cc, bcc, subject: params.subject, error: error.message }
+    return { status: 'sent', to, cc, bcc, subject: params.subject, providerId: data?.id }
+  } catch (err: unknown) {
+    return { status: 'failed', to, cc, bcc, subject: params.subject, error: err instanceof Error ? err.message : 'Unknown send error' }
+  }
+}
+
 // ── PD event review digest ───────────────────────────────────────
 // Sent to approvers after an import adds new events to the review queue, so the
 // queue actually gets noticed instead of waiting for someone to wander onto the

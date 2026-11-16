@@ -121,21 +121,18 @@ export default function CohortHomePage() {
     if (!me) return
     const booked = mySignups.has(slot.id)
     setBusy(true); setError(null); setNotice(null)
+    // Book / cancel via the API route so a calendar invite (or cancellation)
+    // goes out to both the member and the host when the slot has a time.
+    const res = await fetch('/api/cohort/slot-signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot_id: slot.id, cancel: booked }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) { setError(json.error ?? (booked ? 'Could not cancel.' : 'Could not sign up.')); setBusy(false); return }
     if (booked) {
-      const { error: e } = await supabase.from('cohort_slot_signups').delete().eq('slot_id', slot.id).eq('user_id', me.id)
-      if (e) { setError(`Could not cancel: ${e.message}`); setBusy(false); return }
-      setNotice('Booking canceled.')
+      setNotice(json.email === 'sent' ? 'Booking canceled — a calendar cancellation was sent.' : 'Booking canceled.')
     } else {
-      // Book via the API route so a calendar invite goes out (when the slot has a time).
-      const res = await fetch('/api/cohort/slot-signup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot_id: slot.id }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(json.error ?? 'Could not sign up.'); setBusy(false); return }
-      setNotice(json.email === 'sent'
-        ? 'Booked — a calendar invite is on its way to your email.'
-        : 'Booked.')
+      setNotice(json.email === 'sent' ? 'Booked — a calendar invite is on its way to your email.' : 'Booked.')
     }
     setBusy(false); load()
   }
