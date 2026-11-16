@@ -131,6 +131,14 @@ const IconCheckins = () => (
   </svg>
 )
 
+const IconCohort = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422A12.083 12.083 0 0112 20.5a12.083 12.083 0 01-6.16-9.922L12 14z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 9v6" />
+  </svg>
+)
+
 const navSections: NavSection[] = [
   {
     label: 'Main',
@@ -199,6 +207,24 @@ export default function Sidebar({ profile }: SidebarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canApprove, pathname])
 
+  // Is the viewer a member of an active cohort? Drives the "New Faculty" item.
+  const canManageCohorts = profile.role === 'admin' || profile.can_manage_cohorts === true
+  const [inCohort, setInCohort] = useState(false)
+  useEffect(() => {
+    let active = true
+    supabase
+      .from('cohort_members')
+      .select('cohort:cohorts(is_active)')
+      .eq('user_id', profile.id)
+      .then(({ data }) => {
+        if (!active) return
+        const rows = (data ?? []) as unknown as { cohort: { is_active: boolean } | null }[]
+        setInCohort(rows.some((r) => r.cohort?.is_active))
+      })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, pathname])
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -208,6 +234,20 @@ export default function Sidebar({ profile }: SidebarProps) {
     `${profile.first_name?.[0] ?? ''}${profile.last_name?.[0] ?? ''}`.toUpperCase()
 
   const userRoleLevel = roleLevel(profile.role)
+
+  // Inject the cohort items: "New Faculty" (members) in Main, "Cohorts"
+  // (managers) in Admin. Built per-render so they react to the flags above.
+  const displaySections: NavSection[] = navSections.map((section) => {
+    if (section.label === 'Main' && inCohort) {
+      const items = [...section.items]
+      items.splice(1, 0, { href: '/dashboard/cohort', label: 'New Faculty', icon: <IconCohort /> })
+      return { ...section, items }
+    }
+    if (section.label === 'Admin' && canManageCohorts) {
+      return { ...section, items: [{ href: '/dashboard/cohorts', label: 'Cohorts', icon: <IconCohort /> }, ...section.items] }
+    }
+    return section
+  })
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -229,7 +269,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        {navSections.map((section) => {
+        {displaySections.map((section) => {
           const minLevel = section.minRole ? roleLevel(section.minRole) : 1
           if (userRoleLevel < minLevel) return null
 

@@ -5,6 +5,7 @@ import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiv
 import { pdHoursTarget } from '@/lib/appSettings'
 import { IconMegaphone } from '@/components/icons'
 import DashboardCheckIns from '@/components/DashboardCheckIns'
+import CohortHero from '@/components/CohortHero'
 
 interface ReportRow {
   id: string
@@ -294,6 +295,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* New Faculty cohort banner — renders only for cohort members */}
+      <CohortHero />
+
       {/* Quick actions — role-tailored; each tile links straight to the task */}
       <section className="space-y-3">
         <h2 className="font-semibold text-gray-900 text-lg">Quick actions</h2>

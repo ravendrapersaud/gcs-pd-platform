@@ -337,6 +337,74 @@ export async function sendReviewDigest(
   }
 }
 
+// ── New Faculty cohort welcome ───────────────────────────────────
+// Sent (manually, from the roster) when a new hire is added to a cohort. Warm,
+// short, and points them at their onboarding home. Degrades to 'skipped' with
+// no RESEND_API_KEY. Never throws.
+function buildCohortWelcomeHtml(member: Profile, cohortName: string, facilitators: Profile[]): string {
+  const name = escHtml(member.first_name || 'there')
+  const facs = facilitators.map((f) => escHtml(`${f.first_name} ${f.last_name}`)).join(', ')
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Welcome to Grace</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+        <tr><td style="background:#003882;padding:32px 40px;text-align:center;">
+          <table align="center" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto 12px;"><tr><td align="center" valign="middle" width="60" height="60" style="width:60px;height:60px;background:#ffffff;border-radius:50%;font-size:19px;font-weight:800;color:#003882;line-height:60px;font-family:'Segoe UI',Arial,sans-serif;">GCS</td></tr></table>
+          <p style="margin:4px 0 0;color:#9eafcc;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">Grace Church School</p>
+          <p style="margin:8px 0 0;color:#ffffff;font-size:20px;font-weight:700;">Welcome to Grace</p>
+        </td></tr>
+        <tr><td style="padding:40px;">
+          <p style="color:#374151;font-size:16px;margin:0 0 8px;">Hi ${name},</p>
+          <p style="color:#374151;font-size:15px;margin:0 0 20px;line-height:1.6;">
+            You’ve been added to <strong>${escHtml(cohortName)}</strong>. Your onboarding home on the PD Platform has your checklist, the cohort schedule, bookable one-on-ones and office hours, and your shared cohort space — all in one place.
+          </p>
+          <div style="text-align:center;margin:24px 0;"><a href="${APP_URL}/dashboard/cohort" style="display:inline-block;background:#003882;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;">Open your cohort home</a></div>
+          ${facs ? `<p style="color:#6b7280;font-size:13px;margin:16px 0 0;">Your facilitators: ${facs}. Reach out anytime.</p>` : ''}
+        </td></tr>
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;"><p style="color:#9ca3af;font-size:12px;margin:0;">Grace Church School · Professional Development Platform</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+export async function sendCohortWelcome(
+  member: Profile,
+  cohortName: string,
+  facilitators: Profile[]
+): Promise<EmailResult> {
+  const to = [member.email].filter(Boolean) as string[]
+  const cc: string[] = []
+  const bcc: string[] = []
+  const subject = `Welcome to ${cohortName}`
+
+  const resend = getResend()
+  if (!resend) {
+    console.warn('[sendCohortWelcome] RESEND_API_KEY not set — skipping email send.')
+    return { status: 'skipped', to, cc, bcc, subject }
+  }
+  if (to.length === 0) {
+    return { status: 'skipped', to, cc, bcc, subject, error: 'Member has no email address' }
+  }
+  try {
+    const { data, error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to,
+      subject,
+      html: buildCohortWelcomeHtml(member, cohortName, facilitators),
+    })
+    if (error) return { status: 'failed', to, cc, bcc, subject, error: error.message }
+    return { status: 'sent', to, cc, bcc, subject, providerId: data?.id }
+  } catch (err: unknown) {
+    return { status: 'failed', to, cc, bcc, subject, error: err instanceof Error ? err.message : 'Unknown send error' }
+  }
+}
+
 export async function sendObservationEmail(
   teacher: Profile,
   observer: Profile,

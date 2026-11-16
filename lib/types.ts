@@ -49,6 +49,7 @@ export interface Profile {
   needs_setup: boolean
   can_create_workspaces: boolean
   can_approve_events?: boolean // may approve/publish & manage PD calendar events
+  can_manage_cohorts?: boolean // may create & run New Faculty cohorts (admins always can)
   avatar_url: string | null
   favorites_public?: boolean // opt-in: colleagues may view my Resource Library favorites
   // Revised profile (Phase 1 — data only; not yet wired to permissions)
@@ -533,7 +534,7 @@ export interface Workspace {
   id: string
   name: string
   description: string | null
-  kind: 'team' | 'committee' | 'department'
+  kind: 'team' | 'committee' | 'department' | 'cohort'
   rule_division: string | null
   rule_department: string | null
   rule_employee_type: string | null
@@ -581,6 +582,105 @@ export interface WorkspaceFile {
   created_at: string
   // joined
   uploader?: Profile
+}
+
+// ── New Faculty Cohorts (onboarding) ─────────────────────────
+// A cohort is an annual onboarding group for new teaching faculty (the
+// "NEC26" series): a curated roster, a shared schedule, an onboarding
+// checklist, bookable 1:1 / office-hours / observation-walk slots, and an
+// auto-provisioned shared workspace. See supabase/migration_cohorts.sql.
+export type CohortMemberRole = 'member' | 'facilitator'
+export type SlotKind = 'one_on_one' | 'office_hours' | 'observation_walk'
+
+export interface Cohort {
+  id: string
+  name: string
+  school_year: string | null
+  description: string | null
+  is_active: boolean
+  start_date: string | null
+  end_date: string | null
+  workspace_id: string | null
+  created_by: string | null
+  created_at: string
+  // joined / hydrated
+  member_count?: number
+}
+
+export interface CohortMember {
+  cohort_id: string
+  user_id: string
+  member_role: CohortMemberRole
+  added_by: string | null
+  added_at: string
+  // joined
+  profile?: Profile
+}
+
+export interface CohortSession {
+  id: string
+  cohort_id: string
+  title: string
+  description: string | null
+  prep_notes: string | null
+  session_date: string | null
+  start_time: string | null
+  end_time: string | null
+  location: string | null
+  campus: string | null // '86' | '46' | null (= both)
+  presenter: string | null
+  resource_url: string | null
+  sort_order: number
+  created_by: string | null
+  created_at: string
+}
+
+export interface CohortTask {
+  id: string
+  cohort_id: string
+  session_id: string | null // null = general onboarding task
+  title: string
+  description: string | null
+  link_url: string | null
+  due_date: string | null
+  required: boolean
+  sort_order: number
+  created_by: string | null
+  created_at: string
+}
+
+export interface CohortTaskCompletion {
+  task_id: string
+  user_id: string
+  completed_at: string
+}
+
+export interface CohortSlot {
+  id: string
+  cohort_id: string
+  host_id: string | null
+  kind: SlotKind
+  title: string | null
+  slot_date: string | null
+  start_time: string | null
+  end_time: string | null
+  location: string | null
+  capacity: number
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  // joined / hydrated
+  host?: Profile
+  signup_count?: number
+}
+
+export interface CohortSlotSignup {
+  slot_id: string
+  user_id: string
+  note: string | null
+  created_at: string
+  // joined
+  profile?: Profile
 }
 
 // ── Utility types ─────────────────────────────────────────────
