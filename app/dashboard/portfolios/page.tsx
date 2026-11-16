@@ -69,7 +69,7 @@ export default function PortfoliosDirectoryPage() {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-gray-500">The people you oversee. Filter, then open a portfolio for a review or 1-on-1.</p>
+      <p className="text-sm text-gray-500">The people you oversee. Filter, then open a portfolio for a review or check-in.</p>
 
       {/* Filters */}
       <div className="card p-4">

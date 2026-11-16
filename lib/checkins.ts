@@ -1,4 +1,4 @@
-// Pure check-in cadence helpers, shared by the portfolio "Your 1:1" card and the
+// Pure check-in cadence helpers, shared by the portfolio "Your check-in" card and the
 // dashboard quick-items tile. No React, no Supabase — just date math + labels.
 import type { CheckInFrequency } from './types'
 

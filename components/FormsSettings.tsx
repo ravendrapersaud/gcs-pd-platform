@@ -161,7 +161,7 @@ export default function FormsSection() {
         <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer rounded-lg border border-gray-200 p-3">
           <input type="checkbox" className="mt-0.5" checked={draft.category === 'check_in'} onChange={(e) => patch({ category: e.target.checked ? 'check_in' : 'form' })} />
           <span>
-            This is a <strong>check-in / 1:1</strong>
+            This is a <strong>check-in</strong>
             <span className="text-gray-400"> — it appears in its own “Check-ins” section of the portfolio and prompts annually, rather than under general Forms.</span>
           </span>
         </label>

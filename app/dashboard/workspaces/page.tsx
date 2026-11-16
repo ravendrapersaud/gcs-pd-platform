@@ -215,7 +215,7 @@ export default function WorkspacesPage() {
         </div>
       )}
 
-      {/* Private 1:1 callback — a POINTER, not a group workspace. The running 1:1
+      {/* Private check-in callback — a POINTER, not a group workspace. The running check-in
           (check-in notes, follow-ups, linked docs) lives on the portfolio, scoped
           to the person + their supervisor(s) + admins; its content is never copied
           into a browsable workspace row. */}
@@ -226,7 +226,7 @@ export default function WorkspacesPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-display font-bold text-navy-900">Your 1:1 space</h3>
+              <h3 className="font-display font-bold text-navy-900">Your check-ins</h3>
               <span className="badge badge-gray text-[10px]">Private</span>
             </div>
             <p className="text-sm text-gray-600 mt-1">

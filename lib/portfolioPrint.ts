@@ -2,7 +2,7 @@ import type { PortfolioData } from '@/app/dashboard/portfolio/[id]/page'
 import { formatUSD } from '@/lib/funds'
 
 // Self-contained printable employee portfolio — opened in a new window for
-// printing or saving to PDF (for employee files and 1-on-1s). No dependency on
+// printing or saving to PDF (for employee files and check-ins). No dependency on
 // app state; everything comes from the already-fetched PortfolioData.
 
 function esc(s: unknown): string {

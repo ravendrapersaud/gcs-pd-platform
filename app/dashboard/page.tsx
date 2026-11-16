@@ -304,7 +304,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* Your 1:1s — next check-in, open follow-ups, and reports due */}
+      {/* Your check-ins — next check-in, open follow-ups, and reports due */}
       <DashboardCheckIns />
 
       {/* Team summary (supervisors and admins) */}

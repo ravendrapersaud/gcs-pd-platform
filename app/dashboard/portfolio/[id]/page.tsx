@@ -326,7 +326,7 @@ export default function PortfolioPage() {
   useEffect(() => { load() }, [load])
 
   // Deep-link scroll (e.g. #one-on-one from the dashboard / Workspaces callback):
-  // the target only exists after the data loads, and async children (the 1:1 card)
+  // the target only exists after the data loads, and async children (the check-in card)
   // keep growing after that, so a single scroll lands in the wrong place. Re-apply
   // for ~1.5s as the layout settles, then stop.
   const scrolledToHash = useRef(false)
@@ -553,7 +553,7 @@ export default function PortfolioPage() {
         )}
       </Section>
 
-      {/* Your 1:1 — rhythm, running docs, follow-ups, past check-ins, and notes,
+      {/* Your check-in — rhythm, running docs, follow-ups, past check-ins, and notes,
           all in one place. The "Past check-ins" list (submitted reflections) is
           rendered here and passed in, so the fill flow / edit links stay local. */}
       <div id="one-on-one" className="scroll-mt-20">

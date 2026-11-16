@@ -11,7 +11,7 @@ const fmtDate = (d: string) => new Date(d.length <= 10 ? `${d}T12:00:00` : d).to
 
 type SchedRow = { employee_id: string; frequency: CheckInFrequency; active: boolean; start_date: string }
 
-// A compact "Your 1:1s" row for the dashboard: your next check-in + open
+// A compact "Check-ins" row for the dashboard: your next check-in + open
 // follow-ups, and (for supervisors) how many reports are due. Client-side so it
 // can reuse the cadence math and respect RLS as the signed-in user.
 export default function DashboardCheckIns() {

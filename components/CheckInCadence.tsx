@@ -242,7 +242,7 @@ export default function CheckInCadence({
       {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* ═══ Check-ins column — the ongoing 1:1: rhythm, docs, follow-ups, notes ═══ */}
+      {/* ═══ Check-ins column — the ongoing check-in: rhythm, docs, follow-ups, notes ═══ */}
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -291,14 +291,14 @@ export default function CheckInCadence({
           </div>
         )}
 
-      {/* Linked docs — the running Google doc(s) that anchor the 1:1 */}
+      {/* Linked docs — the running Google doc(s) that anchor the check-in */}
       <div className="border-t border-gray-100 pt-4">
         <p className="text-sm font-medium text-gray-800">Linked docs</p>
         <p className="text-xs text-gray-400 mb-2">Pin the running doc(s) you keep between check-ins — a shared Google Doc, agenda, or folder. Visible to {isSelf ? 'you and your supervisor' : `${employeeFirstName} and their supervisors`}.</p>
 
         <div className="flex flex-col gap-2 mb-3">
           <div className="flex flex-wrap gap-2">
-            <input className="input text-sm flex-1 min-w-[8rem]" placeholder="Label (e.g. Running 1:1 notes)" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} />
+            <input className="input text-sm flex-1 min-w-[8rem]" placeholder="Label (e.g. Running check-in notes)" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} />
             <input className="input text-sm flex-1 min-w-[10rem]" placeholder="Paste a Google Doc / Drive link…" value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && linkUrl.trim()) addLink() }} />
