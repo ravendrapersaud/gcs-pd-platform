@@ -31,6 +31,7 @@ export default function CohortHomePage() {
   const [loading, setLoading] = useState(true)
   const [canManage, setCanManage] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -119,13 +120,22 @@ export default function CohortHomePage() {
   const toggleSignup = async (slot: CohortSlot) => {
     if (!me) return
     const booked = mySignups.has(slot.id)
-    setBusy(true); setError(null)
+    setBusy(true); setError(null); setNotice(null)
     if (booked) {
       const { error: e } = await supabase.from('cohort_slot_signups').delete().eq('slot_id', slot.id).eq('user_id', me.id)
       if (e) { setError(`Could not cancel: ${e.message}`); setBusy(false); return }
+      setNotice('Booking canceled.')
     } else {
-      const { data, error: e } = await supabase.from('cohort_slot_signups').insert({ slot_id: slot.id, user_id: me.id }).select()
-      if (e || !data || data.length === 0) { setError(`Could not sign up: ${e?.message ?? 'this slot may be full'}`); setBusy(false); return }
+      // Book via the API route so a calendar invite goes out (when the slot has a time).
+      const res = await fetch('/api/cohort/slot-signup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot_id: slot.id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'Could not sign up.'); setBusy(false); return }
+      setNotice(json.email === 'sent'
+        ? 'Booked — a calendar invite is on its way to your email.'
+        : 'Booked.')
     }
     setBusy(false); load()
   }
@@ -181,6 +191,7 @@ export default function CohortHomePage() {
   return (
     <div className="space-y-6">
       {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+      {notice && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{notice}</div>}
 
       {/* Hero */}
       <div className="card p-0 overflow-hidden">
