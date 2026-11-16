@@ -22,6 +22,7 @@ export default function DashboardCheckIns() {
   const [myOpen, setMyOpen] = useState(0)
   const [reportsTotal, setReportsTotal] = useState(0)
   const [reportsDue, setReportsDue] = useState(0)
+  const [reportsNoCadence, setReportsNoCadence] = useState(0)
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -54,11 +55,17 @@ export default function DashboardCheckIns() {
       }
       const today = todayISO()
       let due = 0
+      // A report is "on a rhythm" only with an active schedule and a real cadence.
+      const onRhythm = new Set<string>()
       for (const s of (rSched ?? []) as SchedRow[]) {
+        if (s.active && s.frequency !== 'none') onRhythm.add(s.employee_id)
         const nd = nextDueDate({ frequency: s.frequency, active: s.active, lastCheckIn: lastBy.get(s.employee_id) ?? null, startDate: s.start_date })
         if (nd && nd <= today) due += 1
       }
       setReportsDue(due)
+      // Reports with no active cadence at all (never set up, or paused) still need
+      // attention — otherwise "All caught up" hides people who aren't on a rhythm.
+      setReportsNoCadence(reportIds.filter((id) => !onRhythm.has(id)).length)
     }
     setLoading(false)
   }, [])
@@ -95,10 +102,14 @@ export default function DashboardCheckIns() {
         {reportsTotal > 0 && (
           <Link href="/dashboard/goals?tab=team" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
             <p className="text-sm font-medium text-gray-500">Your team</p>
-            {reportsDue > 0 ? (
+            {reportsDue + reportsNoCadence > 0 ? (
               <>
-                <p className="text-2xl font-bold text-red-600">{reportsDue} due now</p>
-                <p className="text-sm text-gray-500">of {reportsTotal} {reportsTotal === 1 ? 'person' : 'people'}</p>
+                <p className={clsx('text-2xl font-bold', reportsDue > 0 ? 'text-red-600' : 'text-navy-900')}>
+                  {reportsDue + reportsNoCadence} to check in
+                </p>
+                <p className="text-sm text-gray-500">
+                  {[reportsDue > 0 && `${reportsDue} due`, reportsNoCadence > 0 && `${reportsNoCadence} not set up`].filter(Boolean).join(' · ')}
+                </p>
               </>
             ) : (
               <>
