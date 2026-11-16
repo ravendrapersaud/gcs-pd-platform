@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { sendCalendarInvite } from '@/lib/email'
+import { sendCalendarInvite, fromAddress } from '@/lib/email'
 import { zonedWallClockToUtc, type IcsEvent } from '@/lib/ics'
 import { SLOT_KIND_LABELS } from '@/lib/cohorts'
 import type { Profile, SlotKind } from '@/lib/types'
@@ -65,8 +65,9 @@ export async function POST(request: NextRequest) {
     const memberName = `${m.first_name} ${m.last_name}`.trim()
     const summary = slot.title || `${kindLabel} with ${hostName}`
 
-    // Both the member and the host are attendees → the event appears on, and is
-    // cancelled from, both calendars. The host is the organizer.
+    // Both the member and the host are attendees → the event appears on (and is
+    // cancelled from) both calendars. The ORGANIZER must be the actual sending
+    // address, or Gmail/Google shows "Unable to load event".
     const attendees = [{ name: memberName, email: m.email }]
     if (host?.email && host.email.toLowerCase() !== m.email.toLowerCase()) {
       attendees.push({ name: hostName, email: host.email })
@@ -75,10 +76,10 @@ export async function POST(request: NextRequest) {
     const event: IcsEvent = {
       uid: `cohort-slot-${slot.id}-${user.id}@gcschool.org`,
       start, end, summary,
-      description: [`${kindLabel} — ${cohort?.name ?? 'New Faculty cohort'}.`, slot.notes].filter(Boolean).join('\n\n'),
+      description: [`${kindLabel} with ${hostName} — ${cohort?.name ?? 'New Faculty cohort'}.`, slot.notes].filter(Boolean).join('\n\n'),
       location: slot.location ?? undefined,
-      organizerName: hostName,
-      organizerEmail: host?.email ?? 'noreply@notify.gcschool.org',
+      organizerName: cohort?.name ? `${cohort.name} (GCS)` : 'GCS PD Platform',
+      organizerEmail: fromAddress(),
       attendees,
       method: cancel ? 'CANCEL' : 'REQUEST',
       sequence: cancel ? 1 : 0,

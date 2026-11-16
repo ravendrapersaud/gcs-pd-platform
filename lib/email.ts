@@ -301,7 +301,10 @@ export async function sendCalendarInvite(params: {
 // addresses). Degrades to 'skipped' with no RESEND_API_KEY.
 export type DigestEvent = { title: string; start_date: string; url: string | null }
 
-function fromAddress(): string {
+// The bare send address (inside EMAIL_FROM's angle brackets). Exported so
+// calendar invites can set ORGANIZER to the actual sender — Gmail/Google
+// refuse to load an event whose organizer differs from the sending address.
+export function fromAddress(): string {
   const m = EMAIL_FROM.match(/<([^>]+)>/)
   return m ? m[1] : EMAIL_FROM
 }
