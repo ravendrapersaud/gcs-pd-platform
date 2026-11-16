@@ -31,6 +31,25 @@ const normalizeUrl = (raw: string) => {
   return /^https?:\/\//i.test(t) ? t : `https://${t}`
 }
 
+const IconChat = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.77 9.77 0 01-4-.84L3 20l1.09-3.27A7.94 7.94 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+)
+const IconTrend = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+  </svg>
+)
+const Chevron = ({ open }: { open: boolean }) => (
+  <svg className={clsx('w-4 h-4 transition-transform', open && 'rotate-180')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+  </svg>
+)
+const HeaderChip = ({ children }: { children: ReactNode }) => (
+  <span className="w-7 h-7 rounded-lg bg-navy-50 text-navy-800 flex items-center justify-center shrink-0">{children}</span>
+)
+
 export default function CheckInCadence({
   employeeId,
   employeeFirstName,
@@ -58,6 +77,7 @@ export default function CheckInCadence({
   const [error, setError] = useState<string | null>(null)
 
   const [editing, setEditing] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
   const [form, setForm] = useState<{ frequency: CheckInFrequency; template_id: string; active: boolean }>({ frequency: 'monthly', template_id: '', active: true })
   const [busy, setBusy] = useState(false)
 
@@ -224,6 +244,16 @@ export default function CheckInCadence({
   const doneFUs = followUps.filter((f) => f.status === 'done').sort((a, b) => ((b.completed_at ?? '') < (a.completed_at ?? '') ? -1 : 1))
   const today = todayISO()
 
+  // Collapsed-state summary for the running-notes expander.
+  const detailCount = links.length + followUps.length + notes.length
+  const detailSummary = detailCount === 0
+    ? 'Nothing yet'
+    : [
+        openFUs.length > 0 ? `${openFUs.length} open` : null,
+        links.length > 0 ? `${links.length} doc${links.length === 1 ? '' : 's'}` : null,
+        notes.length > 0 ? `${notes.length} note${notes.length === 1 ? '' : 's'}` : null,
+      ].filter(Boolean).join(' · ')
+
   const supervisors = participants.filter((p) => p.id !== employeeId)
   const withWhom = isSelf
     ? (supervisors.length === 1 ? ` with ${supervisors[0].first_name}` : supervisors.length > 1 ? ' with your supervisors' : '')
@@ -250,7 +280,9 @@ export default function CheckInCadence({
       {/* ═══ Check-ins column — the ongoing check-in: rhythm, docs, follow-ups, notes ═══ */}
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="flex items-start gap-2.5 min-w-0">
+            <HeaderChip><IconChat /></HeaderChip>
+            <div className="min-w-0">
             <h4 className="text-sm font-semibold text-gray-900">Check-ins</h4>
             {schedule ? (
               <p className="text-sm text-gray-500 mt-0.5">
@@ -261,8 +293,9 @@ export default function CheckInCadence({
                 )}
               </p>
             ) : (
-              <p className="text-sm text-gray-500 mt-0.5">{isSelf ? "You haven't set how often you check in yet." : 'No check-in rhythm set yet.'}</p>
+              <p className="text-sm text-gray-500 mt-0.5">No rhythm set yet.</p>
             )}
+            </div>
           </div>
           {canEditFreq && !editing && (
             <button onClick={() => setEditing(true)} className="btn-ghost text-xs shrink-0">{schedule ? 'Edit' : 'Set rhythm'}</button>
@@ -296,10 +329,29 @@ export default function CheckInCadence({
           </div>
         )}
 
+      {/* Running notes & follow-ups — collapsed by default to keep the column light */}
+      <div className="border-t border-gray-100 pt-3">
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="w-full flex items-center justify-between gap-2 text-left"
+          aria-expanded={showDetails}
+        >
+          <span className="text-sm font-medium text-gray-800">Running notes &amp; follow-ups</span>
+          <span className="flex items-center gap-2 text-xs text-gray-400">
+            {!showDetails && (
+              <span className={openFUs.length > 0 ? 'text-navy-700 font-medium' : ''}>{detailSummary}</span>
+            )}
+            <Chevron open={showDetails} />
+          </span>
+        </button>
+
+      <div className={clsx('space-y-4', showDetails ? 'mt-4' : 'hidden')}>
+
       {/* Linked docs — the running Google doc(s) that anchor the check-in */}
-      <div className="border-t border-gray-100 pt-4">
+      <div>
         <p className="text-sm font-medium text-gray-800">Linked docs</p>
-        <p className="text-xs text-gray-400 mb-2">Pin the running doc(s) you keep between check-ins — a shared Google Doc, agenda, or folder. Visible to {isSelf ? 'you and your supervisor' : `${employeeFirstName} and their supervisors`}.</p>
+        <p className="text-xs text-gray-400 mb-2">The running doc(s) you keep between check-ins.</p>
 
         <div className="flex flex-col gap-2 mb-3">
           <div className="flex flex-wrap gap-2">
@@ -334,7 +386,7 @@ export default function CheckInCadence({
           <p className="text-sm font-medium text-gray-800">Follow-ups</p>
           {openFUs.length > 0 && <span className="badge badge-navy text-[10px]">{openFUs.length} open</span>}
         </div>
-        <p className="text-xs text-gray-400 mb-2">Action items that carry between check-ins. Assign an owner and tick them off when done — open items surface here next time.</p>
+        <p className="text-xs text-gray-400 mb-2">Action items that carry between check-ins.</p>
 
         <div className="flex flex-col gap-2 mb-3">
           <input className="input text-sm" placeholder="Add a follow-up…" value={fuText}
@@ -406,7 +458,7 @@ export default function CheckInCadence({
       {/* Note slots */}
       <div className="border-t border-gray-100 pt-4">
         <p className="text-sm font-medium text-gray-800">Notes to raise</p>
-        <p className="text-xs text-gray-400 mb-2">Jot things to raise. {isSelf ? 'Mark a note private to keep it to yourself, or shared so your supervisor sees it.' : 'Notes you add here are shared with the employee.'}</p>
+        <p className="text-xs text-gray-400 mb-2">Things to raise next time.</p>
 
         <div className="flex flex-col gap-2 mb-3">
           <textarea rows={2} className="input text-sm resize-none" placeholder="Add a note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
@@ -442,12 +494,17 @@ export default function CheckInCadence({
         )}
       </div>
       </div>
+      </div>
+      </div>
 
       {/* ═══ Growth log column — the templated review / check-in forms, over time ═══ */}
       <div className="space-y-3 lg:border-l lg:border-gray-100 lg:pl-6">
-        <div>
-          <h4 className="text-sm font-semibold text-gray-900">Growth log{pastCheckInCount > 0 ? <span className="text-gray-400 font-normal"> ({pastCheckInCount})</span> : null}</h4>
-          <p className="text-xs text-gray-400 mt-0.5">Self-reviews and reviews, kept as a record over time.</p>
+        <div className="flex items-start gap-2.5">
+          <HeaderChip><IconTrend /></HeaderChip>
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900">Growth log{pastCheckInCount > 0 ? <span className="text-gray-400 font-normal"> ({pastCheckInCount})</span> : null}</h4>
+            <p className="text-xs text-gray-400 mt-0.5">Self-reviews and reviews over time.</p>
+          </div>
         </div>
         {startControl && <div>{startControl}</div>}
         {pastCheckIns}
