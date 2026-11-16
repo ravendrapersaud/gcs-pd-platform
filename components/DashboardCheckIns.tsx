@@ -23,18 +23,23 @@ export default function DashboardCheckIns() {
   const [reportsTotal, setReportsTotal] = useState(0)
   const [reportsDue, setReportsDue] = useState(0)
   const [reportsNoCadence, setReportsNoCadence] = useState(0)
+  const [myDept, setMyDept] = useState<string | null>(null)
+  const [deptCount, setDeptCount] = useState(0)
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const [{ data: sched }, { data: resp }, { count: openCount }, { data: assigns }] = await Promise.all([
+    const [{ data: sched }, { data: resp }, { count: openCount }, { data: assigns }, { data: prof }] = await Promise.all([
       supabase.from('check_in_schedules').select('employee_id, frequency, active, start_date').eq('employee_id', user.id).maybeSingle(),
       supabase.from('form_responses').select('submitted_at, template:form_templates(category)').eq('subject_id', user.id).eq('status', 'submitted').order('submitted_at', { ascending: false }),
       supabase.from('check_in_follow_ups').select('id', { count: 'exact', head: true }).eq('employee_id', user.id).eq('status', 'open'),
       supabase.from('supervisor_assignments').select('staff_id').eq('supervisor_id', user.id),
+      supabase.from('profiles').select('department').eq('id', user.id).maybeSingle(),
     ])
 
+    const dept = (((prof as { department: string | null } | null)?.department) ?? '').trim() || null
+    setMyDept(dept)
     setMySched((sched ?? null) as SchedRow | null)
     setMyLast(((resp ?? []).find((r) => (r.template as { category?: string } | null)?.category === 'check_in')?.submitted_at as string) ?? null)
     setMyOpen(openCount ?? 0)
@@ -66,6 +71,10 @@ export default function DashboardCheckIns() {
       // Reports with no active cadence at all (never set up, or paused) still need
       // attention — otherwise "All caught up" hides people who aren't on a rhythm.
       setReportsNoCadence(reportIds.filter((id) => !onRhythm.has(id)).length)
+    } else if (dept) {
+      // Non-supervisor: size their department for the "Your department" tile.
+      const { count: dc } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('department', dept)
+      setDeptCount(dc ?? 0)
     }
     setLoading(false)
   }, [])
@@ -98,8 +107,8 @@ export default function DashboardCheckIns() {
           <span className="text-sm text-navy-700 font-medium mt-auto pt-1">{mySched ? 'Open your check-ins →' : 'Set up check-ins →'}</span>
         </Link>
 
-        {/* Reports due (supervisors) */}
-        {reportsTotal > 0 && (
+        {/* Second tile: your team (supervisors) or your department (everyone else) */}
+        {reportsTotal > 0 ? (
           <Link href="/dashboard/goals?tab=team" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
             <p className="text-sm font-medium text-gray-500">Your team</p>
             {reportsDue + reportsNoCadence > 0 ? (
@@ -119,7 +128,14 @@ export default function DashboardCheckIns() {
             )}
             <span className="text-sm text-navy-700 font-medium mt-auto pt-1">View your team →</span>
           </Link>
-        )}
+        ) : myDept ? (
+          <Link href="/dashboard/workspaces/department" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
+            <p className="text-sm font-medium text-gray-500">Your department</p>
+            <p className="text-2xl font-bold text-navy-900">{myDept}</p>
+            <p className="text-sm text-gray-500">{deptCount > 0 ? `${deptCount} ${deptCount === 1 ? 'person' : 'people'}` : 'Shared space'}</p>
+            <span className="text-sm text-navy-700 font-medium mt-auto pt-1">Open department space →</span>
+          </Link>
+        ) : null}
       </div>
     </section>
   )

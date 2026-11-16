@@ -435,6 +435,8 @@ function DepartmentsSection() {
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
   const [newName, setNewName] = useState('')
+  const [provBusy, setProvBusy] = useState(false)
+  const [provResult, setProvResult] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -524,6 +526,24 @@ function DepartmentsSection() {
     })
   }
 
+  // Bulk-create a shared workspace for every department with 2+ people (summer
+  // setup). The SECURITY DEFINER RPC dedupes and enforces admin itself.
+  const provisionWorkspaces = async () => {
+    if (!window.confirm('Create a shared workspace for every department with 2 or more people? Departments that already have one are left as-is, and one-person departments are skipped.')) return
+    setProvBusy(true); setProvResult(null); setError(null)
+    const { data, error: err } = await supabase.rpc('provision_department_workspaces', { min_members: 2 })
+    if (err) { setError(err.message); setProvBusy(false); return }
+    const r = (data ?? {}) as { created?: number; existed?: number; skipped_singletons?: number; created_names?: string[] }
+    const parts = [
+      `${r.created ?? 0} created`,
+      (r.existed ?? 0) > 0 ? `${r.existed} already existed` : null,
+      (r.skipped_singletons ?? 0) > 0 ? `${r.skipped_singletons} one-person ${r.skipped_singletons === 1 ? 'department' : 'departments'} skipped` : null,
+    ].filter(Boolean)
+    const names = r.created_names ?? []
+    setProvResult(parts.join(' · ') + (names.length ? ` — ${names.join(', ')}` : ''))
+    setProvBusy(false)
+  }
+
   return (
     <div className="card p-6 space-y-5">
       <div>
@@ -602,6 +622,21 @@ function DepartmentsSection() {
           onKeyDown={(e) => { if (e.key === 'Enter') addDept() }}
         />
         <button onClick={addDept} disabled={busy || !newName.trim()} className="btn-secondary shrink-0">+ Add department</button>
+      </div>
+
+      <div className="border-t border-gray-100 pt-4 space-y-2">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Department workspaces</h3>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Create a shared collaborative space for each department with 2 or more people — membership stays in sync automatically. Everyone also gets a one-click &ldquo;Your department&rdquo; space from their dashboard, so this is mainly a one-shot after the summer roster import.
+          </p>
+        </div>
+        {provResult && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">{provResult}</div>
+        )}
+        <button onClick={provisionWorkspaces} disabled={provBusy} className="btn-secondary">
+          {provBusy ? 'Provisioning…' : 'Provision department workspaces'}
+        </button>
       </div>
     </div>
   )

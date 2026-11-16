@@ -533,7 +533,7 @@ export interface Workspace {
   id: string
   name: string
   description: string | null
-  kind: 'team' | 'committee'
+  kind: 'team' | 'committee' | 'department'
   rule_division: string | null
   rule_department: string | null
   rule_employee_type: string | null

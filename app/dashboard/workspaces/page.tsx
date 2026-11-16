@@ -176,6 +176,7 @@ export default function WorkspacesPage() {
         <div className="min-w-0">
           <h3 className="font-display font-bold text-navy-900">{ws.name}</h3>
           {ws.kind === 'committee' && <span className="badge badge-navy text-[10px] mt-1 inline-block">Committee</span>}
+          {ws.kind === 'department' && <span className="badge badge-gray text-[10px] mt-1 inline-block">Department</span>}
         </div>
         <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
           {ws.member_count} member{ws.member_count === 1 ? '' : 's'}

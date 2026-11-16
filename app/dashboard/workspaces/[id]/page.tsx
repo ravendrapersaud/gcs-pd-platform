@@ -469,6 +469,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {workspace.kind === 'committee' && <span className="badge badge-navy">Committee</span>}
+          {workspace.kind === 'department' && <span className="badge badge-gray">Department</span>}
           {workspace.rule_division && <span className="badge badge-navy">{workspace.rule_division}</span>}
           {workspace.rule_department && <span className="badge badge-gray">{workspace.rule_department}</span>}
           {workspace.rule_employee_type && (
@@ -477,7 +478,7 @@ export default function WorkspaceDetailPage({ params }: { params: { id: string }
           {!workspace.rule_division && !workspace.rule_department && !workspace.rule_employee_type && (
             <span className="badge badge-gray">Manual membership</span>
           )}
-          {isManager && (
+          {isManager && workspace.kind !== 'department' && (
             <button onClick={toggleCommittee} className="text-xs text-gray-400 hover:text-navy-700 ml-1">
               {workspace.kind === 'committee' ? 'Unmark committee' : 'Mark as committee'}
             </button>
