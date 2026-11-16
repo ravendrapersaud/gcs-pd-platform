@@ -132,6 +132,17 @@ export default function CohortDetailPage() {
     setBusy(false); load()
   }
 
+  const deleteCohort = async () => {
+    if (!cohort) return
+    if (!confirm(`Permanently delete "${cohort.name}" — all its sessions, checklist, slots, and roster — and its shared workspace? This cannot be undone.`)) return
+    setBusy(true); setError(null); setNotice(null)
+    const wsId = cohort.workspace_id
+    const { error: e } = await supabase.from('cohorts').delete().eq('id', id)
+    if (e) { fail('Could not delete cohort', e); setBusy(false); return }
+    if (wsId) await supabase.from('workspaces').delete().eq('id', wsId)
+    window.location.href = '/dashboard/cohorts'
+  }
+
   const sendWelcome = async (m: CohortMember) => {
     const who = nameOf(profById(m.user_id))
     if (!confirm(`Send a welcome email to ${who}?`)) return
@@ -210,6 +221,51 @@ export default function CohortDetailPage() {
     setBusy(false); load()
   }
 
+  // ── Inline edit: sessions ───────────────────────────────────
+  const [editSessId, setEditSessId] = useState<string | null>(null)
+  const [editSess, setEditSess] = useState({ title: '', session_date: '', start_time: '', end_time: '', campus: '', location: '', presenter: '', prep_notes: '', resource_url: '' })
+  const startEditSession = (s: CohortSession) => {
+    setEditSessId(s.id)
+    setEditSess({
+      title: s.title ?? '', session_date: s.session_date ?? '', start_time: s.start_time ?? '', end_time: s.end_time ?? '',
+      campus: s.campus ?? '', location: s.location ?? '', presenter: s.presenter ?? '', prep_notes: s.prep_notes ?? '', resource_url: s.resource_url ?? '',
+    })
+  }
+  const saveSession = async () => {
+    if (!editSessId) return
+    if (!editSess.title.trim()) { setError('Session needs a topic.'); return }
+    setBusy(true); setError(null); setNotice(null)
+    const { data, error: e } = await supabase.from('cohort_sessions').update({
+      title: editSess.title.trim(), session_date: editSess.session_date || null,
+      start_time: editSess.start_time || null, end_time: editSess.end_time || null,
+      campus: editSess.campus || null, location: editSess.location.trim() || null,
+      presenter: editSess.presenter.trim() || null, prep_notes: editSess.prep_notes.trim() || null,
+      resource_url: editSess.resource_url.trim() || null,
+    }).eq('id', editSessId).select()
+    if (e || !data || data.length === 0) { fail('Could not save session', e); setBusy(false); return }
+    setEditSessId(null); setBusy(false); load()
+  }
+
+  // ── Inline edit: tasks ──────────────────────────────────────
+  const [editTaskId, setEditTaskId] = useState<string | null>(null)
+  const [editTask, setEditTask] = useState({ title: '', description: '', link_url: '', due_date: '', session_id: '', required: false })
+  const startEditTask = (t: CohortTask) => {
+    setEditTaskId(t.id)
+    setEditTask({ title: t.title ?? '', description: t.description ?? '', link_url: t.link_url ?? '', due_date: t.due_date ?? '', session_id: t.session_id ?? '', required: t.required })
+  }
+  const saveTask = async () => {
+    if (!editTaskId) return
+    if (!editTask.title.trim()) { setError('Task needs a title.'); return }
+    setBusy(true); setError(null); setNotice(null)
+    const { data, error: e } = await supabase.from('cohort_tasks').update({
+      title: editTask.title.trim(), description: editTask.description.trim() || null,
+      link_url: editTask.link_url.trim() || null, due_date: editTask.due_date || null,
+      session_id: editTask.session_id || null, required: editTask.required,
+    }).eq('id', editTaskId).select()
+    if (e || !data || data.length === 0) { fail('Could not save task', e); setBusy(false); return }
+    setEditTaskId(null); setBusy(false); load()
+  }
+
   if (loading) return <div className="card h-64 animate-pulse bg-gray-100" />
   if (!cohort) return <div className="card p-6 text-sm text-gray-600">Cohort not found.</div>
 
@@ -230,11 +286,16 @@ export default function CohortDetailPage() {
                 {!cohort.is_active && ' · Archived'}
               </p>
             </div>
-            {cohort.workspace_id && (
-              <Link href={`/dashboard/workspaces/${cohort.workspace_id}`} className="text-sm text-white/90 hover:text-white underline shrink-0">
-                Open cohort space →
-              </Link>
-            )}
+            <div className="flex items-center gap-4 shrink-0">
+              {cohort.workspace_id && (
+                <Link href={`/dashboard/workspaces/${cohort.workspace_id}`} className="text-sm text-white/90 hover:text-white underline">
+                  Open cohort space →
+                </Link>
+              )}
+              <button onClick={deleteCohort} disabled={busy} className="text-sm text-white/60 hover:text-white underline">
+                Delete
+              </button>
+            </div>
           </div>
         </div>
         <div className="px-6 py-2 flex gap-1 overflow-x-auto">
@@ -313,16 +374,46 @@ export default function CohortDetailPage() {
           ) : (
             <ul className="space-y-2">
               {sessions.map((s) => (
-                <li key={s.id} className="card p-4 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-navy-900">{s.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {formatSessionDate(s.session_date)}{formatTimeRange(s.start_time, s.end_time) && ` · ${formatTimeRange(s.start_time, s.end_time)}`}
-                      {' · '}{campusLabel(s.campus)}{s.location && ` · ${s.location}`}{s.presenter && ` · ${s.presenter}`}
-                    </p>
-                    {s.prep_notes && <p className="text-xs text-gray-600 mt-1"><span className="font-medium">Prep:</span> {s.prep_notes}</p>}
-                  </div>
-                  <button className="btn-ghost text-xs text-red-600 shrink-0" disabled={busy} onClick={() => del('cohort_sessions', { id: s.id }, 'session')}>Delete</button>
+                <li key={s.id} className="card p-4">
+                  {editSessId === s.id ? (
+                    <div className="space-y-3">
+                      <input className="input" value={editSess.title} onChange={(e) => setEditSess({ ...editSess, title: e.target.value })} />
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        <div><label className="label">Date</label><input type="date" className="input" value={editSess.session_date} onChange={(e) => setEditSess({ ...editSess, session_date: e.target.value })} /></div>
+                        <div><label className="label">Start</label><input type="time" className="input" value={editSess.start_time} onChange={(e) => setEditSess({ ...editSess, start_time: e.target.value })} /></div>
+                        <div><label className="label">End</label><input type="time" className="input" value={editSess.end_time} onChange={(e) => setEditSess({ ...editSess, end_time: e.target.value })} /></div>
+                        <div>
+                          <label className="label">Campus</label>
+                          <select className="input" value={editSess.campus} onChange={(e) => setEditSess({ ...editSess, campus: e.target.value })}>
+                            <option value="">Both</option><option value="86">86th St</option><option value="46">46th St</option>
+                          </select>
+                        </div>
+                        <div><label className="label">Location</label><input className="input" value={editSess.location} onChange={(e) => setEditSess({ ...editSess, location: e.target.value })} /></div>
+                        <div><label className="label">Presenter</label><input className="input" value={editSess.presenter} onChange={(e) => setEditSess({ ...editSess, presenter: e.target.value })} /></div>
+                      </div>
+                      <textarea className="input" rows={2} placeholder="Preparation needed" value={editSess.prep_notes} onChange={(e) => setEditSess({ ...editSess, prep_notes: e.target.value })} />
+                      <input className="input" placeholder="Resource link" value={editSess.resource_url} onChange={(e) => setEditSess({ ...editSess, resource_url: e.target.value })} />
+                      <div className="flex justify-end gap-2">
+                        <button className="btn-secondary text-sm" onClick={() => setEditSessId(null)}>Cancel</button>
+                        <button className="btn-primary text-sm" disabled={busy} onClick={saveSession}>Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-navy-900">{s.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {formatSessionDate(s.session_date)}{formatTimeRange(s.start_time, s.end_time) && ` · ${formatTimeRange(s.start_time, s.end_time)}`}
+                          {' · '}{campusLabel(s.campus)}{s.location && ` · ${s.location}`}{s.presenter && ` · ${s.presenter}`}
+                        </p>
+                        {s.prep_notes && <p className="text-xs text-gray-600 mt-1"><span className="font-medium">Prep:</span> {s.prep_notes}</p>}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button className="btn-ghost text-xs" disabled={busy} onClick={() => startEditSession(s)}>Edit</button>
+                        <button className="btn-ghost text-xs text-red-600" disabled={busy} onClick={() => del('cohort_sessions', { id: s.id }, 'session')}>Delete</button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -361,16 +452,46 @@ export default function CohortDetailPage() {
               {tasks.map((t) => {
                 const sess = t.session_id ? sessions.find((s) => s.id === t.session_id) : null
                 return (
-                  <li key={t.id} className="card p-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900">
-                        {t.title} {t.required && <span className="badge badge-yellow text-[10px] ml-1">Required</span>}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {sess ? `Prep for: ${sess.title}` : 'General'}{t.due_date && ` · due ${formatSessionDate(t.due_date)}`}
-                      </p>
-                    </div>
-                    <button className="btn-ghost text-xs text-red-600 shrink-0" disabled={busy} onClick={() => del('cohort_tasks', { id: t.id }, 'task')}>Delete</button>
+                  <li key={t.id} className="card p-4">
+                    {editTaskId === t.id ? (
+                      <div className="space-y-3">
+                        <input className="input" value={editTask.title} onChange={(e) => setEditTask({ ...editTask, title: e.target.value })} />
+                        <textarea className="input" rows={2} placeholder="Details (optional)" value={editTask.description} onChange={(e) => setEditTask({ ...editTask, description: e.target.value })} />
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <div><label className="label">Link</label><input className="input" placeholder="https://…" value={editTask.link_url} onChange={(e) => setEditTask({ ...editTask, link_url: e.target.value })} /></div>
+                          <div><label className="label">Due</label><input type="date" className="input" value={editTask.due_date} onChange={(e) => setEditTask({ ...editTask, due_date: e.target.value })} /></div>
+                          <div>
+                            <label className="label">Session</label>
+                            <select className="input" value={editTask.session_id} onChange={(e) => setEditTask({ ...editTask, session_id: e.target.value })}>
+                              <option value="">General task</option>
+                              {sessions.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input type="checkbox" checked={editTask.required} onChange={(e) => setEditTask({ ...editTask, required: e.target.checked })} /> Required
+                        </label>
+                        <div className="flex justify-end gap-2">
+                          <button className="btn-secondary text-sm" onClick={() => setEditTaskId(null)}>Cancel</button>
+                          <button className="btn-primary text-sm" disabled={busy} onClick={saveTask}>Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900">
+                            {t.title} {t.required && <span className="badge badge-yellow text-[10px] ml-1">Required</span>}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {sess ? `Prep for: ${sess.title}` : 'General'}{t.due_date && ` · due ${formatSessionDate(t.due_date)}`}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button className="btn-ghost text-xs" disabled={busy} onClick={() => startEditTask(t)}>Edit</button>
+                          <button className="btn-ghost text-xs text-red-600" disabled={busy} onClick={() => del('cohort_tasks', { id: t.id }, 'task')}>Delete</button>
+                        </div>
+                      </div>
+                    )}
                   </li>
                 )
               })}
