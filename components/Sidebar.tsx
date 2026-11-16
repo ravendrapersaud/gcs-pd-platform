@@ -125,6 +125,12 @@ const IconId = () => (
   </svg>
 )
 
+const IconCheckins = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.77 9.77 0 01-4-.84L3 20l1.09-3.27A7.94 7.94 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+)
+
 const navSections: NavSection[] = [
   {
     label: 'Main',
@@ -151,6 +157,7 @@ const navSections: NavSection[] = [
     label: 'Admin',
     minRole: 'supervisor',
     items: [
+      { href: '/dashboard/checkins', label: 'Team Check-ins', icon: <IconCheckins />, minRole: 'supervisor' },
       { href: '/dashboard/approvals', label: 'Approvals', icon: <IconApprovals />, minRole: 'supervisor' },
       { href: '/dashboard/admin/staff', label: 'Roster', icon: <IconStaff /> },
       { href: '/dashboard/admin/import', label: 'Import', icon: <IconImport /> },

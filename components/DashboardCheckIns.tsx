@@ -109,7 +109,7 @@ export default function DashboardCheckIns() {
 
         {/* Second tile: your team (supervisors) or your department (everyone else) */}
         {reportsTotal > 0 ? (
-          <Link href="/dashboard/goals?tab=team" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
+          <Link href="/dashboard/checkins" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
             <p className="text-sm font-medium text-gray-500">Your team</p>
             {reportsDue + reportsNoCadence > 0 ? (
               <>
@@ -126,7 +126,7 @@ export default function DashboardCheckIns() {
                 <p className="text-sm text-gray-500">{reportsTotal} {reportsTotal === 1 ? 'person' : 'people'} on track</p>
               </>
             )}
-            <span className="text-sm text-navy-700 font-medium mt-auto pt-1">View your team →</span>
+            <span className="text-sm text-navy-700 font-medium mt-auto pt-1">Review team check-ins →</span>
           </Link>
         ) : myDept ? (
           <Link href="/dashboard/workspaces/department" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">

@@ -24,6 +24,7 @@ const routeMeta: Record<string, { title: string; action?: { label: string; href:
   '/dashboard/pd-log': { title: 'PD Log' },
   '/dashboard/calendar': { title: 'PD Calendar' },
   '/dashboard/workspaces': { title: 'Workspaces' },
+  '/dashboard/checkins': { title: 'Team Check-ins' },
   '/dashboard/shout-outs': { title: 'Shout-outs' },
   '/dashboard/observations': { title: 'Observations' },
   '/dashboard/observations/peer': { title: 'Peer Feedback' },
