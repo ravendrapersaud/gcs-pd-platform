@@ -61,11 +61,71 @@ function currentSchoolYear(): number {
   return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1
 }
 
-function Section({ title, count, prompt, children }: { title: string; count: number; prompt?: React.ReactNode; children: React.ReactNode }) {
+// ── Inline icon set (navy line icons for section headers + stat chips) ──
+function SvgIcon({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <svg className={clsx('w-5 h-5', className)} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      {children}
+    </svg>
+  )
+}
+const IcoClock = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></SvgIcon>
+const IcoFolder = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></SvgIcon>
+const IcoEye = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></SvgIcon>
+const IcoMegaphone = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0019.3 3m-.125 1.125c.4.919.731 1.875.985 2.859M19.175 4.125a23.91 23.91 0 011.014 5.395m0 0a23.91 23.91 0 01-1.014 5.395m1.014-5.395L21 9.75M9.75 9.348c-1.027.075-2.014.68-2.75 1.652" /></SvgIcon>
+const IcoFlag = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" /></SvgIcon>
+const IcoCap = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.62 48.62 0 0112 20.904a48.62 48.62 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" /></SvgIcon>
+const IcoGrid = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25A2.25 2.25 0 0113.5 8.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></SvgIcon>
+const IcoDoc = () => <SvgIcon><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></SvgIcon>
+
+// A section header matching the Section component's icon-chip style, for the
+// in-file sections that aren't rendered through <Section>.
+function SectionHeading({ icon, title, count }: { icon: ReactNode; title: string; count: number }) {
+  return (
+    <h3 className="font-semibold text-gray-900 flex items-center gap-2.5">
+      <span className="w-8 h-8 rounded-lg bg-navy-50 text-navy-800 flex items-center justify-center shrink-0">{icon}</span>
+      <span>{title} <span className="text-gray-400 font-normal">({count})</span></span>
+    </h3>
+  )
+}
+
+// Colored snapshot stat (tinted card + accent icon chip).
+function StatCard({ icon, label, value, sub, tint, chip, children }: {
+  icon: ReactNode; label: string; value: ReactNode; sub?: ReactNode; tint: string; chip: string; children?: ReactNode
+}) {
+  return (
+    <div className={clsx('rounded-xl p-4 flex flex-col gap-1 border border-black/5', tint)}>
+      <div className="flex items-start justify-between">
+        <p className="text-xs uppercase tracking-wide text-gray-500 font-medium">{label}</p>
+        <span className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', chip)}>{icon}</span>
+      </div>
+      <p className="text-2xl font-bold text-navy-900 leading-tight">{value}{sub}</p>
+      {children}
+    </div>
+  )
+}
+
+// Compact progress indicator: a slim bar + % (replaces the bare grey number).
+function ProgressPill({ pct }: { pct: number }) {
+  const v = Math.max(0, Math.min(100, pct))
+  return (
+    <div className="shrink-0 flex items-center gap-1.5 w-24">
+      <div className="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
+        <div className={clsx('h-full rounded-full', v >= 100 ? 'bg-grace-green' : 'bg-navy-700')} style={{ width: `${v}%` }} />
+      </div>
+      <span className="text-xs text-gray-500 tabular-nums w-8 text-right">{v}%</span>
+    </div>
+  )
+}
+
+function Section({ title, count, prompt, icon, children }: { title: string; count: number; prompt?: React.ReactNode; icon?: ReactNode; children: React.ReactNode }) {
   return (
     <div className="card p-5">
-      <h3 className="font-semibold text-gray-900 mb-3">{title} <span className="text-gray-400 font-normal">({count})</span></h3>
-      {count === 0 ? (prompt ?? <p className="text-sm text-gray-400">Nothing recorded this year.</p>) : children}
+      <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2.5">
+        {icon && <span className="w-8 h-8 rounded-lg bg-navy-50 text-navy-800 flex items-center justify-center shrink-0">{icon}</span>}
+        <span>{title} <span className="text-gray-400 font-normal">({count})</span></span>
+      </h3>
+      {count === 0 ? (prompt ?? <p className="text-sm text-gray-400 pl-10">Nothing recorded this year.</p>) : <div className={icon ? 'sm:pl-10' : undefined}>{children}</div>}
     </div>
   )
 }
@@ -98,8 +158,8 @@ function CompetenciesByDomain({ items, emptyPrompt }: { items: PortfolioData['co
   return (
     <div className="card p-5 space-y-4">
       <div>
-        <h3 className="font-semibold text-gray-900">Competencies <span className="text-gray-400 font-normal">({items.length})</span></h3>
-        <p className="text-xs text-gray-400">Evidence per indicator, grouped by area — each piece links to its source review or project.</p>
+        <SectionHeading icon={<IcoGrid />} title="Competencies" count={items.length} />
+        <p className="text-xs text-gray-400 sm:pl-[42px] mt-1">Evidence per indicator, grouped by area — each piece links to its source review or project.</p>
       </div>
       {items.length === 0 ? (
         emptyPrompt ?? <p className="text-sm text-gray-400">No competency evidence yet.</p>
@@ -214,8 +274,8 @@ function FocusCompetencies({ subjectId, subjectFirstName, canAssign }: { subject
   return (
     <div className="card p-5 space-y-3">
       <div>
-        <h3 className="font-semibold text-gray-900">Focus competencies <span className="text-gray-400 font-normal">({assignments.length})</span></h3>
-        <p className="text-xs text-gray-400">
+        <SectionHeading icon={<IcoGrid />} title="Focus competencies" count={assignments.length} />
+        <p className="text-xs text-gray-400 sm:pl-[42px] mt-1">
           Frameworks set as a focus for {subjectFirstName}. They appear on {subjectFirstName}’s Frameworks list and can be tagged on their projects, so evidence can be gathered against them.
         </p>
       </div>
@@ -409,29 +469,22 @@ export default function PortfolioPage() {
 
       {/* PD engagement summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="card p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">PD hours</p>
-          <p className="text-2xl font-bold text-navy-900">{data.pd.hoursTotal}<span className="text-sm font-normal text-gray-400"> / {data.pd.target}</span></p>
-          <div className="h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden"><div className="h-full bg-navy-900 rounded-full" style={{ width: `${pct}%` }} /></div>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">Projects</p>
-          <p className="text-2xl font-bold text-navy-900">{data.projects.length}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">Observations</p>
-          <p className="text-2xl font-bold text-navy-900">{data.observations.length}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs uppercase tracking-wide text-gray-400">Shout-outs</p>
-          <p className="text-2xl font-bold text-navy-900">{data.shoutouts.length}</p>
-        </div>
+        <StatCard
+          icon={<IcoClock />} label="PD hours" tint="bg-navy-50" chip="bg-navy-900 text-white"
+          value={data.pd.hoursTotal} sub={<span className="text-sm font-normal text-gray-400"> / {data.pd.target}</span>}
+        >
+          <div className="h-1.5 bg-white/70 rounded-full mt-2 overflow-hidden"><div className="h-full bg-navy-900 rounded-full" style={{ width: `${pct}%` }} /></div>
+        </StatCard>
+        <StatCard icon={<IcoFolder />} label="Projects" tint="bg-grace-lightblue/25" chip="bg-grace-lightblue text-navy-900" value={data.projects.length} />
+        <StatCard icon={<IcoEye />} label="Observations" tint="bg-grace-green/40" chip="bg-grace-green text-navy-900" value={data.observations.length} />
+        <StatCard icon={<IcoMegaphone />} label="Shout-outs" tint="bg-grace-orange/15" chip="bg-grace-orange text-white" value={data.shoutouts.length} />
       </div>
 
       {/* Goals */}
       <Section
         title="Goals"
         count={data.goals.length}
+        icon={<IcoFlag />}
         prompt={canPrompt ? <PortfolioPromptBlock title={`Set your goals for ${data.year.label}`} blurb="What do you want to grow, build, or accomplish this year?" cta="Set a goal" href="/dashboard/goals?new=1" /> : undefined}
       >
         <ul className="divide-y divide-gray-100">
@@ -446,7 +499,7 @@ export default function PortfolioPage() {
                 </span>
                 <span className="flex-1 text-sm text-gray-800 min-w-0">{g.title}</span>
                 <span className={clsx('badge shrink-0 capitalize', statusColor[g.status] ?? 'badge-gray')}>{g.status}</span>
-                <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{g.progress_pct}%</span>
+                <ProgressPill pct={g.progress_pct} />
               </div>
               {(g.parent || isOrg) && (
                 <p className="text-xs text-gray-500 pl-1">
@@ -469,6 +522,7 @@ export default function PortfolioPage() {
       <Section
         title="Projects"
         count={data.projects.length}
+        icon={<IcoFolder />}
         prompt={canPrompt ? <PortfolioPromptBlock title={`Start a project for ${data.year.label}`} blurb="Capture an initiative you're leading or contributing to — the work behind your goals." cta="New project" href={`/dashboard/projects?new=1&year=${year}`} /> : undefined}
       >
         <ul className="divide-y divide-gray-100">
@@ -477,14 +531,14 @@ export default function PortfolioPage() {
               {pr.visibility === 'private' && <span className="shrink-0" title="Private">🔒</span>}
               <a href={`/dashboard/projects/${pr.id}`} className="flex-1 text-sm text-gray-800 hover:text-navy-800 min-w-0 truncate">{pr.title}</a>
               <span className={clsx('badge shrink-0', statusColor[pr.status] ?? 'badge-gray')}>{projectStatusLabel[pr.status] ?? pr.status}</span>
-              <span className="text-xs text-gray-400 shrink-0 w-10 text-right">{pr.progress_pct}%</span>
+              <ProgressPill pct={pr.progress_pct} />
             </li>
           ))}
         </ul>
       </Section>
 
       {/* Observations */}
-      <Section title="Formal observations" count={data.observations.length}>
+      <Section title="Formal observations" count={data.observations.length} icon={<IcoEye />}>
         <ul className="divide-y divide-gray-100">
           {data.observations.map((o) => (
             <li key={o.id} className="py-2.5">
@@ -500,7 +554,7 @@ export default function PortfolioPage() {
       </Section>
 
       {/* Shout-outs */}
-      <Section title="Shout-outs received" count={data.shoutouts.length}>
+      <Section title="Shout-outs received" count={data.shoutouts.length} icon={<IcoMegaphone />}>
         <ul className="space-y-2">
           {data.shoutouts.map((s) => (
             <li key={s.id} className="rounded-lg border border-gray-100 p-3">
@@ -509,7 +563,7 @@ export default function PortfolioPage() {
                 <span className="text-xs text-gray-400">{fmtDate(s.created_at)}</span>
               </div>
               <p className="text-sm text-gray-700 mt-1 italic">“{s.message}”</p>
-              {s.tags?.length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{s.tags.map((t) => <span key={t} className="badge badge-gray text-[10px]">{t}</span>)}</div>}
+              {s.tags?.length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{s.tags.map((t) => <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-grace-orange/15 text-navy-800 font-medium">{t}</span>)}</div>}
             </li>
           ))}
         </ul>
@@ -519,6 +573,7 @@ export default function PortfolioPage() {
       <Section
         title="PD activities & funding"
         count={data.pd.activities.length + data.funding.length}
+        icon={<IcoCap />}
         prompt={canPrompt ? <PortfolioPromptBlock title={`Log your first PD of ${data.year.label}`} blurb="Record a conference, workshop, course, or reading you've engaged with." cta="Log PD" href="/dashboard/pd-log?new=1" /> : undefined}
       >
         {data.pd.activities.length > 0 && (
@@ -600,7 +655,7 @@ export default function PortfolioPage() {
       {/* Forms */}
       <div className="card p-5">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <h3 className="font-semibold text-gray-900">Forms <span className="text-gray-400 font-normal">({otherResponses.length})</span></h3>
+          <SectionHeading icon={<IcoDoc />} title="Forms" count={otherResponses.length} />
           {otherFillable.length > 0 && (
             <select
               className="input text-sm py-1.5 w-auto"
