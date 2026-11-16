@@ -71,7 +71,7 @@ export default function DashboardCheckIns() {
 
   return (
     <section className="space-y-3">
-      <h2 className="font-semibold text-gray-900 text-lg">Your 1:1s</h2>
+      <h2 className="font-semibold text-gray-900 text-lg">Check-ins</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Your next check-in */}
         <Link href="/dashboard/portfolio/me#one-on-one" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
@@ -88,22 +88,22 @@ export default function DashboardCheckIns() {
           <p className="text-sm text-gray-500">
             {myOpen > 0 ? <span className={myOverdue ? '' : 'text-gray-700 font-medium'}>{myOpen} follow-up{myOpen === 1 ? '' : 's'} open</span> : 'No open follow-ups'}
           </p>
-          <span className="text-sm text-navy-700 font-medium mt-auto pt-1">{mySched ? 'Open your 1:1 →' : 'Set up your 1:1 →'}</span>
+          <span className="text-sm text-navy-700 font-medium mt-auto pt-1">{mySched ? 'Open your check-ins →' : 'Set up check-ins →'}</span>
         </Link>
 
         {/* Reports due (supervisors) */}
         {reportsTotal > 0 && (
           <Link href="/dashboard/goals?tab=team" className="card p-5 hover:shadow-md transition-shadow flex flex-col gap-1">
-            <p className="text-sm font-medium text-gray-500">Reports to check in</p>
+            <p className="text-sm font-medium text-gray-500">Your team</p>
             {reportsDue > 0 ? (
               <>
                 <p className="text-2xl font-bold text-red-600">{reportsDue} due now</p>
-                <p className="text-sm text-gray-500">of {reportsTotal} {reportsTotal === 1 ? 'report' : 'reports'}</p>
+                <p className="text-sm text-gray-500">of {reportsTotal} {reportsTotal === 1 ? 'person' : 'people'}</p>
               </>
             ) : (
               <>
                 <p className="text-2xl font-bold text-navy-900">All caught up</p>
-                <p className="text-sm text-gray-500">{reportsTotal} {reportsTotal === 1 ? 'report' : 'reports'} on track</p>
+                <p className="text-sm text-gray-500">{reportsTotal} {reportsTotal === 1 ? 'person' : 'people'} on track</p>
               </>
             )}
             <span className="text-sm text-navy-700 font-medium mt-auto pt-1">View your team →</span>
