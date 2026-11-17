@@ -7,6 +7,9 @@ import {
   parseFundSettings,
   fundYearRange,
   formatUSD,
+  costCategoryOptions,
+  DEFAULT_OFF_ALLOTMENT_SOURCES,
+  DEFAULT_PERSONAL_SOURCE_LABEL,
   type FundConfig,
 } from '@/lib/funds'
 import {
@@ -807,6 +810,11 @@ export default function AdminSettingsPage() {
   const [staffStart, setStaffStart] = useState(FALLBACK_FUND_CONFIG.staffYearStart)
   const [facultyStart, setFacultyStart] = useState(FALLBACK_FUND_CONFIG.facultyYearStart)
 
+  // Form state — configurable fund sources & cost categories
+  const [personalLabel, setPersonalLabel] = useState(DEFAULT_PERSONAL_SOURCE_LABEL)
+  const [offSources, setOffSources] = useState(DEFAULT_OFF_ALLOTMENT_SOURCES.join('\n'))
+  const [costCategories, setCostCategories] = useState(costCategoryOptions([]).map((o) => o.label).join('\n'))
+
   // Form state — other platform settings
   const [hoursTarget, setHoursTarget] = useState(String(DEFAULT_PD_HOURS_TARGET))
   const [threshold, setThreshold] = useState('')
@@ -838,6 +846,9 @@ export default function AdminSettingsPage() {
     const target = Number(map['pd_hours_target'])
     setHoursTarget(String(Number.isFinite(target) && target > 0 ? target : DEFAULT_PD_HOURS_TARGET))
     setThreshold((map['funding_admin_threshold'] ?? '').trim())
+    setPersonalLabel((map['pd_personal_source_label'] ?? '').trim() || DEFAULT_PERSONAL_SOURCE_LABEL)
+    setOffSources((map['pd_fund_sources'] ?? '').trim() || DEFAULT_OFF_ALLOTMENT_SOURCES.join('\n'))
+    setCostCategories((map['pd_cost_categories'] ?? '').trim() || costCategoryOptions([]).map((o) => o.label).join('\n'))
     setAllowOverBalance((map['allow_over_balance_requests'] ?? 'true') !== 'false')
     setModeration((map['resource_moderation'] ?? 'off') === 'on')
     setWsPolicy(map['workspace_creation_policy'] === 'everyone' ? 'everyone' : 'supervisors')
@@ -900,6 +911,9 @@ export default function AdminSettingsPage() {
       { key: 'faculty_fund_year_start', value: mmdd(facultyStart), updated_by: userId, updated_at: now },
       { key: 'pd_hours_target', value: String(target), updated_by: userId, updated_at: now },
       { key: 'funding_admin_threshold', value: thresholdRaw === '' ? '' : String(Number(thresholdRaw)), updated_by: userId, updated_at: now },
+      { key: 'pd_personal_source_label', value: personalLabel.trim() || DEFAULT_PERSONAL_SOURCE_LABEL, updated_by: userId, updated_at: now },
+      { key: 'pd_fund_sources', value: offSources.split('\n').map((s) => s.trim()).filter(Boolean).join('\n'), updated_by: userId, updated_at: now },
+      { key: 'pd_cost_categories', value: costCategories.split('\n').map((s) => s.trim()).filter(Boolean).join('\n'), updated_by: userId, updated_at: now },
       { key: 'allow_over_balance_requests', value: allowOverBalance ? 'true' : 'false', updated_by: userId, updated_at: now },
       { key: 'resource_moderation', value: moderation ? 'on' : 'off', updated_by: userId, updated_at: now },
       { key: 'workspace_creation_policy', value: wsPolicy, updated_by: userId, updated_at: now },
@@ -1067,6 +1081,45 @@ export default function AdminSettingsPage() {
             </span>
           </span>
         </label>
+      </div>
+
+      {/* ── Fund sources & cost categories ─────────────────────── */}
+      <div className="card p-6 space-y-5">
+        <div>
+          <h2 className="font-semibold text-gray-900 text-lg">Fund sources &amp; cost categories</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            The dropdowns used when recording a PD cost. Only the personal allotment draws from a person&apos;s fund; every other source is recorded but off-allotment.
+          </p>
+        </div>
+        <div>
+          <label className="label">Personal allotment — label</label>
+          <input
+            className="input"
+            value={personalLabel}
+            onChange={(e) => { setPersonalLabel(e.target.value); touch() }}
+          />
+          <p className="text-xs text-gray-400 mt-1">The one source that draws from the allotment. You can rename it, but it&apos;s always present.</p>
+        </div>
+        <div>
+          <label className="label">Other fund sources (paid elsewhere)</label>
+          <textarea
+            className="input"
+            rows={5}
+            value={offSources}
+            onChange={(e) => { setOffSources(e.target.value); touch() }}
+          />
+          <p className="text-xs text-gray-400 mt-1">One per line. These count as PD but never reduce the allotment.</p>
+        </div>
+        <div>
+          <label className="label">Cost categories</label>
+          <textarea
+            className="input"
+            rows={6}
+            value={costCategories}
+            onChange={(e) => { setCostCategories(e.target.value); touch() }}
+          />
+          <p className="text-xs text-gray-400 mt-1">One per line (e.g. Per-diem, Registration, Lodging).</p>
+        </div>
       </div>
       </div>
       )}

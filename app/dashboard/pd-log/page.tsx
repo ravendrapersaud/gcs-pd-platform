@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { PdActivity, FundingRequest, PdType, FundingStatus } from '@/lib/types'
-import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, drawsFromAllotment, FUND_SOURCE_LABELS, COST_CATEGORY_LABELS, type FundConfig, type FundSource, type CostCategory } from '@/lib/funds'
-import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget, allowOverBalanceRequests } from '@/lib/appSettings'
+import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, drawsFromAllotment, fundSourceLabel, costCategoryLabel, type FundConfig } from '@/lib/funds'
+import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget, allowOverBalanceRequests, type AppSettingRow } from '@/lib/appSettings'
 import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
 
@@ -32,6 +32,7 @@ export default function PdLogPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [fundCfg, setFundCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
+  const [settingsRows, setSettingsRows] = useState<AppSettingRow[]>([])
   const [myProfile, setMyProfile] = useState<{ employee_type: string | null; pd_allotment: number | null } | null>(null)
   const [hoursTarget, setHoursTarget] = useState(DEFAULT_PD_HOURS_TARGET)
   const [allowOverBalance, setAllowOverBalance] = useState(true)
@@ -89,6 +90,7 @@ export default function PdLogPage() {
     setFundingRequests((funds ?? []) as FundingRequest[])
     setMyProfile((profile ?? null) as { employee_type: string | null; pd_allotment: number | null } | null)
     setFundCfg(parseFundSettings(settings))
+    setSettingsRows((settings ?? []) as AppSettingRow[])
     setHoursTarget(pdHoursTarget(settings))
     setAllowOverBalance(allowOverBalanceRequests(settings))
     setLoading(false)
@@ -509,13 +511,13 @@ export default function PdLogPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900">{fr.title}</p>
                       {fr.category && (
-                        <span className="badge badge-gray text-xs">{COST_CATEGORY_LABELS[fr.category as CostCategory] ?? fr.category}</span>
+                        <span className="badge badge-gray text-xs">{costCategoryLabel(fr.category)}</span>
                       )}
                       {fr.is_overseas_travel && (
                         <span className="badge badge-navy text-xs">Overseas travel</span>
                       )}
                       {!drawsFromAllotment(fr.fund_source) && (
-                        <span className="badge badge-green text-xs">Paid by {FUND_SOURCE_LABELS[fr.fund_source as FundSource] ?? fr.fund_source}</span>
+                        <span className="badge badge-green text-xs">Paid by {fundSourceLabel(fr.fund_source, settingsRows)}</span>
                       )}
                       {fr.admin_entered && (
                         <span className="badge badge-gray text-xs">Added by admin</span>

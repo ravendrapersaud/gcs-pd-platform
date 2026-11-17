@@ -165,6 +165,62 @@ export function usedAllotment(
     .reduce((s, r) => s + Number(r.amount), 0)
 }
 
+// ── Admin-configurable source / category lists (Settings → PD & Funding) ──
+// The off-allotment sources and the cost categories are editable as newline
+// lists in app_settings; "Personal PD allotment" is always present, always
+// draws from the fund, and is only relabelable. Unset = the built-in defaults.
+export const DEFAULT_PERSONAL_SOURCE_LABEL = 'Personal PD allotment'
+export const DEFAULT_OFF_ALLOTMENT_SOURCES = [
+  'Department budget', 'School / institutional', 'Grant', 'External / other', 'Presenter stipend',
+]
+
+type SettingRows = { key: string; value: string }[] | null | undefined
+function fundSettingsMap(rows: SettingRows): Record<string, string> {
+  const m: Record<string, string> = {}
+  for (const r of rows ?? []) if (r?.key) m[r.key] = r.value
+  return m
+}
+function fundParseLines(v: string | undefined | null): string[] {
+  return (v ?? '').split('\n').map((s) => s.trim()).filter(Boolean)
+}
+
+export function personalSourceLabel(rows: SettingRows): string {
+  return (fundSettingsMap(rows)['pd_personal_source_label'] ?? '').trim() || DEFAULT_PERSONAL_SOURCE_LABEL
+}
+
+export interface FundSourceOption { value: string; label: string; draws: boolean }
+
+// The options for the fund-source dropdown: the fixed personal allotment first,
+// then the off-allotment sources. When unset, the defaults keep their stable
+// slug values; a custom list stores each label as its own value.
+export function fundSourceOptions(rows: SettingRows): FundSourceOption[] {
+  const personal: FundSourceOption = { value: 'personal', label: personalSourceLabel(rows), draws: true }
+  const custom = (fundSettingsMap(rows)['pd_fund_sources'] ?? '').trim()
+  if (custom) {
+    return [personal, ...fundParseLines(custom).map((l) => ({ value: l, label: l, draws: false }))]
+  }
+  const defaults: FundSource[] = ['department', 'school', 'grant', 'external', 'presenter_stipend']
+  return [personal, ...defaults.map((s) => ({ value: s, label: FUND_SOURCE_LABELS[s], draws: false }))]
+}
+
+// Display label for a stored fund_source value (handles personal relabel,
+// built-in slugs, and custom label-values).
+export function fundSourceLabel(value: string | null | undefined, rows: SettingRows): string {
+  if (!value || value === 'personal') return personalSourceLabel(rows)
+  return FUND_SOURCE_LABELS[value as FundSource] ?? value
+}
+
+export interface CostCategoryOption { value: string; label: string }
+export function costCategoryOptions(rows: SettingRows): CostCategoryOption[] {
+  const custom = (fundSettingsMap(rows)['pd_cost_categories'] ?? '').trim()
+  if (custom) return fundParseLines(custom).map((l) => ({ value: l, label: l }))
+  return COST_CATEGORIES.map((c) => ({ value: c, label: COST_CATEGORY_LABELS[c] }))
+}
+export function costCategoryLabel(value: string | null | undefined): string {
+  if (!value) return ''
+  return COST_CATEGORY_LABELS[value as CostCategory] ?? value
+}
+
 // ── Deprecated flat-config API ───────────────────────────────────
 // Thin wrappers over FALLBACK_FUND_CONFIG kept for compatibility.
 // Prefer parseFundSettings + fundYearRange/effectiveAllotment.

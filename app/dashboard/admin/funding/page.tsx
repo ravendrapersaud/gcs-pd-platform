@@ -5,10 +5,11 @@ import { createClient } from '@/lib/supabase/client'
 import type { FundingRequest, PdActivity, Profile, FundingStatus } from '@/lib/types'
 import {
   FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, usedAllotment, drawsFromAllotment,
-  isInFundYear, fundYearLabel, fundYearRange, formatUSD,
-  FUND_SOURCES, FUND_SOURCE_LABELS, COST_CATEGORIES, COST_CATEGORY_LABELS,
-  type FundConfig, type FundSource, type CostCategory,
+  isInFundYear, fundYearLabel, fundYearRange, formatUSD, personalSourceLabel,
+  fundSourceOptions, fundSourceLabel, costCategoryOptions, costCategoryLabel,
+  type FundConfig,
 } from '@/lib/funds'
+import type { AppSettingRow } from '@/lib/appSettings'
 import clsx from 'clsx'
 
 const nameOf = (p?: Pick<Profile, 'first_name' | 'last_name'> | null) =>
@@ -17,7 +18,7 @@ const nameOf = (p?: Pick<Profile, 'first_name' | 'last_name'> | null) =>
 const STATUSES: FundingStatus[] = ['approved', 'pending', 'denied', 'cancelled']
 
 const blankForm = {
-  title: '', amount: '', category: '' as '' | CostCategory, fund_source: 'personal' as FundSource,
+  title: '', amount: '', category: '', fund_source: 'personal',
   pd_activity_id: '', status: 'approved' as FundingStatus, description: '',
 }
 
@@ -33,6 +34,7 @@ export default function AdminFundingPage() {
 
   const [people, setPeople] = useState<Profile[]>([])
   const [cfg, setCfg] = useState<FundConfig>(FALLBACK_FUND_CONFIG)
+  const [settingsRows, setSettingsRows] = useState<AppSettingRow[]>([])
 
   const [picker, setPicker] = useState('')
   const [person, setPerson] = useState<Profile | null>(null)
@@ -42,7 +44,7 @@ export default function AdminFundingPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(blankForm)
   const [editId, setEditId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ amount: '', fund_source: 'personal' as FundSource, category: '' as '' | CostCategory, status: 'approved' as FundingStatus })
+  const [editForm, setEditForm] = useState<{ amount: string; fund_source: string; category: string; status: FundingStatus }>({ amount: '', fund_source: 'personal', category: '', status: 'approved' })
 
   // ── Initial load: me + roster + settings ────────────────────
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function AdminFundingPage() {
       setCanManage(p?.role === 'admin' || p?.can_manage_funds === true)
       setPeople((roster ?? []) as Profile[])
       setCfg(parseFundSettings(settings))
+      setSettingsRows((settings ?? []) as AppSettingRow[])
       setReady(true)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,8 +119,8 @@ export default function AdminFundingPage() {
   const startEdit = (fr: FundingRequest) => {
     setEditId(fr.id)
     setEditForm({
-      amount: String(fr.amount), fund_source: (fr.fund_source as FundSource) ?? 'personal',
-      category: (fr.category as CostCategory) ?? '', status: fr.status,
+      amount: String(fr.amount), fund_source: fr.fund_source ?? 'personal',
+      category: fr.category ?? '', status: fr.status,
     })
   }
   const saveEdit = async () => {
@@ -152,6 +155,8 @@ export default function AdminFundingPage() {
   const offAllotment = thisYear.filter((fr) => fr.status === 'approved' && !drawsFromAllotment(fr.fund_source)).reduce((s, fr) => s + Number(fr.amount), 0)
   const remaining = Math.max(allotment - used, 0)
   const addDraws = drawsFromAllotment(form.fund_source)
+  const sourceOptions = fundSourceOptions(settingsRows)
+  const categoryOptions = costCategoryOptions(settingsRows)
 
   return (
     <div className="space-y-6">
@@ -217,15 +222,15 @@ export default function AdminFundingPage() {
                 </div>
                 <div>
                   <label className="label">Category</label>
-                  <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as CostCategory | '' })}>
+                  <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                     <option value="">—</option>
-                    {COST_CATEGORIES.map((c) => <option key={c} value={c}>{COST_CATEGORY_LABELS[c]}</option>)}
+                    {categoryOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="label">Fund source</label>
-                  <select className="input" value={form.fund_source} onChange={(e) => setForm({ ...form, fund_source: e.target.value as FundSource })}>
-                    {FUND_SOURCES.map((s) => <option key={s} value={s}>{FUND_SOURCE_LABELS[s]}</option>)}
+                  <select className="input" value={form.fund_source} onChange={(e) => setForm({ ...form, fund_source: e.target.value })}>
+                    {sourceOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -249,7 +254,7 @@ export default function AdminFundingPage() {
               <div className={clsx('rounded-lg px-3 py-2 text-sm', addDraws ? 'bg-navy-50 text-navy-800' : 'bg-green-50 text-green-800')}>
                 {addDraws
                   ? `Counts toward ${nameOf(person)}’s $${allotment.toLocaleString()} allotment.`
-                  : `Counts as PD, but does NOT draw from the allotment (paid by ${FUND_SOURCE_LABELS[form.fund_source]}).`}
+                  : `Counts as PD, but does NOT draw from the allotment (paid by ${fundSourceLabel(form.fund_source, settingsRows)}).`}
               </div>
               <div className="flex justify-end gap-3">
                 <button className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
@@ -265,6 +270,14 @@ export default function AdminFundingPage() {
             <div className="space-y-3">
               {requests.map((fr) => {
                 const draws = drawsFromAllotment(fr.fund_source)
+                // Keep a stored value selectable even if it's no longer in the
+                // configured lists (so editing never silently changes it).
+                const srcOpts = sourceOptions.some((o) => o.value === (fr.fund_source ?? 'personal'))
+                  ? sourceOptions
+                  : [...sourceOptions, { value: fr.fund_source ?? 'personal', label: fundSourceLabel(fr.fund_source, settingsRows), draws: false }]
+                const catOpts = fr.category && !categoryOptions.some((o) => o.value === fr.category)
+                  ? [...categoryOptions, { value: fr.category, label: costCategoryLabel(fr.category) }]
+                  : categoryOptions
                 return (
                   <div key={fr.id} className="card p-5">
                     {editId === fr.id ? (
@@ -274,15 +287,15 @@ export default function AdminFundingPage() {
                           <div><label className="label">Amount</label><input type="number" step="0.01" className="input" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} /></div>
                           <div>
                             <label className="label">Category</label>
-                            <select className="input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value as CostCategory | '' })}>
+                            <select className="input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}>
                               <option value="">—</option>
-                              {COST_CATEGORIES.map((c) => <option key={c} value={c}>{COST_CATEGORY_LABELS[c]}</option>)}
+                              {catOpts.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
                           </div>
                           <div>
                             <label className="label">Source</label>
-                            <select className="input" value={editForm.fund_source} onChange={(e) => setEditForm({ ...editForm, fund_source: e.target.value as FundSource })}>
-                              {FUND_SOURCES.map((s) => <option key={s} value={s}>{FUND_SOURCE_LABELS[s]}</option>)}
+                            <select className="input" value={editForm.fund_source} onChange={(e) => setEditForm({ ...editForm, fund_source: e.target.value })}>
+                              {srcOpts.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                             </select>
                           </div>
                           <div>
@@ -302,8 +315,8 @@ export default function AdminFundingPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-gray-900">{fr.title}</p>
-                            {fr.category && <span className="badge badge-gray text-xs">{COST_CATEGORY_LABELS[fr.category as CostCategory] ?? fr.category}</span>}
-                            {!draws && <span className="badge badge-green text-xs">Paid by {FUND_SOURCE_LABELS[fr.fund_source as FundSource] ?? fr.fund_source}</span>}
+                            {fr.category && <span className="badge badge-gray text-xs">{costCategoryLabel(fr.category)}</span>}
+                            {!draws && <span className="badge badge-green text-xs">Paid by {fundSourceLabel(fr.fund_source, settingsRows)}</span>}
                             {fr.admin_entered && <span className="badge badge-gray text-xs">Admin-entered</span>}
                           </div>
                           <p className="text-xs text-gray-400 mt-1">
