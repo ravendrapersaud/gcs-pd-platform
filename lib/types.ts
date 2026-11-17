@@ -691,6 +691,22 @@ export interface CohortSlotSignup {
   profile?: Profile
 }
 
+// ── Audit log (append-only; see supabase/migration_audit_log.sql) ──
+export interface AuditLog {
+  id: string
+  action: string                 // 'profile.update' | 'funding.insert' | 'funding.update' | 'funding.delete' | 'settings.update'
+  actor_id: string | null        // who did it
+  target_type: string | null     // 'profile' | 'funding_request' | 'app_setting'
+  target_id: string | null
+  target_user_id: string | null  // whose record it concerns (null = school-wide)
+  summary: string | null
+  changes: Record<string, { from: unknown; to: unknown }> | null
+  created_at: string
+  // joined
+  actor?: Pick<Profile, 'first_name' | 'last_name'> | null
+  target_user?: Pick<Profile, 'first_name' | 'last_name'> | null
+}
+
 // ── Utility types ─────────────────────────────────────────────
 export type ProfileWithSupervisors = Profile & {
   supervisors: Profile[]
