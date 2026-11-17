@@ -50,6 +50,7 @@ export interface Profile {
   can_create_workspaces: boolean
   can_approve_events?: boolean // may approve/publish & manage PD calendar events
   can_manage_cohorts?: boolean // may create & run New Faculty cohorts (admins always can)
+  can_manage_funds?: boolean   // may add/edit PD cost lines for any employee (admins always can)
   avatar_url: string | null
   favorites_public?: boolean // opt-in: colleagues may view my Resource Library favorites
   // Revised profile (Phase 1 — data only; not yet wired to permissions)
@@ -426,6 +427,13 @@ export interface FundingRequest {
   reviewed_at: string | null
   decision_note: string | null
   created_at: string
+  // Cost attribution (see supabase/migration_fund_source.sql). fund_source
+  // decides whether this draws from the person's personal allotment; only
+  // 'personal' does. admin_entered = a fund manager entered it directly.
+  fund_source?: string          // FundSource in lib/funds.ts; defaults 'personal'
+  category?: string | null      // CostCategory in lib/funds.ts
+  created_by?: string | null    // who entered the line (fund manager)
+  admin_entered?: boolean
   // joined
   user?: Profile
   reviewer?: Profile
