@@ -9,6 +9,7 @@ import { buildPortfolioHtml } from '@/lib/portfolioPrint'
 import PortfolioPromptBlock from '@/components/PortfolioPromptBlock'
 import CheckInCadence from '@/components/CheckInCadence'
 import ServiceCommunity from '@/components/ServiceCommunity'
+import RecordActivity from '@/components/RecordActivity'
 import type { FormField } from '@/lib/types'
 import { TRACK_LABELS, TRACK_BLURBS, type Track } from '@/lib/tracks'
 import clsx from 'clsx'
@@ -677,6 +678,9 @@ export default function PortfolioPage() {
           </ul>
         )}
       </div>
+
+      {/* Transparency — admin actions that touched this person's record */}
+      <RecordActivity subjectId={p.id} selfView={!!data.viewer?.isSelf} />
 
       <div className="pt-1">
         <Link href="/dashboard/admin/staff" className="text-sm text-navy-700 hover:underline">← Back to Roster</Link>
