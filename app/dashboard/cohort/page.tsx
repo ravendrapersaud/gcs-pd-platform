@@ -8,7 +8,7 @@ import type {
   Cohort, CohortMember, CohortSession, CohortTask, CohortSlot, Profile,
 } from '@/lib/types'
 import {
-  SLOT_KIND_LABELS, campusLabel, checklistProgress, splitSessions,
+  SLOT_KINDS, SLOT_KIND_LABELS, campusLabel, checklistProgress, splitSessions,
   formatSessionDate, formatTimeRange, dateParts, googleCalendarUrl,
 } from '@/lib/cohorts'
 
@@ -266,36 +266,62 @@ export default function CohortHomePage() {
             {slots.length === 0 ? (
               <p className="text-sm text-gray-400">No slots offered yet.</p>
             ) : (
-              <ul className="space-y-2">
-                {slots.map((s) => {
-                  const booked = mySignups.has(s.id)
-                  const taken = slotTaken[s.id] ?? 0
-                  const full = !booked && taken >= s.capacity
+              <div className="space-y-4">
+                {SLOT_KINDS.map((kind) => {
+                  const group = slots
+                    .filter((s) => s.kind === kind)
+                    .sort((a, b) =>
+                      (a.slot_date ?? '9999').localeCompare(b.slot_date ?? '9999') ||
+                      (a.start_time ?? '').localeCompare(b.start_time ?? '')
+                    )
+                  if (group.length === 0) return null
                   return (
-                    <li key={s.id} className="rounded-lg border border-gray-200 p-3">
-                      <p className="text-sm font-medium text-gray-900">{s.title || SLOT_KIND_LABELS[s.kind]}</p>
-                      <p className="text-xs text-gray-500">
-                        {SLOT_KIND_LABELS[s.kind]} · with {nameOf(prof(s.host_id ?? ''))}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {formatSessionDate(s.slot_date)}{formatTimeRange(s.start_time, s.end_time) && ` · ${formatTimeRange(s.start_time, s.end_time)}`}
-                        {s.location && ` · ${s.location}`}
-                      </p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-[11px] text-gray-400">{taken}/{s.capacity} booked</span>
-                        <button
-                          onClick={() => toggleSignup(s)} disabled={busy || full}
-                          className={clsx('text-xs px-2.5 py-1 rounded-md font-medium',
-                            booked ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              : full ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'btn-primary')}
-                        >
-                          {booked ? 'Cancel' : full ? 'Full' : 'Sign up'}
-                        </button>
-                      </div>
-                    </li>
+                    <div key={kind}>
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-navy-600 mb-1.5">{SLOT_KIND_LABELS[kind]}</p>
+                      <ul className="space-y-2">
+                        {group.map((s) => {
+                          const booked = mySignups.has(s.id)
+                          const taken = slotTaken[s.id] ?? 0
+                          const full = !booked && taken >= s.capacity
+                          const dp = dateParts(s.slot_date)
+                          return (
+                            <li key={s.id} className="rounded-lg border border-gray-200 p-3">
+                              <div className="flex gap-3">
+                                <div className="shrink-0 w-11 rounded-lg bg-navy-50 border border-navy-100 text-navy-800 text-center py-1 self-start">
+                                  {dp ? (
+                                    <>
+                                      <div className="text-[9px] font-bold uppercase tracking-wide text-navy-600">{dp.month}</div>
+                                      <div className="text-lg font-bold leading-none">{dp.day}</div>
+                                    </>
+                                  ) : (
+                                    <div className="text-[9px] font-semibold py-1.5 text-navy-500">TBD</div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-bold text-navy-900">{formatTimeRange(s.start_time, s.end_time) || 'Time TBD'}</p>
+                                  <p className="text-xs text-gray-500">with {nameOf(prof(s.host_id ?? ''))}{s.location && ` · ${s.location}`}</p>
+                                  {s.title && <p className="text-xs text-gray-400 truncate">{s.title}</p>}
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-[11px] text-gray-400">{taken}/{s.capacity} booked</span>
+                                <button
+                                  onClick={() => toggleSignup(s)} disabled={busy || full}
+                                  className={clsx('text-xs px-2.5 py-1 rounded-md font-medium',
+                                    booked ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      : full ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'btn-primary')}
+                                >
+                                  {booked ? 'Cancel' : full ? 'Full' : 'Sign up'}
+                                </button>
+                              </div>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
                   )
                 })}
-              </ul>
+              </div>
             )}
           </section>
 
