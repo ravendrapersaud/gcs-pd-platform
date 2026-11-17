@@ -154,6 +154,77 @@ function ProgressBar({ pct }: { pct: number }) {
   )
 }
 
+// Prominent alignment picker used in goal creation — surfaces School and
+// Department (office) goals as selectable cards (owner, progress, rollup),
+// with the creator's own-department goals floated first. Click a card to
+// align under it; click again to clear.
+function OrgGoalPicker({
+  options, value, onChange, myDepartment,
+}: {
+  options: Goal[]
+  value: string
+  onChange: (id: string) => void
+  myDepartment: string | null
+}) {
+  if (options.length === 0) {
+    return <p className="text-sm text-gray-400">No department or school goals to align to yet.</p>
+  }
+  const myDept = (myDepartment ?? '').trim().toLowerCase()
+  const isMine = (g: Goal) => Boolean(myDept) && (g.owner?.department ?? '').trim().toLowerCase() === myDept
+  const school = options.filter((g) => g.scope === 'school')
+  const dept = options.filter((g) => g.scope === 'office').sort((a, b) => Number(isMine(b)) - Number(isMine(a)))
+
+  const Card = ({ g }: { g: Goal }) => {
+    const selected = value === g.id
+    const mine = g.scope === 'office' && isMine(g)
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(selected ? '' : g.id)}
+        className={clsx(
+          'w-full text-left rounded-lg border p-3 transition-colors',
+          selected ? 'border-navy-600 bg-navy-50 ring-1 ring-navy-600' : 'border-gray-200 hover:border-navy-300'
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-gray-900 text-sm">{g.title}</span>
+              <span className={clsx('badge text-[10px]', g.scope === 'school' ? 'badge-navy' : 'badge-gray')}>{SCOPE_LABEL[g.scope ?? 'individual']}</span>
+              {mine && <span className="badge badge-green text-[10px]">Your department</span>}
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {g.owner ? `${g.owner.first_name} ${g.owner.last_name}` : 'Unknown owner'}
+              {(g.aligned_count ?? 0) > 0 && ` · ${g.aligned_count} aligned · avg ${Math.round(g.aligned_avg_pct ?? 0)}%`}
+            </p>
+            <div className="mt-1.5"><ProgressBar pct={g.progress_pct} /></div>
+          </div>
+          <span className={clsx('shrink-0 w-4 h-4 rounded-full border grid place-items-center mt-0.5', selected ? 'border-navy-600 bg-navy-600' : 'border-gray-300')}>
+            {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+          </span>
+        </div>
+      </button>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {school.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-navy-600 mb-1.5">School goals</p>
+          <div className="space-y-2">{school.map((g) => <Card key={g.id} g={g} />)}</div>
+        </div>
+      )}
+      {dept.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-navy-600 mb-1.5">Department goals</p>
+          <div className="space-y-2">{dept.map((g) => <Card key={g.id} g={g} />)}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface GoalCardProps {
   goal: Goal
   onUpdate: (goalId: string, pct: number, note: string) => Promise<void>
@@ -357,10 +428,11 @@ interface GoalFormProps {
   questionDue: string
   orgGoals: Goal[]
   myRole: string | null
+  myDepartment: string | null
   defaultScope?: GoalScope
 }
 
-function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultVariant, questionDue, orgGoals, myRole, defaultScope }: GoalFormProps) {
+function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultVariant, questionDue, orgGoals, myRole, myDepartment, defaultScope }: GoalFormProps) {
   const editing = Boolean(initial?.id)
   const [variant, setVariant] = useState<GoalType>(initial?.goal_type ?? defaultVariant)
   const [scope, setScope] = useState<GoalScope>(initial?.scope ?? defaultScope ?? 'individual')
@@ -505,20 +577,13 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
         <input type="date" className="input" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
       </div>
 
-      {/* Alignment — pick a parent org goal (not for a top-level school goal) */}
+      {/* Alignment — pick a parent org goal as a prominent card list (not for a
+          top-level school goal) */}
       {scope !== 'school' && (
         <div>
-          <label className="label">Aligns to <span className="text-gray-400 font-normal">(optional)</span></label>
-          {parentOptions.length === 0 ? (
-            <p className="text-sm text-gray-400">No {scope === 'office' ? 'school' : 'department or school'} goals to align to yet.</p>
-          ) : (
-            <select className="input" value={parentId} onChange={(e) => setParentId(e.target.value)}>
-              <option value="">Not aligned</option>
-              {parentOptions.map((g) => (
-                <option key={g.id} value={g.id}>{SCOPE_LABEL[g.scope ?? 'individual']}: {g.title}</option>
-              ))}
-            </select>
-          )}
+          <label className="label">Align to a bigger goal <span className="text-gray-400 font-normal">(optional)</span></label>
+          <p className="text-xs text-gray-500 mb-2">Connecting your goal to a school or department goal shows how your work ladders up — and rolls your progress into theirs.</p>
+          <OrgGoalPicker options={parentOptions} value={parentId} onChange={setParentId} myDepartment={myDepartment} />
         </div>
       )}
 
@@ -863,6 +928,7 @@ export default function GoalsPage() {
           questionDue={questionDue}
           orgGoals={orgGoals}
           myRole={myRole}
+          myDepartment={myDepartment}
           defaultScope={formDefaultScope}
         />
       )}
@@ -879,6 +945,7 @@ export default function GoalsPage() {
           questionDue={questionDue}
           orgGoals={orgGoals}
           myRole={myRole}
+          myDepartment={myDepartment}
         />
       )}
 
