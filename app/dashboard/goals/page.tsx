@@ -582,7 +582,7 @@ function GoalForm({ onSave, onCancel, initial, profiles, currentUserId, defaultV
       {scope !== 'school' && (
         <div>
           <label className="label">Align to a bigger goal <span className="text-gray-400 font-normal">(optional)</span></label>
-          <p className="text-xs text-gray-500 mb-2">Connecting your goal to a school or department goal shows how your work ladders up — and rolls your progress into theirs.</p>
+          <p className="text-xs text-gray-500 mb-2">Aligning to a school or department goal shows how your work contributes to Grace’s larger mission — and rolls your progress up into theirs.</p>
           <OrgGoalPicker options={parentOptions} value={parentId} onChange={setParentId} myDepartment={myDepartment} />
         </div>
       )}
