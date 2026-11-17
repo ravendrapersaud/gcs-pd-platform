@@ -108,6 +108,63 @@ export function formatUSD(amount: number): string {
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
+// ── Fund source & cost category ──────────────────────────────────
+// A cost always counts as PD; its SOURCE decides whether it draws from the
+// employee's personal allotment. Only 'personal' does. Everything else is
+// paid elsewhere (department/school/grant/external, or a presenter stipend)
+// and is recorded for visibility without touching the $3,100.
+export type FundSource = 'personal' | 'department' | 'school' | 'grant' | 'external' | 'presenter_stipend'
+
+export const FUND_SOURCES: FundSource[] = ['personal', 'department', 'school', 'grant', 'external', 'presenter_stipend']
+
+export const FUND_SOURCE_LABELS: Record<FundSource, string> = {
+  personal: 'Personal PD allotment',
+  department: 'Department budget',
+  school: 'School / institutional',
+  grant: 'Grant',
+  external: 'External / other',
+  presenter_stipend: 'Presenter stipend',
+}
+
+// The one rule the whole feature turns on: only personal-allotment costs
+// draw down the $3,100.
+export function drawsFromAllotment(source: string | null | undefined): boolean {
+  return (source ?? 'personal') === 'personal'
+}
+
+export type CostCategory =
+  | 'registration' | 'travel' | 'lodging' | 'per_diem' | 'meals'
+  | 'materials' | 'membership' | 'substitute' | 'other'
+
+export const COST_CATEGORIES: CostCategory[] = [
+  'registration', 'travel', 'lodging', 'per_diem', 'meals', 'materials', 'membership', 'substitute', 'other',
+]
+
+export const COST_CATEGORY_LABELS: Record<CostCategory, string> = {
+  registration: 'Registration / tuition',
+  travel: 'Travel / transportation',
+  lodging: 'Lodging',
+  per_diem: 'Per-diem',
+  meals: 'Meals',
+  materials: 'Materials / books',
+  membership: 'Membership / dues',
+  substitute: 'Substitute coverage',
+  other: 'Other',
+}
+
+// Sum the approved costs that actually draw from the allotment (personal only),
+// within the person's fund year. Centralized so the dashboard, PD log, and the
+// admin console all agree on what "used" means.
+export function usedAllotment(
+  rows: { amount: number | string; status: string; fund_source?: string | null; created_at: string }[],
+  employeeType: string | null | undefined,
+  cfg: FundConfig
+): number {
+  return rows
+    .filter((r) => r.status === 'approved' && drawsFromAllotment(r.fund_source) && isInFundYear(r.created_at, employeeType, cfg))
+    .reduce((s, r) => s + Number(r.amount), 0)
+}
+
 // ── Deprecated flat-config API ───────────────────────────────────
 // Thin wrappers over FALLBACK_FUND_CONFIG kept for compatibility.
 // Prefer parseFundSettings + fundYearRange/effectiveAllotment.

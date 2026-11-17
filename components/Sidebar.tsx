@@ -139,6 +139,12 @@ const IconCohort = () => (
   </svg>
 )
 
+const IconFunding = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
 const navSections: NavSection[] = [
   {
     label: 'Main',
@@ -209,6 +215,7 @@ export default function Sidebar({ profile }: SidebarProps) {
 
   // Is the viewer a member of an active cohort? Drives the "New Faculty" item.
   const canManageCohorts = profile.role === 'admin' || profile.can_manage_cohorts === true
+  const canManageFunds = profile.role === 'admin' || profile.can_manage_funds === true
   const [inCohort, setInCohort] = useState(false)
   useEffect(() => {
     let active = true
@@ -243,8 +250,11 @@ export default function Sidebar({ profile }: SidebarProps) {
       items.splice(1, 0, { href: '/dashboard/cohort', label: 'New Faculty', icon: <IconCohort /> })
       return { ...section, items }
     }
-    if (section.label === 'Admin' && canManageCohorts) {
-      return { ...section, items: [{ href: '/dashboard/cohorts', label: 'Cohorts', icon: <IconCohort /> }, ...section.items] }
+    if (section.label === 'Admin' && (canManageCohorts || canManageFunds)) {
+      const prepend: NavItem[] = []
+      if (canManageCohorts) prepend.push({ href: '/dashboard/cohorts', label: 'Cohorts', icon: <IconCohort /> })
+      if (canManageFunds) prepend.push({ href: '/dashboard/admin/funding', label: 'PD Funding', icon: <IconFunding /> })
+      return { ...section, items: [...prepend, ...section.items] }
     }
     return section
   })

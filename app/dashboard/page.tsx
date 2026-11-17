@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiveAllotment, formatUSD } from '@/lib/funds'
+import { parseFundSettings, fundYearRange, fundYearLabel, isInFundYear, effectiveAllotment, formatUSD, drawsFromAllotment } from '@/lib/funds'
 import { pdHoursTarget } from '@/lib/appSettings'
 import { IconMegaphone } from '@/components/icons'
 import DashboardCheckIns from '@/components/DashboardCheckIns'
@@ -91,8 +91,11 @@ async function fetchTeamData(
       .in('user_id', ids)
       .eq('status', 'pending'),
     supabase
+      // select('*') (not an explicit fund_source column) so this still works
+      // before migration_fund_source.sql is applied — a missing fund_source
+      // then reads as undefined and drawsFromAllotment() treats it as personal.
       .from('funding_requests')
-      .select('user_id, amount, created_at')
+      .select('*')
       .in('user_id', ids)
       .eq('status', 'approved')
       .gte('created_at', earliestISO),
@@ -108,7 +111,10 @@ async function fetchTeamData(
 
   const approvedByUser: Record<string, number> = {}
   for (const row of approvedRes.data ?? []) {
-    // Only count spend inside this person's own fund year.
+    // Only count spend inside this person's own fund year, and only costs that
+    // actually draw from the personal allotment (not department/school/grant/
+    // presenter-funded, which count as PD but don't touch the $3,100).
+    if (!drawsFromAllotment((row as { fund_source?: string | null }).fund_source)) continue
     if (!isInFundYear(row.created_at, typeById[row.user_id], fundCfg)) continue
     approvedByUser[row.user_id] = (approvedByUser[row.user_id] ?? 0) + Number(row.amount)
   }

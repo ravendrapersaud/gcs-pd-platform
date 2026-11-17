@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { PdActivity, FundingRequest, PdType, FundingStatus } from '@/lib/types'
-import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, type FundConfig } from '@/lib/funds'
+import { FALLBACK_FUND_CONFIG, parseFundSettings, effectiveAllotment, isInFundYear, fundYearLabel, fundYearRange, formatUSD, drawsFromAllotment, FUND_SOURCE_LABELS, COST_CATEGORY_LABELS, type FundConfig, type FundSource, type CostCategory } from '@/lib/funds'
 import { DEFAULT_PD_HOURS_TARGET, pdHoursTarget, allowOverBalanceRequests } from '@/lib/appSettings'
 import { useTabParam } from '@/lib/useTabParam'
 import clsx from 'clsx'
@@ -176,11 +176,14 @@ export default function PdLogPage() {
   //    faculty vs staff, amount honors any per-person override) ────
   const myAllotment = effectiveAllotment(myProfile, fundCfg)
   const fundsThisYear = fundingRequests.filter((fr) => isInFundYear(fr.created_at, myProfile?.employee_type, fundCfg))
+  // Only costs charged to the personal allotment draw down the $3,100. Costs
+  // paid elsewhere (department/school/grant/presenter) still appear below, but
+  // don't reduce the balance.
   const usedFunds = fundsThisYear
-    .filter((fr) => fr.status === 'approved')
+    .filter((fr) => fr.status === 'approved' && drawsFromAllotment(fr.fund_source))
     .reduce((s, fr) => s + Number(fr.amount), 0)
   const pendingFunds = fundsThisYear
-    .filter((fr) => fr.status === 'pending')
+    .filter((fr) => fr.status === 'pending' && drawsFromAllotment(fr.fund_source))
     .reduce((s, fr) => s + Number(fr.amount), 0)
   const remainingFunds = Math.max(myAllotment - usedFunds, 0)
   const usedPct = myAllotment > 0 ? Math.min(Math.round((usedFunds / myAllotment) * 100), 100) : 100
@@ -505,8 +508,17 @@ export default function PdLogPage() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-900">{fr.title}</p>
+                      {fr.category && (
+                        <span className="badge badge-gray text-xs">{COST_CATEGORY_LABELS[fr.category as CostCategory] ?? fr.category}</span>
+                      )}
                       {fr.is_overseas_travel && (
                         <span className="badge badge-navy text-xs">Overseas travel</span>
+                      )}
+                      {!drawsFromAllotment(fr.fund_source) && (
+                        <span className="badge badge-green text-xs">Paid by {FUND_SOURCE_LABELS[fr.fund_source as FundSource] ?? fr.fund_source}</span>
+                      )}
+                      {fr.admin_entered && (
+                        <span className="badge badge-gray text-xs">Added by admin</span>
                       )}
                     </div>
                     {fr.description && (
@@ -534,6 +546,9 @@ export default function PdLogPage() {
                   <div className="text-right shrink-0">
                     <p className="font-bold text-navy-900">${Number(fr.amount).toFixed(2)}</p>
                     <span className={`badge mt-1 ${statusColors[fr.status]}`}>{fr.status}</span>
+                    {!drawsFromAllotment(fr.fund_source) && (
+                      <p className="text-[10px] text-gray-400 mt-1">off-allotment</p>
+                    )}
                   </div>
                 </div>
               ))}
