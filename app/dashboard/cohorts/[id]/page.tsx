@@ -10,7 +10,7 @@ import type {
 } from '@/lib/types'
 import {
   SLOT_KINDS, SLOT_KIND_LABELS, campusLabel, checklistProgress,
-  formatSessionDate, formatTimeRange,
+  formatSessionDate, formatTimeRange, dateParts,
 } from '@/lib/cohorts'
 
 type Tab = 'roster' | 'schedule' | 'checklist' | 'slots' | 'progress'
@@ -532,27 +532,55 @@ export default function CohortDetailPage() {
           {slots.length === 0 ? (
             <p className="text-sm text-gray-400">No slots yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {slots.map((s) => {
-                const su = signupsBySlot(s.id)
+            <div className="space-y-4">
+              {SLOT_KINDS.map((kind) => {
+                const group = slots
+                  .filter((s) => s.kind === kind)
+                  .sort((a, b) =>
+                    (a.slot_date ?? '9999').localeCompare(b.slot_date ?? '9999') ||
+                    (a.start_time ?? '').localeCompare(b.start_time ?? '')
+                  )
+                if (group.length === 0) return null
                 return (
-                  <li key={s.id} className="card p-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-navy-900">{s.title || SLOT_KIND_LABELS[s.kind]}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {SLOT_KIND_LABELS[s.kind]} · host {nameOf(profById(s.host_id ?? ''))} · {formatSessionDate(s.slot_date)}
-                        {formatTimeRange(s.start_time, s.end_time) && ` · ${formatTimeRange(s.start_time, s.end_time)}`}
-                        {' · '}{su.length}/{s.capacity} booked
-                      </p>
-                      {su.length > 0 && (
-                        <p className="text-xs text-gray-600 mt-1">{su.map((x) => nameOf(profById(x.user_id))).join(', ')}</p>
-                      )}
-                    </div>
-                    <button className="btn-ghost text-xs text-red-600 shrink-0" disabled={busy} onClick={() => del('cohort_slots', { id: s.id }, 'slot')}>Delete</button>
-                  </li>
+                  <div key={kind}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-navy-600 mb-1.5">{SLOT_KIND_LABELS[kind]}</p>
+                    <ul className="space-y-2">
+                      {group.map((s) => {
+                        const su = signupsBySlot(s.id)
+                        const dp = dateParts(s.slot_date)
+                        return (
+                          <li key={s.id} className="card p-4 flex items-start justify-between gap-3">
+                            <div className="flex gap-3 min-w-0">
+                              <div className="shrink-0 w-12 rounded-lg bg-navy-50 border border-navy-100 text-navy-800 text-center py-1 self-start">
+                                {dp ? (
+                                  <>
+                                    <div className="text-[9px] font-bold uppercase tracking-wide text-navy-600">{dp.month}</div>
+                                    <div className="text-lg font-bold leading-none">{dp.day}</div>
+                                    <div className="text-[9px] text-navy-500 mt-0.5">{dp.weekday}</div>
+                                  </>
+                                ) : (
+                                  <div className="text-[9px] font-semibold py-2 text-navy-500">TBD</div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-navy-900">{formatTimeRange(s.start_time, s.end_time) || 'Time TBD'}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {s.title ? `${s.title} · ` : ''}host {nameOf(profById(s.host_id ?? ''))}{s.location && ` · ${s.location}`} · {su.length}/{s.capacity} booked
+                                </p>
+                                {su.length > 0 && (
+                                  <p className="text-xs text-gray-600 mt-1">{su.map((x) => nameOf(profById(x.user_id))).join(', ')}</p>
+                                )}
+                              </div>
+                            </div>
+                            <button className="btn-ghost text-xs text-red-600 shrink-0" disabled={busy} onClick={() => del('cohort_slots', { id: s.id }, 'slot')}>Delete</button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
                 )
               })}
-            </ul>
+            </div>
           )}
         </div>
       )}
