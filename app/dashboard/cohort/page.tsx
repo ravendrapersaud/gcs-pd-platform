@@ -9,7 +9,7 @@ import type {
 } from '@/lib/types'
 import {
   SLOT_KIND_LABELS, campusLabel, checklistProgress, splitSessions,
-  formatSessionDate, formatTimeRange,
+  formatSessionDate, formatTimeRange, dateParts, googleCalendarUrl,
 } from '@/lib/cohorts'
 
 const nameOf = (p?: Profile | null) => (p ? `${p.first_name} ${p.last_name}`.trim() : 'A mentor')
@@ -327,18 +327,34 @@ export default function CohortHomePage() {
 }
 
 function SessionRow({ s }: { s: CohortSession }) {
+  const dp = dateParts(s.session_date)
+  const gcal = googleCalendarUrl(s)
   return (
-    <div className="rounded-lg border border-gray-200 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-navy-900">{s.title}</p>
-        <span className="text-xs text-gray-400 shrink-0">{formatSessionDate(s.session_date)}</span>
+    <div className="rounded-lg border border-gray-200 p-3 flex gap-3">
+      {/* Prominent calendar-tile date */}
+      <div className="shrink-0 w-14 rounded-lg bg-navy-50 border border-navy-100 text-navy-800 text-center py-1.5 self-start">
+        {dp ? (
+          <>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-navy-600">{dp.month}</div>
+            <div className="text-xl font-bold leading-none">{dp.day}</div>
+            <div className="text-[10px] text-navy-500 mt-0.5">{dp.weekday}</div>
+          </>
+        ) : (
+          <div className="text-[10px] font-semibold py-2 text-navy-500">TBD</div>
+        )}
       </div>
-      <p className="text-xs text-gray-500 mt-0.5">
-        {formatTimeRange(s.start_time, s.end_time) && `${formatTimeRange(s.start_time, s.end_time)} · `}
-        {campusLabel(s.campus)}{s.location && ` · ${s.location}`}{s.presenter && ` · ${s.presenter}`}
-      </p>
-      {s.prep_notes && <p className="text-xs text-gray-600 mt-1"><span className="font-medium">Prep:</span> {s.prep_notes}</p>}
-      {s.resource_url && <a href={s.resource_url} target="_blank" rel="noopener noreferrer" className="text-xs text-navy-700 hover:underline">Resource →</a>}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-navy-900">{s.title}</p>
+        <p className="text-xs text-gray-500 mt-0.5">
+          {formatTimeRange(s.start_time, s.end_time) && `${formatTimeRange(s.start_time, s.end_time)} · `}
+          {campusLabel(s.campus)}{s.location && ` · ${s.location}`}{s.presenter && ` · ${s.presenter}`}
+        </p>
+        {s.prep_notes && <p className="text-xs text-gray-600 mt-1"><span className="font-medium">Prep:</span> {s.prep_notes}</p>}
+        <div className="flex flex-wrap gap-3 mt-1">
+          {s.resource_url && <a href={s.resource_url} target="_blank" rel="noopener noreferrer" className="text-xs text-navy-700 hover:underline">Resource →</a>}
+          {gcal && <a href={gcal} target="_blank" rel="noopener noreferrer" className="text-xs text-navy-700 hover:underline font-medium">Add to calendar →</a>}
+        </div>
+      </div>
     </div>
   )
 }

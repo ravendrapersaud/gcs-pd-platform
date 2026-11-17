@@ -1,6 +1,7 @@
 // Pure helpers for New Faculty cohorts — labels, checklist progress, and
 // session/date math. No React, no Supabase. Mirrors lib/checkins.ts.
 import type { CohortSession, CohortTask, SlotKind, CohortMemberRole } from './types'
+import { zonedWallClockToUtc } from './ics'
 
 export const SLOT_KINDS: SlotKind[] = ['one_on_one', 'office_hours', 'observation_walk']
 
@@ -100,4 +101,62 @@ export function formatTimeRange(start: string | null | undefined, end: string | 
   const e = formatTime(end)
   if (s && e) return `${s} – ${e}`
   return s || e || ''
+}
+
+// Weekday / month / day pieces for a prominent calendar-tile date chip.
+export function dateParts(
+  dateStr: string | null | undefined
+): { weekday: string; month: string; day: string } | null {
+  if (!dateStr) return null
+  const d = new Date(`${dateStr.slice(0, 10)}T12:00:00`)
+  if (isNaN(d.getTime())) return null
+  return {
+    weekday: d.toLocaleDateString('en-US', { weekday: 'short' }),
+    month: d.toLocaleDateString('en-US', { month: 'short' }),
+    day: String(d.getDate()),
+  }
+}
+
+// A Google Calendar "add event" link for a session (one click → prefilled event
+// → Save, for a Google Workspace school). Timed when the session has start/end,
+// otherwise an all-day event on its date (the seeded sessions carry their
+// per-campus times in `location`). Returns null for an undated session.
+function ymd(dateISO: string): string {
+  return dateISO.slice(0, 10).replace(/-/g, '')
+}
+function nextYmd(dateISO: string): string {
+  const [y, m, d] = dateISO.slice(0, 10).split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d + 1))
+  return `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, '0')}${String(dt.getUTCDate()).padStart(2, '0')}`
+}
+function utcStamp(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+}
+export function googleCalendarUrl(s: {
+  title: string
+  session_date: string | null
+  start_time: string | null
+  end_time: string | null
+  location: string | null
+  presenter: string | null
+  prep_notes: string | null
+}): string | null {
+  if (!s.session_date) return null
+  const params = new URLSearchParams({ action: 'TEMPLATE', text: s.title })
+  let dates: string | null = null
+  if (s.start_time) {
+    const start = zonedWallClockToUtc(s.session_date, s.start_time)
+    const end = (s.end_time ? zonedWallClockToUtc(s.session_date, s.end_time) : null)
+      ?? (start ? new Date(start.getTime() + 30 * 60000) : null)
+    if (start && end) dates = `${utcStamp(start)}/${utcStamp(end)}`
+  }
+  if (!dates) dates = `${ymd(s.session_date)}/${nextYmd(s.session_date)}` // all-day
+  params.set('dates', dates)
+  const details = [
+    s.presenter ? `Presenter: ${s.presenter}` : null,
+    s.prep_notes ? `Prep: ${s.prep_notes}` : null,
+  ].filter(Boolean).join('\n')
+  if (details) params.set('details', details)
+  if (s.location) params.set('location', s.location)
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
